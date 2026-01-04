@@ -1,0 +1,18 @@
+# AI Core
+ag2[gemini]             # مكتبة الوكلاء (النسخة الحديثة)
+google-generativeai     # للاتصال بموديلات جوجل
+
+# Environment
+python-dotenv           # لقراءة ملف .env
+
+# Web Interface
+streamlit               # لواجهة المستخدم
+
+# Backend (Optional for later)
+fastapi
+uvicorn
+
+# Utilities
+requests                # للاتصال بالـ APIs
+moviepy                 # لمونتاج الفيديو
+pydantic                # للتحقق من البيانات
