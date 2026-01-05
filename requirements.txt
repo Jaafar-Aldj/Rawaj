@@ -1,16 +1,17 @@
 # AI Core
 ag2[gemini]             # مكتبة الوكلاء (النسخة الحديثة)
+ag2[retrievechat]
 google-generativeai     # للاتصال بموديلات جوجل
 
 # Environment
 python-dotenv           # لقراءة ملف .env
 
 # Web Interface
-streamlit               # لواجهة المستخدم
+# streamlit               # لواجهة المستخدم
 
 # Backend (Optional for later)
-fastapi
-uvicorn
+# fastapi
+# uvicorn
 
 # Utilities
 requests                # للاتصال بالـ APIs
