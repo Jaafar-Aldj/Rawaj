@@ -11,7 +11,7 @@ if __name__ == "__main__":
     print("-" * 50)
     
     # بيانات منتج وهمي للتجربة
-    product = "(FutureWatch)"
-    description = "Very samrt whatch, nice and shinny"
+    product = "مغسلة جوني"
+    description = "خدمة غسيل ملابس مع كوي ,خدمة سريعة, دوام 24 ع 24, اسعار مناسبة"
     
     run_campaign_meeting(product, description)

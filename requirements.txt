@@ -7,11 +7,11 @@ google-generativeai     # للاتصال بموديلات جوجل
 python-dotenv           # لقراءة ملف .env
 
 # Web Interface
-# streamlit               # لواجهة المستخدم
+streamlit               # لواجهة المستخدم
 
 # Backend (Optional for later)
-# fastapi
-# uvicorn
+fastapi
+uvicorn
 
 # Utilities
 requests                # للاتصال بالـ APIs

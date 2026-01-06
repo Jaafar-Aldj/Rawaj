@@ -1,61 +1,61 @@
 import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
-from app.agents.roles import get_prompter,get_copywriter,get_director  
+from app.agents.roles import get_director, get_copywriter, get_prompter
 import os
 
 def run_campaign_meeting(product_name, product_desc):
-    # 1. استدعاء الوكلاء (بدون تعديل System Message)
     director = get_director()
     copywriter = get_copywriter()
     prompter = get_prompter()
-
-    # 2. إعدادات المدير (ليستخدمها الوكلاء)
-    # ملاحظة: سنستخدم إعدادات Gemini هنا
     llm_config = director.llm_config
 
-    # 3. إعداد وكيل RAG (هذا هو التغيير الجوهري)
-    # هذا الوكيل سيقرأ ملفات .md ويجيب منها
     rag_proxy = RetrieveUserProxyAgent(
         name="Knowledge_Base_Admin",
-        is_termination_msg=lambda x: "TERMINATE" in x.get("content", ""),
+        is_termination_msg=lambda x: "TERMINATE" in x.get("content", "").upper(),
         human_input_mode="NEVER",
         code_execution_config=False,
         max_consecutive_auto_reply=3,
-        
-        # إعدادات الاسترجاع (Retrieval Config)
-       # إعدادات الاسترجاع (Retrieval Config)
         retrieve_config={
             "task": "qa",
             "docs_path": [os.path.join(os.getcwd(), "knowledge")],
-            
-            # إعدادات التقسيم
-            "chunk_token_size": 1000,
+            "chunk_token_size": 1000, 
             "model": llm_config['config_list'][0]['model'],
-            
-            "collection_name": "rawaj_knowledge_db", # غيرنا الاسم لنجبره على إنشاء جديد
+            "collection_name": "rawaj_final_db", # اسم جديد
             "get_or_create": True,
-            "overwrite": True, # إجبار إعادة الفهرسة من الصفر (مهم جداً للتجربة)
+            "overwrite": True, 
         },
     )
-    
 
-    # 4. خريطة الانتقال (تحديث بسيط لإشراك وكيل المعرفة)
-    # في البداية، وكيل المعرفة سيعطي المعلومات للمدير
-    allowed_transitions = {
-        rag_proxy: [director],
-        director: [copywriter, rag_proxy],
-        copywriter: [prompter],
-        prompter: [director],
-    }
+    # --- دالة الاختيار المخصص (الحل الجذري) ---
+    def custom_speaker_selection(last_speaker, groupchat):
+        messages = groupchat.messages
+        if not messages:
+            return director # البداية دائماً للمدير بعد الآدمن
+        
+        last_message = messages[-1]["content"]
+        
+        # 1. قاعدة الإنهاء الصارمة
+        if "TERMINATE" in last_message:
+            return rag_proxy # سلم للآدمن لينهي الحوار فوراً
 
-    # 5. إعداد المجموعة
+        # 2. تسلسل العمل الطبيعي (Pipeline)
+        if last_speaker is rag_proxy:
+            return director
+        elif last_speaker is director:
+            return copywriter
+        elif last_speaker is copywriter:
+            return prompter
+        elif last_speaker is prompter:
+            return director # ارجع للمدير للمراجعة
+            
+        return "auto" 
+    # -------------------------------------------
+
     groupchat = autogen.GroupChat(
         agents=[rag_proxy, director, copywriter, prompter],
         messages=[],
-        max_round=8,
-        allowed_or_disallowed_speaker_transitions=allowed_transitions,
-        speaker_selection_method="auto",
-        speaker_transitions_type="allowed",
+        max_round=10,
+        speaker_selection_method=custom_speaker_selection, # نستخدم دالتنا الخاصة
     )
 
     manager = autogen.GroupChatManager(
@@ -63,22 +63,20 @@ def run_campaign_meeting(product_name, product_desc):
         llm_config=llm_config
     )
 
-    # 6. صياغة السؤال لـ RAG
-    # نطلب منه البحث في الملفات عن استراتيجيات تناسب المنتج
     problem = f"""
     المنتج: {product_name}
     الوصف: {product_desc}
     
     المطلوب:
-    1. ابحث في ملفات المعرفة (knowledge base) عن أفضل استراتيجية تسويقية تناسب هذا المنتج.
-    2. زود "Creative_Director" بهذه الاستراتيجية ليبدأ التخطيط.
-    3. أكملوا العمل لإنتاج نصوص ووصف للصور.
+    1. ابحث في المعرفة عن استراتيجية.
+    2. وجه Creative_Director.
+    3. أنتجوا النصوص والصور.
     """
 
-    # 7. بدء الدردشة
-    # ملاحظة: نستخدم retrieve_docs لتفعيل البحث أولاً
-    rag_proxy.initiate_chat(
+    chat_result = rag_proxy.initiate_chat(
         manager,
-        message=rag_proxy.message_generator, # هذا يجعل الوكيل يبحث في الملفات أولاً ويولد رسالة
+        message=rag_proxy.message_generator,
         problem=problem,
     )
+
+    return chat_result.chat_history
