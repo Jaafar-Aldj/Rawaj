@@ -1,17 +1,21 @@
 import sys
 import os
 
-# إضافة مجلد app للمسار لكي يرى البايثون الملفات
 sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
 
 from app.agents.manager import run_campaign_meeting
 
 if __name__ == "__main__":
     print("🚀 Starting Rawaj Marketing Team...")
-    print("-" * 50)
     
-    # بيانات منتج وهمي للتجربة
-    product = "مغسلة جوني"
-    description = "خدمة غسيل ملابس مع كوي ,خدمة سريعة, دوام 24 ع 24, اسعار مناسبة"
+    # منتج جديد للتجربة
+    product = "عطر ليالي الصحراء (Desert Nights Perfume)"
+    description = "عطر شرقي فاخر برائحة العود والعنبر، زجاجة سوداء وذهبية، للجنسين."
     
-    run_campaign_meeting(product, description)
+    # تشغيل النظام واستلام النتائج
+    result = run_campaign_meeting(product, description)
+    
+    print("\n" + "="*50)
+    print("✅ MISSION COMPLETE")
+    print(f"🖼️ Generated Image saved at: {result.get('image_path')}")
+    print("="*50)

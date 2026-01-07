@@ -2,6 +2,9 @@ import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 from app.agents.roles import get_director, get_copywriter, get_prompter
 import os
+import json
+import re
+from app.services.image_gen import generate_image_with_imagen
 
 def run_campaign_meeting(product_name, product_desc):
     director = get_director()
@@ -78,5 +81,100 @@ def run_campaign_meeting(product_name, product_desc):
         message=rag_proxy.message_generator,
         problem=problem,
     )
+    
 
-    return chat_result.chat_history
+    # ... (الجزء العلوي من الملف كما هو) ...
+
+    # ---------------------------------------------------------
+    # 8. مرحلة استخراج النتائج والتنفيذ (Updated Logic)
+    # ---------------------------------------------------------
+    
+    final_output = {
+        "ad_copy": {},
+        "image_path": None,
+        "video_prompt": None
+    }
+
+    print("\n🔍 Analyzing chat history for prompts...")
+
+    # نبحث في تاريخ المحادثة
+    for message in reversed(chat_result.chat_history):
+        content = message.get("content", "")
+        name = message.get("name", "")
+        
+        # استخراج الصور من مهندس الوصف
+        if name == "Prompt_Engineer":
+            image_prompt = None
+            
+            # محاولة 1: البحث عن JSON
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                try:
+                    data = json.loads(json_match.group())
+                    # قد يكون مصفوفة أو نصاً واحداً
+                    prompts = data.get("image_prompts", [])
+                    if isinstance(prompts, list) and len(prompts) > 0:
+                        image_prompt = prompts[0]
+                    elif isinstance(prompts, str):
+                        image_prompt = prompts
+                    
+                    final_output["video_prompt"] = data.get("video_prompt")
+                except:
+                    pass
+
+            # محاولة 2: البحث عن النص العادي (Fallback) - هذا سيحل مشكلتك الحالية
+            if not image_prompt:
+                # ريجيكس يبحث عن النص الذي يأتي بعد **Image Prompt:**
+                text_match = re.search(r"\*\*Image Prompt:\*\*\s*(.*)", content, re.IGNORECASE)
+                if text_match:
+                    image_prompt = text_match.group(1).strip()
+                    # تنظيف النص من أي زيادات في النهاية
+                    if "**Video Prompt:**" in content:
+                         # نأخذ النص الموجود بين Image Prompt و Video Prompt
+                         split_content = content.split("**Video Prompt:**")
+                         image_parts = split_content[0].split("**Image Prompt:**")
+                         if len(image_parts) > 1:
+                             image_prompt = image_parts[1].strip()
+
+            # === التنفيذ إذا وجدنا الوصف ===
+            if image_prompt:
+                print(f"🎨 Found Prompt: {image_prompt}")
+                print("🚀 Sending to Google Imagen...")
+                
+                try:
+                    # استدعاء دالة التوليد
+                    final_output["image_path"] = generate_image_with_imagen(image_prompt)
+                except Exception as e:
+                    print(f"❌ Image Generation Failed: {e}")
+                
+                break # وجدنا المطلوب، نتوقف عن البحث
+
+    return final_output
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+    
+    
+
+    
+    
