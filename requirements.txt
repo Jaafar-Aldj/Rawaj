@@ -10,8 +10,14 @@ python-dotenv           # لقراءة ملف .env
 streamlit               # لواجهة المستخدم
 
 # Backend (Optional for later)
-fastapi
+fastapi # fastapi[all]
+fastapi_mail
 uvicorn
+psycopg[binary]
+psycopg2-binary
+sqlalchemy
+pwdlib[argon2]
+
 
 # Utilities
 requests                # للاتصال بالـ APIs
