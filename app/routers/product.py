@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Response, status, HTTPException, Depends
 from sqlalchemy.orm import Session
-from .. import models, schemas
+
+from app import oauth2
+from .. import models, schemas, oauth2
 from ..database import get_db
 
 router = APIRouter(
@@ -8,21 +10,27 @@ router = APIRouter(
     tags=['Product'],
 )
 
-@router.get('/')
-def get_products(db: Session = Depends(get_db)):
-    products = db.query(models.Products).all()
+@router.get('/', response_model=list[schemas.ProductResponse])
+def get_products(db: Session = Depends(get_db),current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    print(current_user.is_verified)
+    products = db.query(models.Products).filter(models.Products.user_id == current_user.id).all()
     return products
 
-@router.get('/{id}')
-def get_product(id: int, db: Session = Depends(get_db)):
-    product = db.query(models.Products).filter(models.Products.id == id).first()
+@router.get('/{id}',response_model=schemas.ProductResponse)
+def get_product(id: int, db: Session = Depends(get_db),current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    product = db.query(models.Products).filter(models.Products.id == id and models.Products.user_id == current_user.id).first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
     return product
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
-def create_product(new_product: schemas.ProductCreate, db: Session = Depends(get_db)):
+@router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ProductResponse)
+def create_product(
+        new_product: schemas.ProductCreate, 
+        db: Session = Depends(get_db), 
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
+    ):
     product_dict = new_product.model_dump()
+    product_dict["user_id"] = current_user.id
     new_product_db = models.Products(**product_dict)
     db.add(new_product_db)
     db.commit()
@@ -30,8 +38,8 @@ def create_product(new_product: schemas.ProductCreate, db: Session = Depends(get
     return new_product_db
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_product(id: int, db: Session = Depends(get_db)):
-    product_query = db.query(models.Products).filter(models.Products.id == id)
+def delete_product(id: int, db: Session = Depends(get_db), current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    product_query = db.query(models.Products).filter(models.Products.id == id and models.Products.user_id == current_user.id)
     product = product_query.first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')

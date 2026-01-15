@@ -18,6 +18,10 @@ class UserResponse(BaseModel): # ما نعيده للمستخدم (بدون با
     class Config:
         from_attributes = True
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
 # --- Product Schemas ---
 class ProductBase(BaseModel):
     name: str
@@ -73,3 +77,13 @@ class CampaignResponse(CampaignBase):
     
     class Config:
         from_attributes = True
+
+
+
+## --- Token Schemas --- 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    id: Optional[int] = None

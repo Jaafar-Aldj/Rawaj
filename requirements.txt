@@ -17,6 +17,8 @@ psycopg[binary]
 psycopg2-binary
 sqlalchemy
 pwdlib[argon2]
+pyjwt
+python-multipart
 
 
 # Utilities
