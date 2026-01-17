@@ -1,8 +1,8 @@
-import os
 import random
 import string
 from pwdlib import PasswordHash
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from .config import settings
 
 password_hash = PasswordHash.recommended()
 
@@ -18,14 +18,15 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 conf = ConnectionConfig(
-    MAIL_USERNAME = os.getenv("MAIL_USERNAME"),
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD"),
-    MAIL_FROM = os.getenv("MAIL_FROM"),
-    MAIL_PORT = 587,
-    MAIL_SERVER = "smtp.gmail.com",
+    MAIL_USERNAME = settings.mail_username,
+    MAIL_PASSWORD = settings.mail_password,
+    MAIL_FROM = settings.mail_from,
+    MAIL_PORT = settings.mail_port,
+    MAIL_SERVER = settings.mail_server,
+    MAIL_FROM_NAME=settings.mail_from_name,
     MAIL_STARTTLS = True,
     MAIL_SSL_TLS = False,
-    USE_CREDENTIALS = True
+    USE_CREDENTIALS = True,
 )
 
 async def send_code_email(email: str, code: str):

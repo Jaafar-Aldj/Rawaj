@@ -11,14 +11,19 @@ router = APIRouter(
 )
 
 @router.get('/', response_model=list[schemas.ProductResponse])
-def get_products(db: Session = Depends(get_db),current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+def get_products(
+        db: Session = Depends(get_db), 
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user),
+        limit: int = 10,
+        skip: int = 0,
+    ):
     print(current_user.is_verified)
-    products = db.query(models.Products).filter(models.Products.user_id == current_user.id).all()
+    products = db.query(models.Products).filter(models.Products.user_id == current_user.id).limit(limit).offset(skip).all()
     return products
 
 @router.get('/{id}',response_model=schemas.ProductResponse)
-def get_product(id: int, db: Session = Depends(get_db),current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
-    product = db.query(models.Products).filter(models.Products.id == id and models.Products.user_id == current_user.id).first()
+def get_product(id: int, db: Session = Depends(get_db), current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    product = db.query(models.Products).filter(models.Products.id == id , models.Products.user_id == current_user.id).first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
     return product
@@ -30,8 +35,7 @@ def create_product(
         current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
     ):
     product_dict = new_product.model_dump()
-    product_dict["user_id"] = current_user.id
-    new_product_db = models.Products(**product_dict)
+    new_product_db = models.Products(user_id = current_user.id, **product_dict)
     db.add(new_product_db)
     db.commit()
     db.refresh(new_product_db)
@@ -39,10 +43,26 @@ def create_product(
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(id: int, db: Session = Depends(get_db), current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
-    product_query = db.query(models.Products).filter(models.Products.id == id and models.Products.user_id == current_user.id)
+    product_query = db.query(models.Products).filter(models.Products.id == id , models.Products.user_id == current_user.id)
     product = product_query.first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
     product_query.delete(synchronize_session=False)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put('/{id}', response_model=schemas.ProductResponse)
+def update_product(
+        id: int, 
+        updated_product: schemas.ProductCreate, 
+        db: Session = Depends(get_db), 
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
+    ):
+    product_query = db.query(models.Products).filter(models.Products.id == id , models.Products.user_id == current_user.id)
+    product = product_query.first()
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
+    product_query.update(updated_product.model_dump(), synchronize_session=False)
+    db.commit()
+    return product_query.first()

@@ -1,10 +1,9 @@
 import os
 import requests
 import base64
-from dotenv import load_dotenv
+from ..config import settings
 
-load_dotenv()
-API_KEY = os.environ.get("GOOGLE_API_KEY")
+API_KEY = settings.google_api_key
 
 def generate_image_with_imagen(prompt, model_name="imagen-4.0-fast-generate-001"):
     """
