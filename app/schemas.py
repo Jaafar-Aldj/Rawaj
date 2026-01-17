@@ -45,7 +45,9 @@ class CampaignBase(BaseModel):
     status: Optional[str] = "DRAFT"
     suggested_audiences: Optional[Dict[str, Any]] = None 
 
-
+class DraftRequest(BaseModel):
+    campaign_id: int
+    selected_audiences: List[str]
 
 # --- Assets Schemas ---
 class AssetBase(BaseModel):
@@ -67,6 +69,9 @@ class AssetResponse(AssetBase):
     
     class Config:
         from_attributes = True
+
+class ApproveRequest(BaseModel):
+    asset_id: int
 
 
 # --- Campaign Response Schema ---

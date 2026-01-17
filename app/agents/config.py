@@ -1,19 +1,9 @@
-from pydantic_settings import BaseSettings
-
-class Settings(BaseSettings):
-    google_api_key: str
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-
-settings = Settings()
+from ..config import settings
 api_key = settings.google_api_key
 
 if not api_key:
     print("⚠️ تحذير: لم يتم العثور على GOOGLE_API_KEY في ملف .env")
 
-# إعدادات الموديل (هذا هو المتغير الذي يبحث عنه ملف الاختبار)
 llm_config = {
     "config_list": [
         {

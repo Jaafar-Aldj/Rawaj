@@ -1,0 +1,130 @@
+
+	
+	
+
+
+
+	
+	
+	
+		
+#	
+
+#
+		
+	
+
+	
+
+
+											
+	
+
+		
+	
+	
+	
+
+				
+	
+	
+			
+	
+
+		
+
+
+
+	
+		
+
+			
+	
+		
+
+
+			
+
+	
+
+	cepts into precise visual outputs for DALL-E 3 and Runway Gen-3.
+
+1. "The Filmmaker's Handbook": Cinematography
+Visual Vocabulary Cheat Sheet
+
+Lighting:
+
+Three-Point Lighting: Standard professional setup (Key, Fill, Backlight) for a clean, dimensional look.
+
+High-Key Lighting: Bright, low-contrast, minimal shadows. Evokes positivity, cleanliness, and optimism.
+
+Low-Key Lighting: High-contrast, dark tones, deep shadows. Evokes drama, mystery, seriousness, and tension.
+
+Rembrandt Lighting: A specific low-key style creating a triangle of light on the cheek. Highly dramatic and artistic.
+
+Golden Hour: Soft, warm, diffused light shortly after sunrise or before sunset. Evokes warmth, romance, nostalgia.
+
+Blue Hour: Cool, soft, diffused light just before sunrise or after sunset. Evokes serenity, cold, or melancholy.
+
+Volumetric Lighting: Visible light rays/beams (e.g., light through a dusty window). Adds depth and atmosphere.
+
+Hard Lighting: Creates sharp, well-defined shadows. Intense and dramatic.
+
+Softbox Lighting: Mimics diffuse, soft light from a large source. Flattering for portraits, clean product shots.
+
+Neon Lighting: Use of neon signs and colors. Evokes cyberpunk, nightlife, urban, and retro aesthetics.
+
+Camera & Lens:
+
+Shot Type: Wide Shot, Full Shot, Medium Shot, Close-up, Extreme Close-up.
+
+Angle: Eye-Level, Low Angle (powerful), High Angle (vulnerable), Dutch Angle (disorienting), Bird's-Eye View, Worm's-Eye View.
+
+Lens Type:
+
+Wide-Angle Lens (e.g., 24mm): Captures a broad field of view, can distort edges. Used for landscapes, establishing shots.
+
+Telephoto Lens (e.g., 85mm, 200mm): Compresses depth, isolates subject. Used for portraits, sports, wildlife.
+
+Macro Lens: For extreme close-ups, revealing fine details.
+
+Prime Lens (e.g., 50mm f/1.8): Fixed focal length, often sharper with better low-light performance.
+
+Composition & Focus:
+
+Rule of Thirds: Placing key elements on intersecting grid lines.
+
+Leading Lines: Using natural lines to guide the viewer's eye.
+
+Depth of Field (DoF): The zone of acceptable sharpness.
+
+Shallow Depth of Field / Bokeh (e.g., f/1.4, f/1.8): Blurs the background, isolates the subject. Creates a professional, cinematic feel.
+
+Deep Depth of Field (e.g., f/11, f/22): Keeps both foreground and background sharp. Used for landscapes.
+
+"If... Then..." Logic Rules for Visuals
+
+IF the goal is to make the subject (person or product) appear heroic, powerful, or dominant, THEN use a Low Angle Shot with Hard Lighting.
+
+IF the brand identity is clean, minimalist, and modern (e.g., Apple), THEN use High-Key Lighting or Softbox Lighting with a Deep Depth of Field.
+
+IF the mood is nostalgic, romantic, or serene, THEN specify Golden Hour Lighting with a Telephoto Lens and Shallow Depth of Field (Bokeh).
+
+IF the product is food, jewelry, or has intricate details, THEN use a Macro Lens, Shallow Depth of Field, and High Contrast to emphasize texture.
+
+IF the scene is meant to be dramatic, mysterious, or serious, THEN use Low-Key Lighting, Rembrandt Lighting, and a cool color palette.
+
+IF creating an establishing shot for a location, THEN use a Wide-Angle Lens from a High Angle or Bird's-Eye View.
+
+2. DALL-E 3 & Image Model Documentation
+Visual Vocabulary Cheat Sheet
+
+Prompt Structure: DALL-E 3 prefers conversational, descriptive sentences. The most critical elements should be mentioned first.
+
+Aspect Ratios (AR): --ar 16:9 (Cinematic), --ar 9:16 (Social Media Stories), --ar 1:1 (Square/Instagram Feed), --ar 4:3 (Standard).
+
+Stylization Keywords:
+
+Medium: photograph, cinematic film still, digital art, vector illustration, 3D render, oil painting.
+
+Detail Level: hyper-deta

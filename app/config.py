@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     mail_port: int
     mail_server: str
 
+    google_api_key: str
+
     class Config:
         env_file = ".env"
-        extra = "ignore"
 
 settings = Settings()

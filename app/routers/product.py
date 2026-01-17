@@ -43,10 +43,12 @@ def create_product(
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
 def delete_product(id: int, db: Session = Depends(get_db), current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
-    product_query = db.query(models.Products).filter(models.Products.id == id , models.Products.user_id == current_user.id)
+    product_query = db.query(models.Products).filter(models.Products.id == id)
     product = product_query.first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
+    if product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
     product_query.delete(synchronize_session=False)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -59,10 +61,12 @@ def update_product(
         db: Session = Depends(get_db), 
         current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
     ):
-    product_query = db.query(models.Products).filter(models.Products.id == id , models.Products.user_id == current_user.id)
+    product_query = db.query(models.Products).filter(models.Products.id == id)
     product = product_query.first()
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
+    if product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
     product_query.update(updated_product.model_dump(), synchronize_session=False)
     db.commit()
     return product_query.first()
