@@ -23,11 +23,8 @@ async def create_user(new_user: schemas.UserCreate, db: Session = Depends(get_db
     user_dict['password_hash'] = utils.hash_function(user_dict.pop('password'))
     new_user_db = models.Users(**user_dict,verification_code=code)
     email_check = db.query(models.Users).filter(models.Users.email == new_user.email).first()
-    username_check = db.query(models.Users).filter(models.Users.username == new_user.username).first()
     if email_check :
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Email ({new_user.email}) already exists")
-    elif username_check :
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Username ({new_user.username}) already exists")
     db.add(new_user_db)
     try :
         await utils.send_code_email(new_user.email, code)

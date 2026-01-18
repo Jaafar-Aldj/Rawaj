@@ -23,11 +23,21 @@ def get_rag_proxy(llm_config):
         },
     )
 
+def json_match_extractor(content):
+    '''Take a chat from LLM and extract JSON part'''
+    try:
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            return data
+    except:
+        print("❌ Failed to parse JSON")
+        raise json.JSONDecodeError
+    return None
 
-# ==============================================================================
-# الوظيفة 1: اقتراح الفئات المستهدفة (مع الشرح)
-# ==============================================================================
+
 def suggest_audiences(product_name, product_desc):
+    '''Take product details and suggest some target audiences with reasons (up to 5)'''
     director = get_director()
     rag_proxy = get_rag_proxy(director.llm_config)
 
@@ -36,7 +46,7 @@ def suggest_audiences(product_name, product_desc):
     Product: {product_name}
     Description: {product_desc}
     
-    TASK: Based on the knowledge base strategies, suggest 3 distinct Target Audiences for this product.
+    TASK: Based on the knowledge base strategies, suggest up to 5 (or less) distinct Target Audiences for this product.
     For each audience, provide a very brief reason (one sentence) explaining WHY they are a good fit.
     
     IMPORTANT: Output ONLY a valid JSON structure like this:
@@ -57,25 +67,19 @@ def suggest_audiences(product_name, product_desc):
     )
 
     last_message = chat_result.chat_history[-1]['content']
-    try:
-        json_match = re.search(r"\{.*\}", last_message, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
-            return data # سيرجع { "suggestions": [...] }
-    except:
-        print("❌ Failed to parse audiences JSON")
-    
-    # قيمة افتراضية محسنة
+    data = json_match_extractor(last_message)
+    if data:
+        return data 
     return {
-        "suggestions": [
+        "suggested_audiences": [
             {"audience": "General Audience", "reason": "Broad appeal product."},
             {"audience": "Early Adopters", "reason": "Interested in new tech."},
             {"audience": "Budget Conscious", "reason": "Affordable pricing."}
         ]
     }
-# ==============================================================================
-# الوظيفة 2: توليد المحتوى لفئة محددة (للمرحلة الثانية)
-# ==============================================================================
+
+
+
 def generate_content_for_audience(product_name, product_desc, audience):
     director = get_director()
     copywriter = get_copywriter()
@@ -96,6 +100,7 @@ def generate_content_for_audience(product_name, product_desc, audience):
 
     message = f"""
     Product: {product_name}
+    product Description: {product_desc}
     Target Audience: {audience}
     
     TASK:
@@ -111,7 +116,8 @@ def generate_content_for_audience(product_name, product_desc, audience):
         "ad_copy": {},
         "image_prompt": None,
         "image_url": None,
-        "video_prompt": None
+        "video_prompt": None,
+        "video_url": None,
     }
 
     for msg in chat_result.chat_history:
@@ -120,28 +126,18 @@ def generate_content_for_audience(product_name, product_desc, audience):
 
         # 1. استخراج النصوص من الكاتب
         if name == "Copywriter":
-            try:
-                json_match = re.search(r"\{.*\}", content, re.DOTALL)
-                if json_match:
-                    final_output["ad_copy"] = json.loads(json_match.group())
-            except: pass
+            final_output["ad_copy"] = json_match_extractor(content)
 
         # 2. استخراج الصور من المهندس وتوليدها
         if name == "Prompt_Engineer":
-            try:
-                json_match = re.search(r"\{.*\}", content, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group())
+            data = json_match_extractor(content)
+           
+            image_prompt = data.get("image_prompts", [])[0]
+            final_output["image_prompt"] = image_prompt
+            final_output["video_prompt"] = data.get("video_prompt")
                     
-                    # حفظ الوصف
-                    image_prompt = data.get("image_prompts", [])[0]
-                    final_output["image_prompt"] = image_prompt
-                    final_output["video_prompt"] = data.get("video_prompt")
-                    
-                    # توليد الصورة
-                    if image_prompt:
-                        print(f"🎨 Generating Image for {audience}...")
-                        final_output["image_url"] = generate_image_with_imagen(image_prompt)
-            except: pass
+            # if image_prompt:
+            #     print(f"🎨 Generating Image for {audience}...")
+            #     final_output["image_url"] = generate_image_with_imagen(image_prompt)
 
     return final_output

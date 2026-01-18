@@ -4,13 +4,13 @@ from typing import List, Optional, Dict, Any
 
 # --- User Schemas ---
 class UserCreate(BaseModel): # للفصل بين الإنشاء والقراءة
-    username: str
+    name: str
     email: EmailStr
     password: str
 
 class UserResponse(BaseModel): # ما نعيده للمستخدم (بدون باسورد)
     id: int
-    username: str
+    name: str
     email: EmailStr
     is_verified: bool
     created_at: datetime
