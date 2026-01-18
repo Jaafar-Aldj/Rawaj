@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from .config import settings
 
 username = settings.database_username
-password = settings.database_password
+password = settings.database_password.replace('%%', '%')  # Handle special characters in password
 host = settings.database_host
 name = settings.database_name
 port = settings.database_port
