@@ -1,5 +1,7 @@
 from fastapi import Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
+
+from app import oauth2
 from .. import utils, models, schemas
 from ..database import get_db
 
@@ -109,3 +111,11 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
         except Exception as e:
             print(e)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
+
+
+# أضف هذا الـ Endpoint الجديد
+@router.get('/me', response_model=schemas.UserResponse)
+def get_current_user_data(current_user: schemas.UserResponse = Depends(oauth2.get_current_user)):
+    # دالة get_current_user التي بنيتها بالفعل تقوم بكل العمل
+    # هي تتحقق من التوكن وترجع بيانات المستخدم
+    return current_user

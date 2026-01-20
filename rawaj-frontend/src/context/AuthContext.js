@@ -2,42 +2,62 @@
 'use client';
 import { createContext, useState, useContext, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import api from '@/services/api'; // 1. استيراد خدمة API الجديدة
 
-// 1. إنشاء الـ Context
 const AuthContext = createContext(null);
 
-// 2. إنشاء الـ Provider (المكون الذي سيزود التطبيق بالبيانات)
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true); // حالة تحميل للتحقق الأولي
+  const [user, setUser] = useState(null); // الآن سنخزن بيانات المستخدم بدلاً من التوكن فقط
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // عند تحميل التطبيق لأول مرة، تحقق مما إذا كان هناك توكن محفوظ في localStorage
-  useEffect(() => {
-    const storedToken = localStorage.getItem('authToken');
-    if (storedToken) {
-      setToken(storedToken);
+  // دالة لجلب بيانات المستخدم الحالي باستخدام التوكن
+  const fetchUser = async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setLoading(false);
+      return;
     }
-    setLoading(false); // انتهاء التحقق الأولي
+
+    try {
+      // يجب أن يكون لديك endpoint في FastAPI لإرجاع بيانات المستخدم الحالي
+      // عادةً ما يكون "GET /users/me"
+      const response = await api('/users/me'); // استخدام الـ api interceptor
+      
+      if (!response.ok) throw new Error('Failed to fetch user');
+      
+      const userData = await response.json();
+      setUser(userData);
+    } catch (error) {
+      console.error('Authentication error:', error);
+      setUser(null);
+      localStorage.removeItem('authToken'); // حذف التوكن غير الصالح
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUser();
   }, []);
 
-  // دالة لتسجيل الدخول
   const login = (newToken) => {
-    setToken(newToken);
-    localStorage.setItem('authToken', newToken); // حفظ التوكن في المتصفح
-    router.push('/dashboard'); // نقل المستخدم إلى لوحة التحكم
+    localStorage.setItem('authToken', newToken);
+    // بعد تسجيل الدخول، قم بجلب بيانات المستخدم مباشرة
+    fetchUser().then(() => {
+        router.push('/dashboard');
+    });
   };
 
-  // دالة لتسجيل الخروج
   const logout = () => {
-    setToken(null);
-    localStorage.removeItem('authToken'); // حذف التوكن من المتصفح
-    router.push('/login'); // نقل المستخدم إلى صفحة تسجيل الدخول
+    setUser(null);
+    localStorage.removeItem('authToken');
+    router.push('/login');
   };
 
-  // القيمة التي سيتم توفيرها لجميع المكونات
   const value = {
-    token,
+    user, // الآن نمرر كائن المستخدم
+    isAuthenticated: !!user, // قيمة boolean سهلة للتحقق
     loading,
     login,
     logout,
@@ -46,7 +66,6 @@ export const AuthProvider = ({ children }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// 3. إنشاء Hook مخصص لتسهيل استخدام الـ Context
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
