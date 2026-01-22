@@ -46,7 +46,7 @@ def generate_image_with_imagen(prompt, model_name="imagen-4.0-fast-generate-001"
             os.makedirs("frontend/assets", exist_ok=True)
             
             # حفظ باسم عشوائي
-            filename = f"frontend/assets/img_{os.urandom(4).hex()}.png"
+            filename = f"rawaj-frontend/assets/img_{os.urandom(4).hex()}.png"
             with open(filename, "wb") as f:
                 f.write(image_data)
             

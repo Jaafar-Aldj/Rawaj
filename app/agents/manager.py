@@ -132,12 +132,97 @@ def generate_content_for_audience(product_name, product_desc, audience):
         if name == "Prompt_Engineer":
             data = json_match_extractor(content)
            
-            image_prompt = data.get("image_prompts", [])[0]
+            image_prompt = data.get("image_prompt")
+            video_prompt = data.get("video_prompt")
+
             final_output["image_prompt"] = image_prompt
-            final_output["video_prompt"] = data.get("video_prompt")
+            final_output["video_prompt"] = video_prompt
                     
-            # if image_prompt:
-            #     print(f"🎨 Generating Image for {audience}...")
-            #     final_output["image_url"] = generate_image_with_imagen(image_prompt)
+            if image_prompt:
+                print(f"🎨 Generating Image for {audience}...")
+                final_output["image_url"] = generate_image_with_imagen(image_prompt)
 
     return final_output
+
+
+# ==============================================================================
+# الوظيفة 3: تعديل المسودة (Feedback Loop)
+# ==============================================================================
+def refine_draft(current_data, feedback, edit_type="both"):
+    """
+    يقوم بتعديل المحتوى بناءً على ملاحظات المستخدم.
+    current_data: { "ad_copy": ..., "image_prompt": ... }
+    edit_type: "text", "image", or "both"
+    """
+    director = get_director()
+    copywriter = get_copywriter()
+    prompter = get_prompter()
+    
+    # وكيل يمثل المستخدم وتعديلاته
+    user = autogen.UserProxyAgent(
+        name="User_Feedback",
+        human_input_mode="NEVER",
+        code_execution_config=False
+    )
+    
+    # تحديد من سيشارك في الاجتماع بناءً على نوع التعديل
+    participants = [user]
+    if edit_type in ["text", "both"]:
+        participants.append(copywriter)
+    if edit_type in ["image", "both"]:
+        participants.append(prompter)
+        
+    groupchat = autogen.GroupChat(
+        agents=participants,
+        messages=[],
+        max_round=3,
+        speaker_selection_method="round_robin"
+    )
+    
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
+
+    # صياغة الرسالة بدقة
+    task_msg = f"User Feedback: {feedback}\n"
+    
+    if edit_type in ["text", "both"]:
+        task_msg += f"Current Copy (JSON): {json.dumps(current_data.get('ad_copy', {}), ensure_ascii=False)}\nTask: Copywriter, Rewrite the ad copy based on feedback. Output JSON.\n"
+        
+    if edit_type in ["image", "both"]:
+        task_msg += f"Current Image Prompt: {current_data.get('image_prompt', '')}\nTask: Prompt_Engineer, Update the image prompt based on feedback. Output JSON.\n"
+
+    # تشغيل الاجتماع المصغر
+    chat_result = user.initiate_chat(manager, message=task_msg)
+
+    # استخراج النتائج الجديدة
+    refined_output = {}
+    
+    for msg in chat_result.chat_history:
+        name = msg.get("name", "")
+        content = msg.get("content", "")
+
+        # استخراج النص الجديد
+        if name == "Copywriter" and edit_type in ["text", "both"]:
+            try:
+                json_match = re.search(r"\{.*\}", content, re.DOTALL)
+                if json_match:
+                    refined_output["ad_copy"] = json.loads(json_match.group())
+            except: pass
+
+        # استخراج الوصف الجديد وتوليد الصورة
+        if name == "Prompt_Engineer" and edit_type in ["image", "both"]:
+            try:
+                json_match = re.search(r"\{.*\}", content, re.DOTALL)
+                if json_match:
+                    data = json.loads(json_match.group())
+                    
+                    image_prompt = data.get("image_prompts", [])[0]
+                    refined_output["image_prompt"] = image_prompt
+                    refined_output["video_prompt"] = data.get("video_prompt") # تحديث فيديو برومبت أيضاً
+                    
+                    if image_prompt:
+                        print(f"🎨 Regenerating Image based on feedback...")
+                        # توليد صورة جديدة
+                        refined_output["image_url"] = generate_image_with_imagen(image_prompt)
+            except: pass
+
+    return refined_output
