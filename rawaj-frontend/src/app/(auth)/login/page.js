@@ -10,7 +10,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth(); // 2. الحصول على دالة login من الـ Context
-
+  
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -21,7 +22,7 @@ export default function LoginPage() {
       formData.append('username', email);
       formData.append('password', password);
 
-      const response = await fetch('http://127.0.0.1:8000/auth/login', {
+      const response = await fetch(`${baseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData,

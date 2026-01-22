@@ -12,6 +12,7 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(''); // State لإظهار رسالة النجاح
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -25,7 +26,7 @@ export default function SignupPage() {
         password: password,
       };
 
-      const response = await fetch('http://127.0.0.1:8000/users/', {
+      const response = await fetch(`${baseUrl}/users/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),

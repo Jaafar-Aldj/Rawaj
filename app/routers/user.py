@@ -10,6 +10,13 @@ router = APIRouter(
     tags=['User'],
 )
 
+# أضف هذا الـ Endpoint الجديد
+@router.get('/me', response_model=schemas.UserResponse)
+def get_current_user_data(current_user: schemas.UserResponse = Depends(oauth2.get_current_user)):
+    # دالة get_current_user التي بنيتها بالفعل تقوم بكل العمل
+    # هي تتحقق من التوكن وترجع بيانات المستخدم
+    return current_user
+
 @router.get('/{id}', response_model=schemas.UserResponse)
 def get_user(id:int, db: Session = Depends(get_db)):
     user = db.query(models.Users).filter(models.Users.id == id).first()
@@ -53,6 +60,8 @@ async def create_user(new_user: schemas.UserCreate, db: Session = Depends(get_db
 def get_users(db: Session = Depends(get_db)):
     users = db.query(models.Users).all()
     return users
+
+
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(id: int, db: Session = Depends(get_db)):
@@ -113,9 +122,3 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
 
 
-# أضف هذا الـ Endpoint الجديد
-@router.get('/me', response_model=schemas.UserResponse)
-def get_current_user_data(current_user: schemas.UserResponse = Depends(oauth2.get_current_user)):
-    # دالة get_current_user التي بنيتها بالفعل تقوم بكل العمل
-    # هي تتحقق من التوكن وترجع بيانات المستخدم
-    return current_user

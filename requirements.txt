@@ -1,26 +1,24 @@
-# AI Core
-ag2[gemini]             # مكتبة الوكلاء (النسخة الحديثة)
-ag2[retrievechat]
-google-generativeai     # للاتصال بموديلات جوجل
+# AI Core   
+ag2[gemini,retrievechat]>=0.10.3
+google-generativeai>=0.8.3     # للاتصال بموديلات جوجل
 
 # Environment
 python-dotenv           # لقراءة ملف .env
 
-# Web Interface
-streamlit               # لواجهة المستخدم
 
 # Backend (Optional for later)
 fastapi # fastapi[all]
 fastapi_mail
 uvicorn
-psycopg[binary]
-psycopg2-binary
-sqlalchemy
-alembic
 pwdlib[argon2]
 pyjwt
 python-multipart
 
+# database 
+sqlalchemy
+alembic
+psycopg[binary]
+psycopg2-binary
 
 # Utilities
 requests                # للاتصال بالـ APIs

@@ -14,6 +14,7 @@ export default function VerifyPage() {
   const router = useRouter();
   const searchParams = useSearchParams(); // Hook لقراءة الـ Query Parameters من الرابط
 
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL;
   // عند تحميل الصفحة، نقوم بقراءة user_id من الرابط
   useEffect(() => {
     const id = searchParams.get('user_id');
@@ -37,7 +38,7 @@ export default function VerifyPage() {
 
     try {
       // بناء الرابط كما يتوقعه FastAPI
-      const url = `http://127.0.0.1:8000/users/verify/${userId}?code=${code}`;
+      const url = `${baseUrl}/users/verify/${userId}?code=${code}`;
 
       const response = await fetch(url, {
         method: 'POST',

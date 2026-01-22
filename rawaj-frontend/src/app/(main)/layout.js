@@ -8,7 +8,7 @@ export default function MainLayout({ children }) {
   return (
     <>
       <Header />
-      <main>{children}</main>
+      <main className="bg-background text-text-main">{children}</main>
       <Footer />
     </>
   );

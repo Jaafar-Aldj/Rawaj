@@ -49,6 +49,14 @@ class DraftRequest(BaseModel):
     campaign_id: int
     selected_audiences: List[str]
 
+class DraftEditRequest(BaseModel):
+    asset_id: int
+    feedback: str 
+    edit_type: str
+
+class FinalizeRequest(BaseModel):
+    campaign_id: int
+
 # --- Assets Schemas ---
 class AssetBase(BaseModel):
     target_audience: str

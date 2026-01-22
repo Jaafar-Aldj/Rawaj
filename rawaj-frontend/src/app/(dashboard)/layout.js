@@ -1,14 +1,13 @@
 // src/app/(dashboard)/layout.js
-'use client'; // Needed for state management (e.g., mobile sidebar toggle)
+'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import ProtectedRoute from '@/components/ProtectedRoute'; // 1. استيراد الحارس
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/context/AuthContext';
 
-// Sidebar component defined within the layout
 const Sidebar = () => {
-  const pathname = usePathname(); // Hook to get the current URL path
-  const { logout } = useAuth(); // الحصول على دالة تسجيل الخروج
+  const pathname = usePathname();
+  const { logout } = useAuth();
 
   const navLinks = [
     { name: '🏠 الرئيسية', href: '/dashboard' },
@@ -18,22 +17,23 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside className="bg-gradient-to-b from-[#0f172a] to-[#020617] border-l border-blue-500/20 p-6 flex flex-col">
+    // استخدام الألوان الجديدة للخلفية والحدود
+    <aside className="bg-gradient-to-b from-panel to-background border-l border-border-color p-6 flex flex-col">
       <div className="text-3xl font-bold text-center mb-12">
-        <Link href="/" className="bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
+        <Link href="/" className="bg-gradient-to-r from-accent to-green-500 text-transparent bg-clip-text">
           Rawaj
         </Link>
       </div>
-      <nav className="flex flex-col gap-2">
+      <nav className="flex flex-col gap-2 flex-grow">
         {navLinks.map((link) => (
           <Link
             key={link.name}
             href={link.href}
-            // Apply 'active' class if the current path matches the link's href
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 font-semibold transition-all duration-300
+            // استخدام الألوان الجديدة للحالة النشطة وحالة الـ hover
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-text-muted font-semibold transition-all duration-300
               ${pathname === link.href
-                ? 'bg-blue-500/10 text-white shadow-lg'
-                : 'hover:bg-gray-700/50 hover:text-white hover:translate-x-1'
+                ? 'bg-accent/10 text-white shadow-lg' // خلفية شفافة من اللون الرئيسي
+                : 'hover:bg-panel hover:text-white hover:translate-x-1'
               }`
             }
           >
@@ -52,15 +52,13 @@ const Sidebar = () => {
   );
 };
 
-// The main layout for the dashboard area
-
 export default function DashboardLayout({ children }) {
   return (
-    // 2. تغليف كل محتوى لوحة التحكم بالحارس
     <ProtectedRoute>
       <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[280px_1fr]">
         <Sidebar />
-        <main className="bg-[#020617] p-4 sm:p-8">
+        {/* استخدام لون الخلفية الرئيسي للمحتوى */}
+        <main className="bg-background p-4 sm:p-8">
           {children}
         </main>
       </div>

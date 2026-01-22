@@ -1,14 +1,51 @@
-from fastapi import APIRouter, Response, status, HTTPException, Depends
+from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadFile, File, Request
 from sqlalchemy.orm import Session
-
 from app import oauth2
 from .. import models, schemas, oauth2
 from ..database import get_db
+
+## Upload image dependencies
+import shutil
+import os
+import uuid 
 
 router = APIRouter(
     prefix='/products',
     tags=['Product'],
 )
+
+# تحديد مسار حفظ الصور
+UPLOAD_DIR = "rawaj-frontend/assets"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/upload-image")
+async def upload_product_image(
+        request: Request, 
+        file: UploadFile = File(...),
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    # 1. التحقق من نوع الملف (اختياري لكن مفضل)
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    # 2. توليد اسم فريد للملف (لتجنب تكرار الأسماء)
+    # نأخذ الامتداد الأصلي (مثل .png)
+    extension = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+    # 3. حفظ الملف على القرص
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not save image: {str(e)}")
+
+    # 4. إرجاع الرابط (URL) الذي سيستخدمه الفرونت إند
+    # نفترض أن السيرفر يعمل على localhost:8000
+    # ملاحظة: في الإنتاج، استبدل هذا برابط السيرفر الحقيقي
+    image_url = f"{request.base_url}assets/{unique_filename}"
+    
+    return {"image_url": image_url}
 
 @router.get('/', response_model=list[schemas.ProductResponse])
 def get_products(

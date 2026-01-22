@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // دالة لجلب بيانات المستخدم الحالي باستخدام التوكن
+  // دالة لجلب بيانات المستخدم الحالي باستخدام التوكن 
   const fetchUser = async () => {
     const token = localStorage.getItem('authToken');
     if (!token) {

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 # from . import models
 from .database import engine
 from .routers import product, user, auth, campaign
@@ -24,8 +25,12 @@ app.include_router(product.router)
 app.include_router(auth.router)
 app.include_router(campaign.router)
 
+app.mount("/assets", StaticFiles(directory="rawaj-frontend/assets"), name="assets")
+
 @app.get('/')
 async def root():
     return {'message':'Hello world!!!!'}
+
+
 
 

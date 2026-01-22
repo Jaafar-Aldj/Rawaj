@@ -1,7 +1,7 @@
 // src/app/layout.js
 import './globals.css';
 import { Tajawal } from 'next/font/google';
-import { AuthProvider } from '@/context/AuthContext'; // 1. استيراد الـ Provider
+import { AuthProvider } from '@/context/AuthContext';
 
 const tajawal = Tajawal({
   subsets: ['arabic'],
@@ -17,8 +17,13 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="ar" dir="rtl">
-      <body className={`${tajawal.variable} font-sans bg-[#050816] text-gray-200`}>
-        {/* 2. تغليف التطبيق بالكامل */}
+      {/* 
+        تطبيق لون الخلفية الرئيسي ولون النص الرئيسي هنا
+        سيضمن أن كل الصفحات ترث هذه الأنماط بشكل افتراضي.
+      */}
+      <body 
+        className={`${tajawal.variable} font-sans bg-background text-text-main`}
+      >
         <AuthProvider>
           {children}
         </AuthProvider>
