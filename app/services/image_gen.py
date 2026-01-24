@@ -38,18 +38,14 @@ def generate_image_with_imagen(prompt, model_name="imagen-4.0-fast-generate-001"
             result = response.json()
             # استخراج الصورة (تأتي مشفرة بـ Base64)
             b64_image = result['predictions'][0]['bytesBase64Encoded']
-            
             # فك التشفير وحفظ الصورة
             image_data = base64.b64decode(b64_image)
-            
             # التأكد من وجود مجلد للصور
-            os.makedirs("frontend/assets", exist_ok=True)
-            
+            os.makedirs("rawaj-frontend/assets", exist_ok=True)
             # حفظ باسم عشوائي
             filename = f"rawaj-frontend/assets/img_{os.urandom(4).hex()}.png"
             with open(filename, "wb") as f:
                 f.write(image_data)
-            
             print(f"✅ Image saved at: {filename}")
             return filename
         else:
@@ -60,7 +56,6 @@ def generate_image_with_imagen(prompt, model_name="imagen-4.0-fast-generate-001"
         print(f"❌ Exception: {e}")
         return None
 
-# --- تجربة مباشرة عند تشغيل الملف ---
 if __name__ == "__main__":
     test_prompt = "A futuristic coffee cup floating in space, cinematic lighting, hyper realistic."
     generate_image_with_imagen(test_prompt)

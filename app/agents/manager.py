@@ -79,7 +79,6 @@ def suggest_audiences(product_name, product_desc):
     }
 
 
-
 def generate_content_for_audience(product_name, product_desc, audience):
     director = get_director()
     copywriter = get_copywriter()
@@ -145,9 +144,6 @@ def generate_content_for_audience(product_name, product_desc, audience):
     return final_output
 
 
-# ==============================================================================
-# الوظيفة 3: تعديل المسودة (Feedback Loop)
-# ==============================================================================
 def refine_draft(current_data, feedback, edit_type="both"):
     """
     يقوم بتعديل المحتوى بناءً على ملاحظات المستخدم.
@@ -203,19 +199,19 @@ def refine_draft(current_data, feedback, edit_type="both"):
         # استخراج النص الجديد
         if name == "Copywriter" and edit_type in ["text", "both"]:
             try:
-                json_match = re.search(r"\{.*\}", content, re.DOTALL)
-                if json_match:
-                    refined_output["ad_copy"] = json.loads(json_match.group())
-            except: pass
+                data = json_match_extractor(content)
+                if data:
+                    refined_output["ad_copy"] = data.get("ad_copy")
+            except: 
+                print("❌ Failed to extract revised ad copy")
+
 
         # استخراج الوصف الجديد وتوليد الصورة
         if name == "Prompt_Engineer" and edit_type in ["image", "both"]:
             try:
-                json_match = re.search(r"\{.*\}", content, re.DOTALL)
-                if json_match:
-                    data = json.loads(json_match.group())
-                    
-                    image_prompt = data.get("image_prompts", [])[0]
+                data = json_match_extractor(content)
+                if data:
+                    image_prompt = data.get("image_prompt")
                     refined_output["image_prompt"] = image_prompt
                     refined_output["video_prompt"] = data.get("video_prompt") # تحديث فيديو برومبت أيضاً
                     
@@ -223,6 +219,7 @@ def refine_draft(current_data, feedback, edit_type="both"):
                         print(f"🎨 Regenerating Image based on feedback...")
                         # توليد صورة جديدة
                         refined_output["image_url"] = generate_image_with_imagen(image_prompt)
-            except: pass
+            except: 
+                print("❌ Failed to extract revised image prompt")
 
     return refined_output

@@ -119,10 +119,9 @@ def edit_draft_content(
     asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == request_data.asset_id).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Draft asset not found")
-    
-    # التأكد من الملكية (عبر الحملة)
-    # (يمكنك إضافة كود للتحقق أن الحملة تابعة للمستخدم الحالي)
-
+    if asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+   
     # 2. استدعاء وكيل التعديل
     # نجهز البيانات الحالية لنرسلها للذكاء
     current_data = {
@@ -143,6 +142,7 @@ def edit_draft_content(
     # 3. تحديث الداتا بيز بالقيم الجديدة
     if request_data.edit_type in ["text", "both"] and updated_result.get("ad_copy"):
         asset.ad_copy = updated_result["ad_copy"]
+        print("Updating ad copy")
         
     if request_data.edit_type in ["image", "both"]:
         # تحديث الصورة إذا وجدت
@@ -150,12 +150,11 @@ def edit_draft_content(
         if image_path:
             filename = os.path.basename(image_path)
             asset.image_url = f"{req.base_url}assets/{filename}"
+            print("Updating image URL")
             
         # تحديث البرومبت
         if updated_result.get("image_prompt"):
             asset.image_prompt = updated_result["image_prompt"]
-        if updated_result.get("video_prompt"):
-            asset.video_prompt = updated_result["video_prompt"]
 
     db.commit()
     db.refresh(asset)
@@ -165,7 +164,7 @@ def edit_draft_content(
 # المرحلة 3: الموافقة وتوليد الفيديو (Finalize)
 # ==============================================================================
 
-@router.post("/finalize", )
+@router.post("/finalize", response_model=schemas.AssetResponse)
 def finalize_asset(
     request: schemas.ApproveRequest,
     db: Session = Depends(get_db),
@@ -190,6 +189,21 @@ def finalize_asset(
 
     # 3. تحديث الحالة
     asset.is_approved = True
-    asset.campaign.status = "COMPLETED"
     db.commit()
-    return 
+
+    # 3. (إضافة ذكية) التحقق هل اكتملت الحملة؟
+    # نعد كم أصل في الحملة، وكم واحد منهم Approved
+    total_assets = db.query(models.CampaignAssets).filter(
+        models.CampaignAssets.campaign_id == asset.campaign_id
+    ).count()
+    approved_assets = db.query(models.CampaignAssets).filter(
+        models.CampaignAssets.campaign_id == asset.campaign_id,
+        models.CampaignAssets.is_approved == True
+    ).count()
+    
+
+    if total_assets == approved_assets:
+        asset.campaign.status = "COMPLETED"
+        db.commit()
+    return asset
+    

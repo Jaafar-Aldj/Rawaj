@@ -8,6 +8,10 @@ class UserCreate(BaseModel): # للفصل بين الإنشاء والقراءة
     email: EmailStr
     password: str
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    password: Optional[str] = None
+
 class UserResponse(BaseModel): # ما نعيده للمستخدم (بدون باسورد)
     id: int
     name: str
@@ -21,6 +25,10 @@ class UserResponse(BaseModel): # ما نعيده للمستخدم (بدون با
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+class UserVerify(BaseModel):
+    user_id: int
+    code: str
 
 # --- Product Schemas ---
 class ProductBase(BaseModel):
@@ -52,7 +60,7 @@ class DraftRequest(BaseModel):
 class DraftEditRequest(BaseModel):
     asset_id: int
     feedback: str 
-    edit_type: str
+    edit_type: str #"text", "image", or "both"
 
 class FinalizeRequest(BaseModel):
     campaign_id: int
@@ -61,14 +69,13 @@ class FinalizeRequest(BaseModel):
 class AssetBase(BaseModel):
     target_audience: str
     ad_copy: Optional[Dict[str, Any]] = None 
-    image_prompt: Optional[str] = None
     image_url: Optional[str] = None
-    video_prompt: Optional[str] = None
     video_url: Optional[str] = None
     is_approved: bool = False
 
 class AssetCreate(AssetBase):
-    pass
+    image_prompt: Optional[str] = None
+    video_prompt: Optional[str] = None
 
 class AssetResponse(AssetBase):
     id: int
