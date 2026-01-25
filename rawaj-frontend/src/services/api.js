@@ -1,21 +1,27 @@
 // src/services/api.js
 
 // دالة أساسية لتكوين الـ Headers
-const getAuthHeaders = () => {
+const getAuthHeaders = (isFormData = false) => {
   const token = localStorage.getItem('authToken');
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }), // إضافة التوكن إذا كان موجوداً
-  };
+  const headers = {};
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
 };
+
 
 // دالة fetch معترضة (Intercepted Fetch)
 const api = async (url, options = {}) => {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${baseUrl}${url}`, {
     ...options,
     headers: {
-      ...getAuthHeaders(),
+      ...getAuthHeaders(isFormData),
       ...options.headers,
     },
   });

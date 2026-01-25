@@ -9,29 +9,102 @@ import api from '@/services/api';
 // ===================================================================
 
 // الخطوة 1: إدخال معلومات المنتج
-const Step1_ProductInput = ({ onComplete }) => {
-  // ... (هذا المكون جاهز تقريباً من ردنا السابق)
+// داخل ملف src/app/(dashboard)/camp/page.js
+
+const Step1_ProductInput = ({ onNext }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  // ... (منطق إرسال المنتج وتحليل الحملة)
+  const [imageFile, setImageFile] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleNext = async () => {
-    // ... (نفس الكود السابق الذي يرسل POST /products ثم POST /campaigns/analyze)
-    const mockCampaign = { id: 123, suggested_audiences: [
-      { audience: "شباب 18-25", reason: "لأن المنتج عصري" },
-      { audience: "نساء 30-45", reason: "لأنه يحل مشكلة يومية" },
-      { audience: "محترفين", reason: "لأنه يزيد الإنتاجية" },
-    ]};
-    onComplete(mockCampaign); // تمرير بيانات الحملة للأب
+  const handleNextStep = async () => {
+    if (!name || !description) {
+      setError('يرجى إدخال اسم ووصف المنتج.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+
+    try {
+      let imageUrl = null;
+
+      // 1. (إذا وجدت صورة) ارفع الصورة أولاً
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+
+        const imageResponse = await api('/products/upload-image', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            // مهم: لا تضع 'Content-Type' هنا، المتصفح سيضعها تلقائياً مع boundary صحيح
+          },
+        });
+
+        if (!imageResponse.ok) throw new Error('فشل في رفع الصورة.');
+        const imageData = await imageResponse.json();
+        imageUrl = imageData.image_url;
+      }
+
+      // 2. إنشاء المنتج مع رابط الصورة (إن وجد)
+      const productData = { name, description, image_url: imageUrl };
+      const productResponse = await api('/products/', {
+        method: 'POST',
+        body: JSON.stringify(productData),
+      });
+
+      if (!productResponse.ok) throw new Error('فشل في إنشاء المنتج.');
+      const newProduct = await productResponse.json();
+      
+      // 3. بعد إنشاء المنتج، نبدأ تحليل الحملة (مع الـ Body الجديد)
+      const analyzeData = { product_id: newProduct.id };
+      const campaignResponse = await api('/campaigns/analyze', {
+        method: 'POST',
+        body: JSON.stringify(analyzeData),
+      });
+      
+      if (!campaignResponse.ok) throw new Error('فشل في تحليل المنتج للحملة.');
+      const newCampaign = await campaignResponse.json();
+
+      // 4. نجاح! ننقل المستخدم للخطوة التالية مع ID الحملة
+      onNext(newCampaign);
+
+    } catch (err) {
+      setError(err.message);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
-
+  
+  // ... باقي كود JSX للفورم يبقى كما هو ...
   return (
     <div>
       <h2 className="text-2xl font-bold mb-4">خطوة 1: معلومات المنتج</h2>
-      <p className="text-gray-400 mb-6">أدخل تفاصيل المنتج أو الخدمة.</p>
-      {/* فورم إدخال الاسم والوصف والصورة */}
+      <p className="text-gray-400 mb-6">أدخل تفاصيل المنتج أو الخدمة التي تريد إنشاء حملة لها.</p>
+      
+      {error && <div className="bg-red-500/20 text-red-300 p-3 rounded-lg text-center mb-4">{error}</div>}
+
+      <div className="space-y-6">
+        <div>
+          <label htmlFor="name" className="block mb-2 text-sm font-medium">اسم المنتج/الخدمة</label>
+          <input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-background border border-border-color rounded-lg px-4 py-2.5 text-text-main" />
+        </div>
+        <div>
+          <label htmlFor="description" className="block mb-2 text-sm font-medium">وصف المنتج</label>
+          <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows="4" required className="w-full bg-background border border-border-color rounded-lg px-4 py-2.5 text-text-main"></textarea>
+        </div>
+        <div>
+          <label htmlFor="image" className="block mb-2 text-sm font-medium">صورة المنتج (اختياري)</label>
+          <input id="image" type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files[0])} className="w-full text-sm text-text-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent/10 file:text-accent hover:file:bg-accent/20" />
+        </div>
+      </div>
+      
       <div className="flex justify-end mt-8">
-        <button onClick={handleNext} className="bg-blue-600 text-white font-bold py-2 px-6 rounded-full">التالي ←</button>
+        <button onClick={handleNextStep} disabled={loading} className="bg-accent text-white font-bold py-2 px-6 rounded-full disabled:opacity-50">
+          {loading ? 'جاري التحليل...' : 'التالي ←'}
+        </button>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import AuthLayout from "@/components/AuthLayout";
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext'; // 1. استيراد useAuth
+import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,8 +11,9 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth(); // 2. الحصول على دالة login من الـ Context
-  
+  const router = useRouter();
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -28,15 +30,27 @@ export default function LoginPage() {
         body: formData,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'فشل تسجيل الدخول.');
-      }
-
+      // لا نتحقق من response.ok هنا بعد الآن
+      // لأننا نريد قراءة الـ body حتى في حالة الخطأ
       const data = await response.json();
+
+      // ===== المنطق الجديد لمعالجة الأخطاء =====
+      if (!response.ok) {
+        // التحقق مما إذا كان الخطأ هو "عدم تفعيل الحساب"
+        // (data.detail سيكون كائناً وليس نصاً في هذه الحالة)
+        if (response.status === 403 && typeof data.detail === 'object' && data.detail.user_id) {
+          // إذا كان كذلك، انقل المستخدم إلى صفحة التفعيل
+          router.push(`/verify?user_id=${data.detail.user_id}`);
+          // لا تعتبر هذا خطأ، بل هو مجرد توجيه
+          return; 
+        }
+        
+        // إذا كان أي خطأ آخر، اعرضه
+        // (data.detail سيكون نصاً في حالة "Invalid email or password")
+        throw new Error(data.detail || 'فشل تسجيل الدخول.');
+      }
       
-      // 3. استدعاء دالة login من الـ Context وتمرير التوكن لها
-      // هي ستقوم بحفظ التوكن ونقل المستخدم إلى لوحة التحكم
+      // إذا نجح الطلب (response.ok كان true)
       login(data.access_token);
 
     } catch (err) {

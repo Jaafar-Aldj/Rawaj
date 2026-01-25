@@ -38,13 +38,14 @@ export default function VerifyPage() {
 
     try {
       // بناء الرابط كما يتوقعه FastAPI
-      const url = `${baseUrl}/users/verify/${userId}?code=${code}`;
-
+      const url = `${baseUrl}/auth/verify`;
+    const bodyData = { user_id: parseInt(userId), code: code };
       const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify(bodyData),
       });
 
       if (!response.ok) {
