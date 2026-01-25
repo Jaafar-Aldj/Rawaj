@@ -1,7 +1,7 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.orm import Session, joinedload
+from typing import List, Optional
 from .. import models, schemas, oauth2
 from ..database import get_db
 from ..agents import manager 
@@ -14,15 +14,15 @@ router = APIRouter(
 # ==============================================================================
 # المرحلة 1: إنشاء الحملة وتحليل المنتج (Audience Suggestion)
 # ==============================================================================
-@router.post("/analyze/{product_id}", response_model=schemas.CampaignResponse)
+@router.post("/analyze", response_model=schemas.CampaignResponse, status_code=status.HTTP_201_CREATED)
 def analyze_product(
-    product_id: int,
+    request: schemas.AnalyzeRequest,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
-    product = db.query(models.Products).filter(models.Products.id == product_id).first()
+    product = db.query(models.Products).filter(models.Products.id == request.product_id).first()
     if not product:
-        raise HTTPException(status_code=404, detail=f"Product with id {product_id} was not found")
+        raise HTTPException(status_code=404, detail=f"Product with id {request.product_id} was not found")
     if product.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to access this product")
 
@@ -52,7 +52,7 @@ def analyze_product(
 # المرحلة 2: اختيار الفئات وتوليد المسودات (Draft Generation)
 # ==============================================================================
 
-@router.post("/generate_drafts",response_model=List[schemas.AssetResponse]) # لا نضع response_model هنا لأننا سنرجع قائمة معقدة
+@router.post("/generate_drafts",response_model=List[schemas.AssetResponse],status_code=status.HTTP_201_CREATED) 
 def generate_drafts(
     req: Request,
     request: schemas.DraftRequest,
@@ -108,7 +108,7 @@ def generate_drafts(
 # المرحلة 2.5: تعديل المسودة (Draft Editing)
 # ==============================================================================
 
-@router.post("/edit_draft", response_model=schemas.AssetResponse)
+@router.put("/edit_draft", response_model=schemas.AssetResponse)
 def edit_draft_content(
     request_data: schemas.DraftEditRequest,
     req: Request, # للحصول على base_url
@@ -164,7 +164,7 @@ def edit_draft_content(
 # المرحلة 3: الموافقة وتوليد الفيديو (Finalize)
 # ==============================================================================
 
-@router.post("/finalize", response_model=schemas.AssetResponse)
+@router.put("/finalize", response_model=schemas.AssetResponse)
 def finalize_asset(
     request: schemas.ApproveRequest,
     db: Session = Depends(get_db),
@@ -207,3 +207,90 @@ def finalize_asset(
         db.commit()
     return asset
     
+@router.get("/{campaign_id}", response_model=schemas.CampaignResponse)
+def get_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).options(joinedload(models.Campaigns.assets))\
+        .filter(models.Campaigns.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this campaign")
+    return campaign
+
+@router.get("/", response_model=List[schemas.CampaignResponse])
+def get_user_campaigns(
+    status: Optional[str] = None,    
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaigns_query = db.query(models.Campaigns)\
+        .options(joinedload(models.Campaigns.assets))\
+        .join(models.Products)\
+        .filter(models.Products.user_id == current_user.id)
+    if status:
+        campaigns = campaigns_query.filter(models.Campaigns.status == status.upper()).all()
+    else:
+        campaigns = campaigns_query.all()
+    return campaigns
+
+@router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).filter(models.Campaigns.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this campaign")
+    
+    db.delete(campaign)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete("/asset/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_campaign_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+    
+    db.delete(asset)
+    db.commit()
+    # تحقق إذا ما كانت الحملة مكتملة بعد حذف الأصل
+    total_assets = db.query(models.CampaignAssets).filter(
+        models.CampaignAssets.campaign_id == asset.campaign_id
+    ).count()
+    approved_assets = db.query(models.CampaignAssets).filter(
+        models.CampaignAssets.campaign_id == asset.campaign_id,
+        models.CampaignAssets.is_approved == True
+    ).count()
+    
+    if total_assets == approved_assets:
+        asset.campaign.status = "COMPLETED"
+        db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.get("/asset/{asset_id}", response_model=schemas.AssetResponse)
+def get_campaign_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+    
+    return asset

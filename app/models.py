@@ -35,6 +35,7 @@ class Campaigns(Base):
     suggested_audiences = Column(JSONB, nullable=True) 
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     product = relationship("Products")
+    assets = relationship("CampaignAssets", back_populates="campaign") 
 
 class CampaignAssets(Base):
     __tablename__ = "campaign_assets"
@@ -48,5 +49,5 @@ class CampaignAssets(Base):
     video_url = Column(String, nullable=True)
     is_approved = Column(Boolean, server_default=text('false'))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
-    campaign = relationship("Campaigns")
+    campaign = relationship("Campaigns", back_populates="assets")
 

@@ -53,6 +53,9 @@ class CampaignBase(BaseModel):
     status: Optional[str] = "DRAFT"
     suggested_audiences: Optional[Dict[str, Any]] = None 
 
+class AnalyzeRequest(BaseModel):
+    product_id: int
+
 class DraftRequest(BaseModel):
     campaign_id: int
     selected_audiences: List[str]
