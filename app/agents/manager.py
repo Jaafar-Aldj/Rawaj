@@ -2,17 +2,47 @@ import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 from app.agents.roles import get_director, get_copywriter, get_prompter
 from app.services.image_gen import generate_image_with_imagen
+from app.agents.config import api_key # نحتاج المفتاح هنا
+import google.generativeai as genai
+import PIL.Image
 import os
 import json
 import re
 
-# إعدادات عامة
+# إعداد مكتبة جوجل مباشرة لتحليل الصور
+genai.configure(api_key=api_key)
+
+# -------------------------------------------------------------------------
+# دالة جديدة: عين الذكاء الاصطناعي (Vision Helper)
+# -------------------------------------------------------------------------
+def analyze_image_content(image_path):
+    """
+    تقوم هذه الدالة بقراءة الصورة واستخراج وصف دقيق لها باستخدام Gemini Vision
+    """
+    if not image_path or not os.path.exists(image_path):
+        return ""
+    
+    try:
+        print(f"👁️ Analyzing image: {image_path}...")
+        model = genai.GenerativeModel('gemini-1.5-flash') # نستخدم موديل سريع
+        img = PIL.Image.open(image_path)
+        
+        prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
+        
+        response = model.generate_content([prompt, img])
+        print("✅ Image Analysis Complete.")
+        return f"\n[AI Visual Analysis of the Product Image]: {response.text}"
+    except Exception as e:
+        print(f"⚠️ Image Analysis Failed: {e}")
+        return ""
+
+
 def get_rag_proxy(llm_config):
     return RetrieveUserProxyAgent(
         name="Knowledge_Base_Admin",
         human_input_mode="NEVER",
         code_execution_config=False,
-        max_consecutive_auto_reply=1, # رد واحد يكفي
+        max_consecutive_auto_reply=1,
         retrieve_config={
             "task": "qa",
             "docs_path": [os.path.join(os.getcwd(), "knowledge")],
@@ -20,97 +50,127 @@ def get_rag_proxy(llm_config):
             "model": llm_config['config_list'][0]['model'],
             "collection_name": "rawaj_final_db", 
             "get_or_create": True,
+            "overwrite": False,
         },
     )
 
 def json_match_extractor(content):
-    '''Take a chat from LLM and extract JSON part'''
     try:
         json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if json_match:
-            data = json.loads(json_match.group())
-            return data
-    except:
-        print("❌ Failed to parse JSON")
-        raise json.JSONDecodeError
+            return json.loads(json_match.group())
+        list_match = re.search(r"\[.*\]", content, re.DOTALL)
+        if list_match:
+            return json.loads(list_match.group())
+    except Exception as e:
+        print(f"❌ Failed to parse JSON: {e}")
     return None
 
+def normalize_prompts_data(data):
+    image_prompt = None
+    video_prompt = None
+    if not data: return None, None
 
-def suggest_audiences(product_name, product_desc):
-    '''Take product details and suggest some target audiences with reasons (up to 5)'''
+    if isinstance(data, dict):
+        image_prompt = data.get("image_prompt") or data.get("image_prompts")
+        video_prompt = data.get("video_prompt") or data.get("video_prompts")
+        
+        if isinstance(image_prompt, list) and len(image_prompt) > 0:
+            image_prompt = image_prompt[0]
+            
+        if not image_prompt and "visual_prompts" in data:
+            items = data["visual_prompts"]
+            if isinstance(items, list) and len(items) > 0:
+                image_prompt = items[0].get("image_prompt")
+                video_prompt = items[0].get("video_prompt")
+
+    elif isinstance(data, list) and len(data) > 0:
+        first_item = data[0]
+        if isinstance(first_item, dict):
+            image_prompt = first_item.get("image_prompt")
+            video_prompt = first_item.get("video_prompt")
+
+    if isinstance(image_prompt, dict): image_prompt = str(image_prompt)
+    if isinstance(video_prompt, dict): video_prompt = str(video_prompt)
+
+    return image_prompt, video_prompt
+
+
+def suggest_audiences(product_name, product_desc, image_path=None):
     director = get_director()
     rag_proxy = get_rag_proxy(director.llm_config)
 
-    # الرسالة المعدلة: طلبنا Reason مع كل Audience
-    message = f"""
+    # 1. تحليل الصورة مسبقاً (إن وجدت)
+    visual_description = analyze_image_content(image_path)
+
+    # 2. دمج الوصف النصي مع وصف الصورة
+    full_description = f"{product_desc}\n{visual_description}"
+
+    content_list = [{"type": "text", "text": f"""
     Product: {product_name}
-    Description: {product_desc}
+    Description: {full_description}
     
-    TASK: Based on the knowledge base strategies, suggest up to 5 (or less) distinct Target Audiences for this product.
-    For each audience, provide a very brief reason (one sentence) explaining WHY they are a good fit.
-    
-    IMPORTANT: Output ONLY a valid JSON structure like this:
-    {{
-        "suggestions": [
-            {{ "audience": "Name of Audience 1", "reason": "Why this fits..." }},
-            {{ "audience": "Name of Audience 2", "reason": "Why this fits..." }},
-            {{ "audience": "Name of Audience 3", "reason": "Why this fits..." }}
-        ]
-    }}
-    """
+    TASK: Based on the knowledge base strategies, suggest up to 5 distinct Target Audiences.
+    IMPORTANT: Output ONLY a valid JSON structure: {{ "suggestions": [ {{ "audience": "Name", "reason": "Why" }} ] }}
+    """}]
 
     chat_result = rag_proxy.initiate_chat(
         director,
-        message=rag_proxy.message_generator,
-        problem=message,
+        message=content_list,
         max_turns=2
     )
 
     last_message = chat_result.chat_history[-1]['content']
     data = json_match_extractor(last_message)
-    if data:
-        return data 
+    
+    if data and "suggestions" in data:
+        return data
+        
     return {
-        "suggested_audiences": [
-            {"audience": "General Audience", "reason": "Broad appeal product."},
-            {"audience": "Early Adopters", "reason": "Interested in new tech."},
-            {"audience": "Budget Conscious", "reason": "Affordable pricing."}
+        "suggestions": [
+            {"audience": "General Public", "reason": "Fallback suggestion."},
+            {"audience": "Tech Enthusiasts", "reason": "Fallback suggestion."}
         ]
     }
 
 
-def generate_content_for_audience(product_name, product_desc, audience):
+def generate_content_for_audience(product_name, product_desc, audience, original_image_path=None):
     director = get_director()
     copywriter = get_copywriter()
     prompter = get_prompter()
     
-    # نستخدم UserProxy عادي هنا (لسنا بحاجة لـ RAG في كل مرة لتوفير الوقت)
     user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
 
-    # تسلسل العمل: المدير -> الكاتب -> المهندس
     groupchat = autogen.GroupChat(
         agents=[user, director, copywriter, prompter],
         messages=[],
-        max_round=5,
-        speaker_selection_method="round_robin" # إجبار الترتيب
+        max_round=4,
+        speaker_selection_method="round_robin"
     )
     
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
 
+    # 1. تحليل الصورة مسبقاً
+    visual_description = analyze_image_content(original_image_path)
+    
+    # 2. إعداد الرسالة (نصية فقط، لكنها تحتوي على تفاصيل الصورة)
     message = f"""
     Product: {product_name}
-    product Description: {product_desc}
+    Description: {product_desc}
+    
+    {visual_description} 
+    
     Target Audience: {audience}
     
     TASK:
-    1. Director: Briefly instruct the team.
-    2. Copywriter: Write Arabic ad copy specifically for '{audience}'. Output JSON.
-    3. Prompt_Engineer: Create visual prompts for '{audience}'. Output JSON.
+    1. Director: Instruct team based on product details (text + visual analysis).
+    2. Copywriter: Write Arabic ad copy for '{audience}'. Output JSON.
+    3. Prompt_Engineer: Create ONE image prompt and ONE video prompt. Output JSON.
     """
 
+    # إرسال كنص عادي (مضمون 100%)
     chat_result = user.initiate_chat(manager, message=message)
 
-    # --- استخراج النتائج ---
     final_output = {
         "ad_copy": {},
         "image_prompt": None,
@@ -123,103 +183,69 @@ def generate_content_for_audience(product_name, product_desc, audience):
         name = msg.get("name", "")
         content = msg.get("content", "")
 
-        # 1. استخراج النصوص من الكاتب
         if name == "Copywriter":
-            final_output["ad_copy"] = json_match_extractor(content)
+            data = json_match_extractor(content)
+            if data:
+                final_output["ad_copy"] = data.get("ad_copy", data)
 
-        # 2. استخراج الصور من المهندس وتوليدها
         if name == "Prompt_Engineer":
             data = json_match_extractor(content)
-           
-            image_prompt = data.get("image_prompt")
-            video_prompt = data.get("video_prompt")
-
-            final_output["image_prompt"] = image_prompt
-            final_output["video_prompt"] = video_prompt
-                    
-            if image_prompt:
+            img_p, vid_p = normalize_prompts_data(data)
+            
+            final_output["image_prompt"] = img_p
+            final_output["video_prompt"] = vid_p
+            
+            if img_p:
                 print(f"🎨 Generating Image for {audience}...")
-                final_output["image_url"] = generate_image_with_imagen(image_prompt)
+                try:
+                    final_output["image_url"] = generate_image_with_imagen(img_p)
+                except Exception as e:
+                    print(f"❌ Image Gen Error: {e}")
 
     return final_output
 
 
 def refine_draft(current_data, feedback, edit_type="both"):
-    """
-    يقوم بتعديل المحتوى بناءً على ملاحظات المستخدم.
-    current_data: { "ad_copy": ..., "image_prompt": ... }
-    edit_type: "text", "image", or "both"
-    """
     director = get_director()
     copywriter = get_copywriter()
     prompter = get_prompter()
     
-    # وكيل يمثل المستخدم وتعديلاته
-    user = autogen.UserProxyAgent(
-        name="User_Feedback",
-        human_input_mode="NEVER",
-        code_execution_config=False
-    )
+    user = autogen.UserProxyAgent(name="User_Feedback", human_input_mode="NEVER", code_execution_config=False)
     
-    # تحديد من سيشارك في الاجتماع بناءً على نوع التعديل
     participants = [user]
-    if edit_type in ["text", "both"]:
-        participants.append(copywriter)
-    if edit_type in ["image", "both"]:
-        participants.append(prompter)
+    if "text" in edit_type or "both" in edit_type: participants.append(copywriter)
+    if "image" in edit_type or "both" in edit_type: participants.append(prompter)
         
-    groupchat = autogen.GroupChat(
-        agents=participants,
-        messages=[],
-        max_round=3,
-        speaker_selection_method="round_robin"
-    )
-    
+    groupchat = autogen.GroupChat(agents=participants, messages=[], max_round=3, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
 
-    # صياغة الرسالة بدقة
     task_msg = f"User Feedback: {feedback}\n"
-    
-    if edit_type in ["text", "both"]:
-        task_msg += f"Current Copy (JSON): {json.dumps(current_data.get('ad_copy', {}), ensure_ascii=False)}\nTask: Copywriter, Rewrite the ad copy based on feedback. Output JSON.\n"
-        
-    if edit_type in ["image", "both"]:
-        task_msg += f"Current Image Prompt: {current_data.get('image_prompt', '')}\nTask: Prompt_Engineer, Update the image prompt based on feedback. Output JSON.\n"
+    if "text" in edit_type or "both" in edit_type:
+        task_msg += f"Current Copy: {current_data.get('ad_copy')}\nTask: Rewrite copy. Output JSON."
+    if "image" in edit_type or "both" in edit_type:
+        task_msg += f"Current Prompt: {current_data.get('image_prompt')}\nTask: Update image prompt. Output JSON."
 
-    # تشغيل الاجتماع المصغر
     chat_result = user.initiate_chat(manager, message=task_msg)
 
-    # استخراج النتائج الجديدة
     refined_output = {}
     
     for msg in chat_result.chat_history:
         name = msg.get("name", "")
         content = msg.get("content", "")
 
-        # استخراج النص الجديد
-        if name == "Copywriter" and edit_type in ["text", "both"]:
-            try:
-                data = json_match_extractor(content)
-                if data:
-                    refined_output["ad_copy"] = data.get("ad_copy")
-            except: 
-                print("❌ Failed to extract revised ad copy")
+        if name == "Copywriter":
+            data = json_match_extractor(content)
+            if data: refined_output["ad_copy"] = data.get("ad_copy", data)
 
-
-        # استخراج الوصف الجديد وتوليد الصورة
-        if name == "Prompt_Engineer" and edit_type in ["image", "both"]:
-            try:
-                data = json_match_extractor(content)
-                if data:
-                    image_prompt = data.get("image_prompt")
-                    refined_output["image_prompt"] = image_prompt
-                    refined_output["video_prompt"] = data.get("video_prompt") # تحديث فيديو برومبت أيضاً
-                    
-                    if image_prompt:
-                        print(f"🎨 Regenerating Image based on feedback...")
-                        # توليد صورة جديدة
-                        refined_output["image_url"] = generate_image_with_imagen(image_prompt)
-            except: 
-                print("❌ Failed to extract revised image prompt")
+        if name == "Prompt_Engineer":
+            data = json_match_extractor(content)
+            img_p, vid_p = normalize_prompts_data(data)
+            
+            refined_output["image_prompt"] = img_p
+            if vid_p: refined_output["video_prompt"] = vid_p
+            
+            if img_p:
+                print(f"🎨 Regenerating Image...")
+                refined_output["image_url"] = generate_image_with_imagen(img_p)
 
     return refined_output

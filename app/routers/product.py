@@ -54,7 +54,6 @@ def get_products(
         limit: int = 10,
         skip: int = 0,
     ):
-    print(current_user.is_verified)
     products = db.query(models.Products).filter(models.Products.user_id == current_user.id).limit(limit).offset(skip).all()
     return products
 

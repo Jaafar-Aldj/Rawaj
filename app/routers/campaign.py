@@ -5,6 +5,9 @@ from typing import List, Optional
 from .. import models, schemas, oauth2
 from ..database import get_db
 from ..agents import manager 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
 
 router = APIRouter(
     prefix="/campaigns",
@@ -29,7 +32,7 @@ def analyze_product(
     # 2. استدعاء وكيل الذكاء الاصطناعي (المدير فقط) لاقتراح الفئات
     # (سنفترض وجود دالة suggest_audiences في manager.py)
     try:
-        suggestions = manager.suggest_audiences(product.name, product.description)
+        suggestions = manager.suggest_audiences(product.name, product.description, product.original_image_url)
     except Exception as e:
         print(f"AI Error: {e}")
         # في حال فشل الـ AI، نضع فئات افتراضية لكي لا يتوقف النظام
@@ -53,57 +56,122 @@ def analyze_product(
 # ==============================================================================
 
 @router.post("/generate_drafts",response_model=List[schemas.AssetResponse],status_code=status.HTTP_201_CREATED) 
-def generate_drafts(
+async def generate_drafts(
     req: Request,
     request: schemas.DraftRequest,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
-    # 1. جلب الحملة
     campaign = db.query(models.Campaigns).filter(models.Campaigns.id == request.campaign_id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     if campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to access this campaign")
 
-    # 2. التكرار على كل فئة وتوليد المحتوى
-    generated_assets = []
-    
-    for audience in request.selected_audiences:
-        # استدعاء الـ AI لتوليد محتوى لهذه الفئة
-        # (سنفترض وجود دالة generate_content_for_audience في manager.py)
-        try :
+    def process_single_audience(audience):
+        try:
             ai_result = manager.generate_content_for_audience(
                 campaign.product.name, 
                 campaign.product.description, 
-                audience
+                audience,
+                original_image_path=campaign.product.original_image_url
             )
-        except Exception as e:
-            print(f"AI Error: {e}")
-            raise HTTPException(status_code=500, detail="Failed to generate content for audience")
-        image_url = ai_result.get("image_url")
-        if image_url:
-            filename = os.path.basename(image_url)
-            public_image_url = f"{req.base_url}assets/{filename}"
-        
-        # حفظ الأصل (Asset) في قاعدة البيانات
-        new_asset = models.CampaignAssets(
-            campaign_id=campaign.id,
-            target_audience=audience,
-            ad_copy=ai_result.get("ad_copy"),       # JSON
-            image_prompt=ai_result.get("image_prompt"),
-            image_url=public_image_url,   # رابط الصورة المولدة
-            video_prompt=ai_result.get("video_prompt"),
-            is_approved=False
-        )
-        db.add(new_asset)
-        generated_assets.append(new_asset)
+            image_url = ai_result.get("image_url")
+            public_image_url = None
+            if image_url:
+                filename = os.path.basename(image_url)
+                public_image_url = image_url
+            return {
+                "audience": audience,
+                "data": ai_result,
+                "local_image_path": public_image_url,
+                "success": True
+            }
+        except Exception as e :
+            print(f"❌ Error generating for {audience}: {e}")
+            return {"audience": audience, "success": False, "error": str(e)}
 
-    # تحديث حالة الحملة
-    campaign.status = "PENDING_APPROVAL"
-    db.commit()
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as pool:
+        tasks =[]   
+        for audience in request.selected_audiences:
+            tasks.append(loop.run_in_executor(pool, process_single_audience, audience))
+        results = await asyncio.gather(*tasks)
+
+    generated_assets = []
+    
+    for result in results:
+        if result["success"] :
+            ai_data = result["data"]
+            final_image_url = None
+            if result["local_image_path"]:
+                filename = os.path.basename(result["local_image_path"])
+                file_image_url = f"{req.base_url}assets/{filename}"
+            new_asset = models.CampaignAssets(
+                campaign_id=campaign.id,
+                target_audience=result["audience"],
+                ad_copy=ai_data.get("ad_copy"),
+                image_prompt=ai_data.get("image_prompt"),
+                image_url=final_image_url,
+                video_prompt=ai_data.get("video_prompt"),
+                is_approved=False
+            )
+            db.add(new_asset)
+            generated_assets.append(new_asset)
+        else:
+            print(f"Skipping failed audience: {result['audience']}")
+
+    if generated_assets:
+        campaign.status = "PENDING_APPROVAL"
+        db.commit()
+    else:
+        raise HTTPException(status_code=500, detail="Failed to generate any drafts")
     
     return generated_assets
+
+
+    # generated_assets = []
+    
+    # for audience in request.selected_audiences:
+    #     # استدعاء الـ AI لتوليد محتوى لهذه الفئة
+    #     # (سنفترض وجود دالة generate_content_for_audience في manager.py)
+    #     try :
+    #         ai_result = manager.generate_content_for_audience(
+    #             campaign.product.name, 
+    #             campaign.product.description, 
+    #             audience,
+    #             original_image_path=campaign.product.original_image_url
+    #         )
+    #     except Exception as e:
+    #         print(f"AI Error: {e}")
+    #         raise HTTPException(status_code=500, detail="Failed to generate content for audience")
+    #     image_url = ai_result.get("image_url")
+    #     if image_url:
+    #         filename = os.path.basename(image_url)
+    #         public_image_url = f"{req.base_url}assets/{filename}"
+        
+    #     # حفظ الأصل (Asset) في قاعدة البيانات
+    #     new_asset = models.CampaignAssets(
+    #         campaign_id=campaign.id,
+    #         target_audience=audience,
+    #         ad_copy=ai_result.get("ad_copy"),       # JSON
+    #         image_prompt=ai_result.get("image_prompt"),
+    #         image_url=public_image_url,   # رابط الصورة المولدة
+    #         video_prompt=ai_result.get("video_prompt"),
+    #         is_approved=False
+    #     )
+    #     db.add(new_asset)
+    #     generated_assets.append(new_asset)
+
+    # # تحديث حالة الحملة
+    # campaign.status = "PENDING_APPROVAL"
+    # db.commit()
+    
+    # return generated_assets
+
+
+
+
 # ==============================================================================
 # المرحلة 2.5: تعديل المسودة (Draft Editing)
 # ==============================================================================

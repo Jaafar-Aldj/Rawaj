@@ -71,7 +71,7 @@ class FinalizeRequest(BaseModel):
 # --- Assets Schemas ---
 class AssetBase(BaseModel):
     target_audience: str
-    ad_copy: Optional[Dict[str, Any]] = None 
+    ad_copy: Optional[Any] = None 
     image_url: Optional[str] = None
     video_url: Optional[str] = None
     is_approved: bool = False
