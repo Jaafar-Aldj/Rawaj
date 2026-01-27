@@ -12,14 +12,13 @@ import re
 # إعداد مكتبة جوجل مباشرة لتحليل الصور
 genai.configure(api_key=api_key)
 
-# -------------------------------------------------------------------------
-# دالة جديدة: عين الذكاء الاصطناعي (Vision Helper)
-# -------------------------------------------------------------------------
+
 def analyze_image_content(image_path):
     """
     تقوم هذه الدالة بقراءة الصورة واستخراج وصف دقيق لها باستخدام Gemini Vision
     """
     if not image_path or not os.path.exists(image_path):
+        print("⚠️  No image")
         return ""
     
     try:
@@ -96,6 +95,8 @@ def normalize_prompts_data(data):
     return image_prompt, video_prompt
 
 
+
+
 def suggest_audiences(product_name, product_desc, image_path=None):
     director = get_director()
     rag_proxy = get_rag_proxy(director.llm_config)
@@ -104,19 +105,19 @@ def suggest_audiences(product_name, product_desc, image_path=None):
     visual_description = analyze_image_content(image_path)
 
     # 2. دمج الوصف النصي مع وصف الصورة
-    full_description = f"{product_desc}\n{visual_description}"
-
-    content_list = [{"type": "text", "text": f"""
+    message = f"""
     Product: {product_name}
-    Description: {full_description}
+    Description: {product_desc}
+    
+    {visual_description}
     
     TASK: Based on the knowledge base strategies, suggest up to 5 distinct Target Audiences.
     IMPORTANT: Output ONLY a valid JSON structure: {{ "suggestions": [ {{ "audience": "Name", "reason": "Why" }} ] }}
-    """}]
+    """
 
     chat_result = rag_proxy.initiate_chat(
         director,
-        message=content_list,
+        message=message,
         max_turns=2
     )
 
@@ -126,12 +127,13 @@ def suggest_audiences(product_name, product_desc, image_path=None):
     if data and "suggestions" in data:
         return data
         
-    return {
-        "suggestions": [
-            {"audience": "General Public", "reason": "Fallback suggestion."},
-            {"audience": "Tech Enthusiasts", "reason": "Fallback suggestion."}
-        ]
-    }
+    raise Exception("NO data returned from agents!!")
+    # return {
+    #     "suggestions": [
+    #         {"audience": "General Public", "reason": "Fallback suggestion."},
+    #         {"audience": "Tech Enthusiasts", "reason": "Fallback suggestion."}
+    #     ]
+    # }
 
 
 def generate_content_for_audience(product_name, product_desc, audience, original_image_path=None):
@@ -206,6 +208,11 @@ def generate_content_for_audience(product_name, product_desc, audience, original
 
 
 def refine_draft(current_data, feedback, edit_type="both"):
+    """
+    يقوم بتعديل المحتوى بناءً على ملاحظات المستخدم.
+    current_data: { "ad_copy": ..., "image_prompt": ... }
+    edit_type: "text", "image", or "both"
+    """ 
     director = get_director()
     copywriter = get_copywriter()
     prompter = get_prompter()
@@ -245,7 +252,10 @@ def refine_draft(current_data, feedback, edit_type="both"):
             if vid_p: refined_output["video_prompt"] = vid_p
             
             if img_p:
-                print(f"🎨 Regenerating Image...")
-                refined_output["image_url"] = generate_image_with_imagen(img_p)
+                try:
+                    print(f"🎨 Regenerating Image...")
+                    refined_output["image_url"] = generate_image_with_imagen(img_p)
+                except Exception as e:
+                    print(f"❌ Image Gen Error: {e}")
 
     return refined_output

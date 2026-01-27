@@ -25,7 +25,7 @@ async def upload_product_image(
         current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
     # 1. التحقق من نوع الملف (اختياري لكن مفضل)
     if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image")
 
     # 2. توليد اسم فريد للملف (لتجنب تكرار الأسماء)
     # نأخذ الامتداد الأصلي (مثل .png)
@@ -38,7 +38,7 @@ async def upload_product_image(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not save image: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not save image: {str(e)}")
 
     # 4. إرجاع الرابط (URL) الذي سيستخدمه الفرونت إند
     # نفترض أن السيرفر يعمل على localhost:8000

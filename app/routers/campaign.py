@@ -25,9 +25,17 @@ def analyze_product(
 ):
     product = db.query(models.Products).filter(models.Products.id == request.product_id).first()
     if not product:
-        raise HTTPException(status_code=404, detail=f"Product with id {request.product_id} was not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with id {request.product_id} was not found")
     if product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this product")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this product")
+    
+    campaign_query = db.query(models.Campaigns).filter(models.Campaigns.product_id == request.product_id)
+    campaign = campaign_query.first()
+    if campaign and campaign.suggested_audiences:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Campaign already exsist for this product")
+    elif campaign :
+        campaign_query.delete(synchronize_session=False)
+        db.commit()
 
     # 2. استدعاء وكيل الذكاء الاصطناعي (المدير فقط) لاقتراح الفئات
     # (سنفترض وجود دالة suggest_audiences في manager.py)
@@ -36,7 +44,7 @@ def analyze_product(
     except Exception as e:
         print(f"AI Error: {e}")
         # في حال فشل الـ AI، نضع فئات افتراضية لكي لا يتوقف النظام
-        raise HTTPException(status_code=500, detail="Failed to analyze product for audience suggestions")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to analyze product for audience suggestions")
 
     # 3. إنشاء الحملة في قاعدة البيانات (Status: DRAFT)
     new_campaign = models.Campaigns(
@@ -49,7 +57,6 @@ def analyze_product(
     db.refresh(new_campaign)
     
     return new_campaign
-
 
 # ==============================================================================
 # المرحلة 2: اختيار الفئات وتوليد المسودات (Draft Generation)
@@ -64,9 +71,22 @@ async def generate_drafts(
 ):
     campaign = db.query(models.Campaigns).filter(models.Campaigns.id == request.campaign_id).first()
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     if campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this campaign")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    assets_query = db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == request.campaign_id)
+    assets = assets_query.all()
+    is_all_ok = True if assets else False
+    for asset in assets:
+        if asset.image_url is None:
+            is_all_ok = False
+            break
+    if not is_all_ok and assets:
+        for asset in assets:
+            db.delete(asset)
+            db.commit()
+    if is_all_ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Assets already exsist for this campaign")
 
     def process_single_audience(audience):
         try:
@@ -106,7 +126,7 @@ async def generate_drafts(
             final_image_url = None
             if result["local_image_path"]:
                 filename = os.path.basename(result["local_image_path"])
-                file_image_url = f"{req.base_url}assets/{filename}"
+                final_image_url = f"{req.base_url}assets/{filename}"
             new_asset = models.CampaignAssets(
                 campaign_id=campaign.id,
                 target_audience=result["audience"],
@@ -125,51 +145,9 @@ async def generate_drafts(
         campaign.status = "PENDING_APPROVAL"
         db.commit()
     else:
-        raise HTTPException(status_code=500, detail="Failed to generate any drafts")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate any drafts")
     
     return generated_assets
-
-
-    # generated_assets = []
-    
-    # for audience in request.selected_audiences:
-    #     # استدعاء الـ AI لتوليد محتوى لهذه الفئة
-    #     # (سنفترض وجود دالة generate_content_for_audience في manager.py)
-    #     try :
-    #         ai_result = manager.generate_content_for_audience(
-    #             campaign.product.name, 
-    #             campaign.product.description, 
-    #             audience,
-    #             original_image_path=campaign.product.original_image_url
-    #         )
-    #     except Exception as e:
-    #         print(f"AI Error: {e}")
-    #         raise HTTPException(status_code=500, detail="Failed to generate content for audience")
-    #     image_url = ai_result.get("image_url")
-    #     if image_url:
-    #         filename = os.path.basename(image_url)
-    #         public_image_url = f"{req.base_url}assets/{filename}"
-        
-    #     # حفظ الأصل (Asset) في قاعدة البيانات
-    #     new_asset = models.CampaignAssets(
-    #         campaign_id=campaign.id,
-    #         target_audience=audience,
-    #         ad_copy=ai_result.get("ad_copy"),       # JSON
-    #         image_prompt=ai_result.get("image_prompt"),
-    #         image_url=public_image_url,   # رابط الصورة المولدة
-    #         video_prompt=ai_result.get("video_prompt"),
-    #         is_approved=False
-    #     )
-    #     db.add(new_asset)
-    #     generated_assets.append(new_asset)
-
-    # # تحديث حالة الحملة
-    # campaign.status = "PENDING_APPROVAL"
-    # db.commit()
-    
-    # return generated_assets
-
-
 
 
 # ==============================================================================
@@ -186,9 +164,9 @@ def edit_draft_content(
     # 1. جلب الأصل (Asset)
     asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == request_data.asset_id).first()
     if not asset:
-        raise HTTPException(status_code=404, detail="Draft asset not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft asset not found")
     if asset.campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this asset")
    
     # 2. استدعاء وكيل التعديل
     # نجهز البيانات الحالية لنرسلها للذكاء
@@ -205,7 +183,7 @@ def edit_draft_content(
         )
     except Exception as e:
         print(f"Edit Error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to refine draft")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to refine draft")
     
     # 3. تحديث الداتا بيز بالقيم الجديدة
     if request_data.edit_type in ["text", "both"] and updated_result.get("ad_copy"):
@@ -241,9 +219,11 @@ def finalize_asset(
     # 1. جلب الأصل والتأكد من الملكية (عبر JOIN مع الحملة)
     asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
     if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
     if asset.campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this asset")
+    if asset.is_approved :
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Asset already approved")
 
     # 2. توليد الفيديو (إذا كان هناك وصف)
     if asset.video_prompt:
@@ -253,7 +233,7 @@ def finalize_asset(
             asset.video_url = video_url
         except Exception as e:
             print(f"Video Error: {e}")
-            raise HTTPException(status_code=500, detail="Failed to generate video")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate video")
 
     # 3. تحديث الحالة
     asset.is_approved = True
@@ -284,9 +264,9 @@ def get_campaign(
     campaign = db.query(models.Campaigns).options(joinedload(models.Campaigns.assets))\
         .filter(models.Campaigns.id == campaign_id).first()
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     if campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this campaign")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
     return campaign
 
 @router.get("/", response_model=List[schemas.CampaignResponse])
@@ -313,9 +293,9 @@ def delete_campaign(
 ):
     campaign = db.query(models.Campaigns).filter(models.Campaigns.id == campaign_id).first()
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     if campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this campaign")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
     
     db.delete(campaign)
     db.commit()
@@ -329,9 +309,9 @@ def delete_campaign_asset(
 ):
     asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
     if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
     if asset.campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this asset")
     
     db.delete(asset)
     db.commit()
@@ -357,8 +337,9 @@ def get_campaign_asset(
 ):
     asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
     if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
     if asset.campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this asset")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this asset")
     
     return asset
+
