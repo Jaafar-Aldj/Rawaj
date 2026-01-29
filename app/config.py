@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     mail_server: str
 
     google_api_key: str
+    elevenlabs_api_key: str
+    elevenlabs_voice_id: str
 
     class Config:
         env_file = ".env"

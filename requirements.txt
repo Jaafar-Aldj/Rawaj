@@ -1,26 +1,31 @@
-# AI Core   
-ag2[gemini,retrievechat]>=0.10.3
-google-generativeai>=0.8.3     # للاتصال بموديلات جوجل
+# --- AI Core (This will install compatible google/grpc libs automatically) ---
+# ag2[gemini,retrievechat]>=0.10.3
+# google-generativeai>=0.8.3
 
-# Environment
-python-dotenv           # لقراءة ملف .env
+# --- Essential Fixes ---
+# Protobuf must be pinned to avoid conflicts with older Google libs
+# protobuf>=4.25.0,<5.0.0
 
-
-# Backend (Optional for later)
-fastapi # fastapi[all]
-fastapi_mail
-uvicorn
-pwdlib[argon2]
-pyjwt
+# --- Backend ---
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
 python-multipart
+pyjwt
 
-# database 
-sqlalchemy
+# --- Database ---
+sqlalchemy>=2.0.0
+# Choose one of these, usually you don't need both binary and pure
+psycopg2-binary 
 alembic
-psycopg[binary]
-psycopg2-binary
 
-# Utilities
-requests                # للاتصال بالـ APIs
-moviepy                 # لمونتاج الفيديو
-pydantic                # للتحقق من البيانات
+# --- Utilities ---
+python-dotenv
+pydantic>=2.0.0
+requests
+moviepy>=1.0.3
+fastapi-mail
+# Rembg can be heavy, usually best to install last if it causes issues
+rembg 
+# onnxruntime
+pillow
+gTTS
