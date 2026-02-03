@@ -23,6 +23,7 @@ python-dotenv
 pydantic>=2.0.0
 requests
 moviepy>=1.0.3
+pwdlib[argon2]
 fastapi-mail
 # Rembg can be heavy, usually best to install last if it causes issues
 rembg 

@@ -30,5 +30,5 @@ def remove_background(input_path, output_path=None):
         return None
     
 if __name__ == "__main__":
-    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\smart_fitness_tracker.jpeg"
+    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\df01cd27-6979-48e9-bf19-4f04f626a768.jpg"
     remove_background(input_path=image_path)

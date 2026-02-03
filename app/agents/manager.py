@@ -17,14 +17,24 @@ def analyze_image_content(image_path):
     """
     تقوم هذه الدالة بقراءة الصورة واستخراج وصف دقيق لها باستخدام Gemini Vision
     """
-    if not image_path or not os.path.exists(image_path):
+    if not image_path:
         print("⚠️  No image")
         return ""
     
+    if "assets/" in image_path and ("http://" in image_path or "https://" in image_path):
+        # نستخرج اسم الملف فقط
+        filename = image_path.split("assets/")[-1]
+        # نبني المسار المحلي الصحيح
+        final_path = os.path.join("rawaj-frontend", "assets", filename)
+
+    if not os.path.exists(final_path):
+        print(f"⚠️ Image file not found locally: {final_path}")
+        return ""
+    
     try:
-        print(f"👁️ Analyzing image: {image_path}...")
-        model = genai.GenerativeModel('gemini-1.5-flash') # نستخدم موديل سريع
-        img = PIL.Image.open(image_path)
+        print(f"👁️ Analyzing image: {final_path}...")
+        model = genai.GenerativeModel('gemini-2.0-flash') # نستخدم موديل سريع
+        img = PIL.Image.open(final_path)
         
         prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
         
@@ -259,3 +269,11 @@ def refine_draft(current_data, feedback, edit_type="both"):
                     print(f"❌ Image Gen Error: {e}")
 
     return refined_output
+
+
+
+if __name__ =="__main__":
+    # image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\smart_fitness_tracker.jpeg"
+    image_path = r"http://127.0.0.1:8000/assets/81e5f1de-2f4f-4f2f-9edd-d3c572ef0e2b.jpeg"
+    analyzed_image = analyze_image_content(image_path=image_path)
+    print(analyzed_image)

@@ -12,3 +12,5 @@ __pycache__/
 email.txt
 collect_code.py
 full_project.txt
+
+service_account.json

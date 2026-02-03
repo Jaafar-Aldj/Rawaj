@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str
     elevenlabs_voice_id: str
 
+    project_id: str
+    location: str
+    model_id: str
+
     class Config:
         env_file = ".env"
 
