@@ -2,48 +2,12 @@ import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 from app.agents.roles import get_director, get_copywriter, get_prompter
 from app.services.image_gen import generate_image_with_imagen
-from app.agents.config import api_key # نحتاج المفتاح هنا
-import google.generativeai as genai
-import PIL.Image
+from app.services.video_gen import create_video_from_image_and_audio, generate_veo_video
+from app.services.audio_gen import generate_audio_elevenlabs
 import os
 import json
 import re
 
-# إعداد مكتبة جوجل مباشرة لتحليل الصور
-genai.configure(api_key=api_key)
-
-
-def analyze_image_content(image_path):
-    """
-    تقوم هذه الدالة بقراءة الصورة واستخراج وصف دقيق لها باستخدام Gemini Vision
-    """
-    if not image_path:
-        print("⚠️  No image")
-        return ""
-    
-    if "assets/" in image_path and ("http://" in image_path or "https://" in image_path):
-        # نستخرج اسم الملف فقط
-        filename = image_path.split("assets/")[-1]
-        # نبني المسار المحلي الصحيح
-        final_path = os.path.join("rawaj-frontend", "assets", filename)
-
-    if not os.path.exists(final_path):
-        print(f"⚠️ Image file not found locally: {final_path}")
-        return ""
-    
-    try:
-        print(f"👁️ Analyzing image: {final_path}...")
-        model = genai.GenerativeModel('gemini-2.0-flash') # نستخدم موديل سريع
-        img = PIL.Image.open(final_path)
-        
-        prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
-        
-        response = model.generate_content([prompt, img])
-        print("✅ Image Analysis Complete.")
-        return f"\n[AI Visual Analysis of the Product Image]: {response.text}"
-    except Exception as e:
-        print(f"⚠️ Image Analysis Failed: {e}")
-        return ""
 
 
 def get_rag_proxy(llm_config):
@@ -107,19 +71,15 @@ def normalize_prompts_data(data):
 
 
 
-def suggest_audiences(product_name, product_desc, image_path=None):
+def suggest_audiences(product_name, product_desc, product_analysis=None):
     director = get_director()
     rag_proxy = get_rag_proxy(director.llm_config)
-
-    # 1. تحليل الصورة مسبقاً (إن وجدت)
-    visual_description = analyze_image_content(image_path)
 
     # 2. دمج الوصف النصي مع وصف الصورة
     message = f"""
     Product: {product_name}
     Description: {product_desc}
-    
-    {visual_description}
+    {product_analysis}
     
     TASK: Based on the knowledge base strategies, suggest up to 5 distinct Target Audiences.
     IMPORTANT: Output ONLY a valid JSON structure: {{ "suggestions": [ {{ "audience": "Name", "reason": "Why" }} ] }}
@@ -138,15 +98,9 @@ def suggest_audiences(product_name, product_desc, image_path=None):
         return data
         
     raise Exception("NO data returned from agents!!")
-    # return {
-    #     "suggestions": [
-    #         {"audience": "General Public", "reason": "Fallback suggestion."},
-    #         {"audience": "Tech Enthusiasts", "reason": "Fallback suggestion."}
-    #     ]
-    # }
 
 
-def generate_content_for_audience(product_name, product_desc, audience, original_image_path=None):
+def generate_content_for_audience(product_name, product_desc, audience, product_analysis=None):
     director = get_director()
     copywriter = get_copywriter()
     prompter = get_prompter()
@@ -161,16 +115,12 @@ def generate_content_for_audience(product_name, product_desc, audience, original
     )
     
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
-
-    # 1. تحليل الصورة مسبقاً
-    visual_description = analyze_image_content(original_image_path)
     
     # 2. إعداد الرسالة (نصية فقط، لكنها تحتوي على تفاصيل الصورة)
     message = f"""
     Product: {product_name}
     Description: {product_desc}
-    
-    {visual_description} 
+    {product_analysis} 
     
     Target Audience: {audience}
     
@@ -270,10 +220,37 @@ def refine_draft(current_data, feedback, edit_type="both"):
 
     return refined_output
 
+def generate_final_video_asset(image_path, video_prompt, ad_copy_text):
+    """
+    دالة شاملة: تولد فيديو Veo + تولد صوت + تدمجهم
+    """
+    final_video_path = None
+    
+    # 1. توليد الفيديو بـ Veo
+    if video_prompt:
+        try:
+            print("🚀 Starting Veo generation...")
+            # نمرر الصورة لـ Veo ليحركها (Image-to-Video)
+            veo_path = generate_veo_video(video_prompt, image_path)
+            
+            if veo_path:
+                final_video_path = veo_path
+        except Exception as e:
+            print(f"❌ Veo Error: {e}")
+
+    
+    # # 3. الدمج (إذا فشل Veo، نستخدم صورة ثابتة + صوت)
+    # if not final_video_path and image_path and audio_path:
+    #     # Fallback: إنشاء فيديو بسيط من صورة وصوت
+    #     return create_video_from_image_and_audio(image_path, audio_path)
+        
+    # # 4. الدمج (إذا نجح Veo + صوت) -> نحتاج دالة لدمج فيديو مع صوت (VideoFileClip)
+    # # (يمكن إضافتها لاحقاً في video_gen.py)
+    
+    return final_video_path
 
 
 if __name__ =="__main__":
     # image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\smart_fitness_tracker.jpeg"
     image_path = r"http://127.0.0.1:8000/assets/81e5f1de-2f4f-4f2f-9edd-d3c572ef0e2b.jpeg"
-    analyzed_image = analyze_image_content(image_path=image_path)
-    print(analyzed_image)
+    

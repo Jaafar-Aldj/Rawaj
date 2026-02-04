@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from app import oauth2
+from app.services.vision import analyze_image_content
 from .. import models, schemas, oauth2
 from ..database import get_db
 
@@ -71,7 +72,10 @@ def create_product(
         current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
     ):
     product_dict = new_product.model_dump()
-    new_product_db = models.Products(user_id = current_user.id, **product_dict)
+    ai_description = None
+    if new_product.original_image_url:
+        ai_description = analyze_image_content(new_product.original_image_url)
+    new_product_db = models.Products(user_id = current_user.id, image_analysis = ai_description, **product_dict)
     db.add(new_product_db)
     db.commit()
     db.refresh(new_product_db)

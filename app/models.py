@@ -24,6 +24,7 @@ class Products(Base):
     name = Column(String,nullable=False)
     description = Column(Text)
     original_image_url = Column(String,nullable=True)
+    image_analysis = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True),server_default=text('now()'))
     owner = relationship("Users")
 

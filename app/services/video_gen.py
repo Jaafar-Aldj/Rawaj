@@ -57,14 +57,18 @@ def get_access_token():
 
 
 def generate_veo_video(prompt_text: str, image_path: str = None):
-    print(f"🚀 Starting generation for prompt: {prompt_text}")
-    
-    if image_path:
-        print(f"🖼️  Using image input: {image_path}")
-        if not os.path.exists(image_path):
+    if not image_path:
+        return None
+    if "assets/" in image_path:
+        filename = image_path.split("assets/")[-1]
+        local_path = os.path.join("rawaj-frontend", "assets", filename)
+    else:
+        local_path = image_path # افتراض أنه مسار محلي
+    if local_path:
+        print(f"🖼️  Using image input: {local_path}")
+        if not os.path.exists(local_path):
             print(f"❌ Image file not found: {image_path}")
             return None
-
     try:
         access_token = get_access_token()
     except Exception as e:
@@ -80,11 +84,11 @@ def generate_veo_video(prompt_text: str, image_path: str = None):
     instance = {"prompt": prompt_text}
 
     # معالجة الصورة
-    if image_path:
-        mime_type, _ = mimetypes.guess_type(image_path)
+    if local_path:
+        mime_type, _ = mimetypes.guess_type(local_path)
         if not mime_type: mime_type = "image/png"
         
-        with open(image_path, "rb") as image_file:
+        with open(local_path, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
             instance["image"] = {
                 "bytesBase64Encoded": encoded_string,

@@ -40,7 +40,7 @@ def analyze_product(
     # 2. استدعاء وكيل الذكاء الاصطناعي (المدير فقط) لاقتراح الفئات
     # (سنفترض وجود دالة suggest_audiences في manager.py)
     try:
-        suggestions = manager.suggest_audiences(product.name, product.description, product.original_image_url)
+        suggestions = manager.suggest_audiences(product.name, product.description, product.image_analysis)
     except Exception as e:
         print(f"AI Error: {e}")
         # في حال فشل الـ AI، نضع فئات افتراضية لكي لا يتوقف النظام
@@ -94,7 +94,7 @@ async def generate_drafts(
                 campaign.product.name, 
                 campaign.product.description, 
                 audience,
-                original_image_path=campaign.product.original_image_url
+                product_analysis=campaign.product.image_analysis
             )
             image_url = ai_result.get("image_url")
             public_image_url = None
@@ -228,8 +228,7 @@ def finalize_asset(
     # 2. توليد الفيديو (إذا كان هناك وصف)
     if asset.video_prompt:
         try:
-            # video_url = manager.generate_video(asset.video_prompt)
-            video_url = "http://fake-video-url.com/video.mp4" # مؤقتاً
+            video_url = manager.generate_veo_video(image_path=asset.image_url, prompt_text=asset.video_prompt)
             asset.video_url = video_url
         except Exception as e:
             print(f"Video Error: {e}")

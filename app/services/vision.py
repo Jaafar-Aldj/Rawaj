@@ -1,0 +1,45 @@
+import google.generativeai as genai
+import PIL.Image
+import os
+from app.agents.config import api_key
+
+# إعداد Gemini
+genai.configure(api_key=api_key)
+
+def analyze_image_content(image_url):
+    """
+    تحليل الصورة المخزنة محلياً بناءً على الرابط العام
+    """
+    if not image_url:
+        return None
+
+    # تحويل الرابط العام إلى مسار محلي
+    # مثال: http://.../assets/img.png -> rawaj-frontend/assets/img.png
+    try:
+        if "assets/" in image_url:
+            filename = image_url.split("assets/")[-1]
+            local_path = os.path.join("rawaj-frontend", "assets", filename)
+        else:
+            local_path = image_url # افتراض أنه مسار محلي
+            
+        if not os.path.exists(local_path):
+            print(f"⚠️ Image file not found: {local_path}")
+            return None
+
+        print(f"👁️ Analyzing Product Image: {local_path}...")
+        model = genai.GenerativeModel('gemini-2.0-flash') # سريع ورخيص
+        img = PIL.Image.open(local_path)
+        
+        prompt = """
+        Describe this product image in high detail for a marketing team. 
+        Focus on: Colors, Material, Design Style, and Key Features.
+        Be objective.
+        Output a concise paragraph.
+        """
+        
+        response = model.generate_content([prompt, img])
+        return f"\n[AI Visual Analysis of the Product Image]: {response.text}"
+
+    except Exception as e:
+        print(f"❌ Vision Analysis Failed: {e}")
+        return None

@@ -35,6 +35,7 @@ class ProductBase(BaseModel):
     name: str
     description: str
     original_image_url: Optional[str] = None
+    image_analysis: Optional[str] = None
 
 class ProductCreate(ProductBase):
     pass
