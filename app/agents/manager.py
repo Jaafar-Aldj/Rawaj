@@ -100,7 +100,7 @@ def suggest_audiences(product_name, product_desc, product_analysis=None):
     raise Exception("NO data returned from agents!!")
 
 
-def generate_content_for_audience(product_name, product_desc, audience, product_analysis=None):
+def generate_content_for_audience(product_name, product_desc, audience, product_analysis=None, image_ref = None):
     director = get_director()
     copywriter = get_copywriter()
     prompter = get_prompter()
@@ -160,7 +160,7 @@ def generate_content_for_audience(product_name, product_desc, audience, product_
             if img_p:
                 print(f"🎨 Generating Image for {audience}...")
                 try:
-                    final_output["image_url"] = generate_image_with_imagen(img_p)
+                    final_output["image_url"] = generate_image_with_imagen(img_p,reference_image_path=image_ref)
                 except Exception as e:
                     print(f"❌ Image Gen Error: {e}")
 

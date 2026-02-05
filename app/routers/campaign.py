@@ -94,7 +94,8 @@ async def generate_drafts(
                 campaign.product.name, 
                 campaign.product.description, 
                 audience,
-                product_analysis=campaign.product.image_analysis
+                product_analysis=campaign.product.image_analysis,
+                image_ref=campaign.product.processed_image_url
             )
             image_url = ai_result.get("image_url")
             public_image_url = None
@@ -126,7 +127,7 @@ async def generate_drafts(
             final_image_url = None
             if result["local_image_path"]:
                 filename = os.path.basename(result["local_image_path"])
-                final_image_url = f"{req.base_url}assets/{filename}"
+                final_image_url = f"{req.base_url}assets/image/{filename}"
             new_asset = models.CampaignAssets(
                 campaign_id=campaign.id,
                 target_audience=result["audience"],
@@ -195,7 +196,7 @@ def edit_draft_content(
         image_path = updated_result.get("image_url")
         if image_path:
             filename = os.path.basename(image_path)
-            asset.image_url = f"{req.base_url}assets/{filename}"
+            asset.image_url = f"{req.base_url}assets/image/{filename}"
             print("Updating image URL")
             
         # تحديث البرومبت
@@ -212,6 +213,7 @@ def edit_draft_content(
 
 @router.put("/finalize", response_model=schemas.AssetResponse)
 def finalize_asset(
+    req: Request,
     request: schemas.ApproveRequest,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
@@ -228,8 +230,9 @@ def finalize_asset(
     # 2. توليد الفيديو (إذا كان هناك وصف)
     if asset.video_prompt:
         try:
-            video_url = manager.generate_veo_video(image_path=asset.image_url, prompt_text=asset.video_prompt)
-            asset.video_url = video_url
+            video_path = manager.generate_veo_video(image_path=asset.image_url, prompt_text=asset.video_prompt)
+            filename = os.path.basename(video_path)
+            asset.video_url = f"{req.base_url}assets/video/{filename}"
         except Exception as e:
             print(f"Video Error: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate video")

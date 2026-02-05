@@ -35,7 +35,7 @@ class ProductBase(BaseModel):
     name: str
     description: str
     original_image_url: Optional[str] = None
-    image_analysis: Optional[str] = None
+    
 
 class ProductCreate(ProductBase):
     pass
@@ -43,6 +43,8 @@ class ProductCreate(ProductBase):
 class ProductResponse(ProductBase):
     id: int
     user_id: int
+    image_analysis: Optional[str] = None
+    processed_image_url: Optional[str] = None
     created_at: datetime
     
     class Config:

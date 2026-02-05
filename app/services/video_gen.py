@@ -16,7 +16,10 @@ LOCATION = settings.location
 MODEL_ID = settings.model_id
 SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
 
-def create_video_from_image_and_audio(image_path, audio_path, output_path=None):
+VIDEO_DIR = "rawaj-frontend/assets/video"
+os.makedirs(VIDEO_DIR, exist_ok=True)
+
+def create_video_from_image_and_audio(image_path, audio_path):
     """
     إنشاء فيديو بسيط: صورة ثابتة + صوت + تأثير زووم (اختياري)
     """
@@ -29,10 +32,9 @@ def create_video_from_image_and_audio(image_path, audio_path, output_path=None):
         
         # دمج الصوت مع الصورة
         video = image.with_audio(audio)
-        
-        # إعدادات التصدير
-        if not output_path:
-            output_path = f"rawaj-frontend/assets/video_{os.urandom(4).hex()}.mp4"
+    
+        unique_filename =  f"video_{os.urandom(4).hex()}.mp4"
+        output_path = os.path.join(VIDEO_DIR, unique_filename)
             
         # الرندرة (هذه العملية تأخذ وقتاً)
         video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
@@ -59,9 +61,9 @@ def get_access_token():
 def generate_veo_video(prompt_text: str, image_path: str = None):
     if not image_path:
         return None
-    if "assets/" in image_path:
-        filename = image_path.split("assets/")[-1]
-        local_path = os.path.join("rawaj-frontend", "assets", filename)
+    if "image/" in image_path:
+        filename = image_path.split("image/")[-1]
+        local_path = os.path.join("rawaj-frontend", "assets", "image", filename)
     else:
         local_path = image_path # افتراض أنه مسار محلي
     if local_path:
@@ -156,17 +158,18 @@ def generate_veo_video(prompt_text: str, image_path: str = None):
                         video_data = video_obj.get("bytesBase64Encoded") or video_obj.get("videoBytes")
 
                         if video_data:
-                            # إنشاء اسم ملف عشوائي
-                            filename = f"rawaj-frontend/assets/veo_{os.urandom(4).hex()}.mp4"
+                            
+                            filename = f"veo_{os.urandom(4).hex()}.mp4"
+                            output_path = os.path.join(VIDEO_DIR, filename)
                             # التأكد من وجود المجلد
-                            os.makedirs(os.path.dirname(filename), exist_ok=True)
+                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
                             
                             # حفظ الملف
-                            with open(filename, "wb") as f:
+                            with open(output_path, "wb") as f:
                                 f.write(base64.b64decode(video_data))
                                 
-                            print(f"✅ Video generated successfully: {filename}")
-                            return filename
+                            print(f"✅ Video generated successfully: {output_path}")
+                            return output_path
                         else:
                             print("❌ 'videos' list exists but no video data key found.")
                             return None

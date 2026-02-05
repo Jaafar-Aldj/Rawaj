@@ -2,6 +2,7 @@ from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadF
 from sqlalchemy.orm import Session
 from app import oauth2
 from app.services.vision import analyze_image_content
+from app.services.image_processing import remove_background
 from .. import models, schemas, oauth2
 from ..database import get_db
 
@@ -16,7 +17,7 @@ router = APIRouter(
 )
 
 # تحديد مسار حفظ الصور
-UPLOAD_DIR = "rawaj-frontend/assets"
+UPLOAD_DIR = "rawaj-frontend/assets/upload"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/upload-image")
@@ -44,7 +45,7 @@ async def upload_product_image(
     # 4. إرجاع الرابط (URL) الذي سيستخدمه الفرونت إند
     # نفترض أن السيرفر يعمل على localhost:8000
     # ملاحظة: في الإنتاج، استبدل هذا برابط السيرفر الحقيقي
-    image_url = f"{request.base_url}assets/{unique_filename}"
+    image_url = f"{request.base_url}assets/upload/{unique_filename}"
     
     return {"image_url": image_url}
 
@@ -67,15 +68,26 @@ def get_product(id: int, db: Session = Depends(get_db), current_user:schemas.Use
 
 @router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ProductResponse)
 def create_product(
+        request: Request,
         new_product: schemas.ProductCreate, 
         db: Session = Depends(get_db), 
         current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
     ):
     product_dict = new_product.model_dump()
     ai_description = None
+    processed_image_url = None
     if new_product.original_image_url:
         ai_description = analyze_image_content(new_product.original_image_url)
-    new_product_db = models.Products(user_id = current_user.id, image_analysis = ai_description, **product_dict)
+        processed_image_path = remove_background(new_product.original_image_url)
+        if processed_image_path:
+            filename = os.path.basename(processed_image_path)
+            processed_image_url = f"{request.base_url}assets/upload/{filename}"
+    new_product_db = models.Products(
+        user_id = current_user.id, 
+        image_analysis = ai_description, 
+        processed_image_url = processed_image_url, 
+        **product_dict
+    )
     db.add(new_product_db)
     db.commit()
     db.refresh(new_product_db)

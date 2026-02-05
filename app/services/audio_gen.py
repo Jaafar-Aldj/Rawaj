@@ -1,9 +1,10 @@
 # from gtts import gTTS
 import os
-import os
 import requests
 from ..config import settings
 
+AUDIO_DIR = "rawaj-frontend/assets/audio"
+os.makedirs(AUDIO_DIR, exist_ok=True)
 
 # def generate_audio(text, output_path=None, lang='ar'):
 #     """
@@ -28,7 +29,7 @@ from ..config import settings
 
 
 
-def generate_audio_elevenlabs(text: str, output_path: str = None, voice_id: str = settings.elevenlabs_voice_id):
+def generate_audio_elevenlabs(text: str, voice_id: str = settings.elevenlabs_voice_id):
     """
     توليد صوت احترافي باستخدام ElevenLabs API.
     """
@@ -57,9 +58,8 @@ def generate_audio_elevenlabs(text: str, output_path: str = None, voice_id: str 
     try:
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status() # ارمِ خطأ إذا كان الرد غير ناجح
-
-        if not output_path:
-            output_path = f"rawaj-frontend/assets/audio_{os.urandom(4).hex()}.mp3"
+        filename = f"audio_{os.urandom(4).hex()}.mp3"
+        output_path = os.path.join(AUDIO_DIR, filename)
 
         with open(output_path, "wb") as f:
             f.write(response.content)

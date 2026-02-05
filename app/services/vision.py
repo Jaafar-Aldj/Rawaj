@@ -12,13 +12,10 @@ def analyze_image_content(image_url):
     """
     if not image_url:
         return None
-
-    # تحويل الرابط العام إلى مسار محلي
-    # مثال: http://.../assets/img.png -> rawaj-frontend/assets/img.png
     try:
-        if "assets/" in image_url:
-            filename = image_url.split("assets/")[-1]
-            local_path = os.path.join("rawaj-frontend", "assets", filename)
+        if "upload/" in image_url:
+            filename = image_url.split("upload/")[-1]
+            local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
         else:
             local_path = image_url # افتراض أنه مسار محلي
             
