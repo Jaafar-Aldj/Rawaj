@@ -65,6 +65,7 @@ prompter = """
         ⛔ NEGATIVE CONSTRAINTS (STRICTLY FORBIDDEN IN PROMPTS):
         - NO Alcohol, wine glasses, cocktails, or bars.
         - NO Women, female figures, or girls (Focus on the Product, male models if needed, or abstract concepts).
+        - NO Children or kids.
         - NO Revealing clothing or inappropriate scenes.
         - NO Pork or gambling elements.
         

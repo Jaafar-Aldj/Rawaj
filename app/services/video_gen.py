@@ -4,7 +4,7 @@ import base64
 import requests
 import google.auth.transport.requests
 import mimetypes
-from moviepy import ImageClip, AudioFileClip
+from moviepy import ImageClip, AudioFileClip, VideoFileClip
 from google.oauth2 import service_account
 # تأكد من أن هذا الاستيراد يعمل عندك
 from ..config import settings 
@@ -188,6 +188,34 @@ def generate_veo_video(prompt_text: str, image_path: str = None):
 
         # انتظار قبل المحاولة التالية
         time.sleep(10)
+
+
+
+def merge_video_with_audio(video_path, audio_path):
+    """دمج فيديو Veo المتحرك مع صوت ElevenLabs"""
+    try:
+        print("🎬 Merging video with audio...")
+        video_clip = VideoFileClip(video_path)
+        audio_clip = AudioFileClip(audio_path)
+        
+        # تكرار الفيديو أو قص الصوت ليتناسبا
+        # الأسهل: قص الصوت ليتناسب مع الفيديو، أو تكرار الفيديو
+        final_duration = min(video_clip.duration, audio_clip.duration)
+        # أو نجعل الفيديو بطول الصوت (loop)
+        if audio_clip.duration > video_clip.duration:
+             # تكرار الفيديو
+             video_clip = video_clip.loop(duration=audio_clip.duration)
+        
+        final_clip = video_clip.with_audio(audio_clip)
+        
+        output_path = video_path.replace(".mp4", "_audio.mp4")
+        final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+        
+        return output_path
+    except Exception as e:
+        print(f"❌ Merge Failed: {e}")
+        return video_path # نرجع الفيديو الصامت كحل بديل
+
 
 
 if __name__ == "__main__" :

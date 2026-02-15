@@ -157,10 +157,31 @@ def generate_content_for_audience(product_name, product_desc, audience, product_
             final_output["image_prompt"] = img_p
             final_output["video_prompt"] = vid_p
             
+            # في دالة generate_content_for_audience
             if img_p:
                 print(f"🎨 Generating Image for {audience}...")
+                
+                # --- هذا هو التعديل الهام ---
+                # تأكد أن original_image_path الذي تمرره هو مسار محلي حقيقي وليس رابط HTTP
+                # إذا كان رابطاً (http://...), يجب تحويله لمسار محلي أولاً
+                local_path = None
+                if image_ref:
+                    if "http" in image_ref and "upload" in image_ref:
+                        filename = image_ref.split("upload/")[-1]
+                        # تأكد من المسار الصحيح لمجلد الرفع (upload أو غيره)
+                        # جرب البحث في المجلدين المحتملين
+                        path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+                        if os.path.exists(path1):
+                            local_path = path1
+                    elif os.path.exists(image_ref):
+                        local_path = image_ref
+                
+                # طباعة للتأكد (Debug)
+                print(f"DEBUG: Using reference image path: {local_path}")
+
                 try:
-                    final_output["image_url"] = generate_image_with_imagen(img_p,reference_image_path=image_ref)
+                    # تمرير المسار المحلي الصحيح
+                    final_output["image_url"] = generate_image_with_imagen(img_p, reference_image_path=local_path)
                 except Exception as e:
                     print(f"❌ Image Gen Error: {e}")
 
