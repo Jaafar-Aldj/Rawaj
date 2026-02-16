@@ -138,6 +138,18 @@ async def generate_drafts(
                 is_approved=False
             )
             db.add(new_asset)
+            db.commit() 
+            db.refresh(new_asset)
+
+            
+            if new_asset.image_url:
+                first_version = models.ImageVersions(
+                    asset_id=new_asset.id,
+                    image_url=new_asset.image_url,
+                    prompt=new_asset.image_prompt,
+                    version_number=1
+                )
+                db.add(first_version)
             generated_assets.append(new_asset)
         else:
             print(f"Skipping failed audience: {result['audience']}")
@@ -191,18 +203,36 @@ def edit_draft_content(
         asset.ad_copy = updated_result["ad_copy"]
         print("Updating ad copy")
         
+        
     if request_data.edit_type in ["image", "both"]:
-        # تحديث الصورة إذا وجدت
         image_path = updated_result.get("image_url")
         if image_path:
             filename = os.path.basename(image_path)
-            asset.image_url = f"{req.base_url}assets/image/{filename}"
-            print("Updating image URL")
-            
-        # تحديث البرومبت
-        if updated_result.get("image_prompt"):
-            asset.image_prompt = updated_result["image_prompt"]
+            new_url = f"{req.base_url}assets/image/{filename}"
+            new_prompt = updated_result.get("image_prompt", asset.image_prompt)
 
+            # 1. تحديث الأصل الرئيسي (ليراه المستخدم فوراً)
+            asset.image_url = new_url
+            asset.image_prompt = new_prompt
+            
+            # 2. حساب رقم الإصدار الجديد
+            last_version = db.query(models.ImageVersions)\
+                .filter(models.ImageVersions.asset_id == asset.id)\
+                .order_by(models.ImageVersions.version_number.desc())\
+                .first()
+            
+            next_ver = (last_version.version_number + 1) if last_version else 1
+            
+            # 3. حفظ الإصدار في الأرشيف
+            new_version = models.ImageVersions(
+                asset_id=asset.id,
+                image_url=new_url,
+                prompt=new_prompt,
+                version_number=next_ver
+            )
+            db.add(new_version)
+
+    # ... (حفظ التغييرات) ...
     db.commit()
     db.refresh(asset)
     return asset
@@ -255,6 +285,31 @@ def finalize_asset(
     if total_assets == approved_assets:
         asset.campaign.status = "COMPLETED"
         db.commit()
+    return asset
+
+@router.post("/asset/{asset_id}/restore_image/{version_id}", response_model=schemas.AssetResponse)
+def restore_image_version(
+        asset_id: int, 
+        version_id: int, 
+        db: Session = Depends(get_db), 
+        current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+    ):
+    campaign = db.query(models.Campaigns).join(models.Products).filter(models.CampaignAssets.id == asset_id).first()
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    version = db.query(models.ImageVersions).filter(models.ImageVersions.id == version_id).first()
+    
+    if not asset or not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if version.asset_id != asset.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Version does not belong to this asset")
+        
+    # استرجاع البيانات من الإصدار القديم
+    asset.image_url = version.image_url
+    asset.image_prompt = version.prompt
+    
+    db.commit()
     return asset
     
 @router.get("/{campaign_id}", response_model=schemas.CampaignResponse)

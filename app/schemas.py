@@ -83,10 +83,29 @@ class AssetCreate(AssetBase):
     image_prompt: Optional[str] = None
     video_prompt: Optional[str] = None
 
+class ImageVersionResponse(BaseModel):
+    id: int
+    image_url: str
+    version_number: int
+    created_at: datetime
+    class Config: 
+        from_attributes = True
+
+class VideoVersionResponse(BaseModel):
+    id: int
+    video_url: str
+    version_number: int
+    created_at: datetime
+    class Config: 
+        from_attributes = True
+
+
 class AssetResponse(AssetBase):
     id: int
     campaign_id: int
     created_at: datetime
+    image_versions: List[ImageVersionResponse] = []
+    video_versions: List[VideoVersionResponse] = []
     
     class Config:
         from_attributes = True

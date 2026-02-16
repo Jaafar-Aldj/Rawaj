@@ -105,7 +105,7 @@ def generate_veo_video(prompt_text: str, image_path: str = None):
     try:
         response = requests.post(start_url, headers=headers, json={
             "instances": [instance],
-            "parameters": {"sampleCount": 1}
+            "parameters": {"sampleCount": 1, "safetySetting": "block_only_high", "personGeneration": "allow_all"}
         }, timeout=30) # تايم أوت للطلب الأول
         
         if response.status_code != 200:
@@ -220,8 +220,8 @@ def merge_video_with_audio(video_path, audio_path):
 
 if __name__ == "__main__" :
     # تأكد من المسار
-    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\img_4747dbda.png"
-    prompt = '''A montage of dynamic shots showcasing the Smart Fitness Tracker being used in various fitness activities (running, weightlifting, yoga) by a male model, focus on the device's display and data visualization, fast cuts, upbeat music, product demo, sweeping camera movements.'''
+    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\image\gen_76282eb1.png"
+    prompt = '''A short, dynamic video showcasing the navy captain's hat rotating slowly on a turntable against a neutral background. The camera slowly zooms in to highlight key features such as the brim, insignia, and stitching. Use smooth, controlled camera movements. The video ends with a title card displaying the product name and a call to action. [Hat + Slow Rotation + Zoom In + Product Demo]'''
     generate_veo_video(
         prompt_text=prompt,
         image_path=image_path,
