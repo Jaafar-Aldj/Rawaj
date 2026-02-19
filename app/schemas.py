@@ -71,6 +71,10 @@ class DraftEditRequest(BaseModel):
 class FinalizeRequest(BaseModel):
     campaign_id: int
 
+class RegenerateVideoRequest(BaseModel):
+    asset_id: int
+    feedback: str
+
 # --- Assets Schemas ---
 class AssetBase(BaseModel):
     target_audience: str

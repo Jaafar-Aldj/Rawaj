@@ -234,14 +234,26 @@ def refine_draft(current_data, feedback, edit_type="both"):
             
             if img_p:
                 try:
+                    image_ref = current_data.get("image_url")
+                    local_path = None
+                    if image_ref:
+                        if "http" in image_ref and "upload" in image_ref:
+                            filename = image_ref.split("upload/")[-1]
+                            # تأكد من المسار الصحيح لمجلد الرفع (upload أو غيره)
+                            # جرب البحث في المجلدين المحتملين
+                            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+                            if os.path.exists(path1):
+                                local_path = path1
+                        elif os.path.exists(image_ref):
+                            local_path = image_ref
                     print(f"🎨 Regenerating Image...")
-                    refined_output["image_url"] = generate_image_with_imagen(img_p)
+                    refined_output["image_url"] = generate_image_with_imagen(img_p, reference_image_path=local_path)
                 except Exception as e:
                     print(f"❌ Image Gen Error: {e}")
 
     return refined_output
 
-def generate_final_video_asset(image_path, video_prompt, ad_copy_text):
+def generate_final_video_asset(image_path, video_prompt):
     """
     دالة شاملة: تولد فيديو Veo + تولد صوت + تدمجهم
     """
@@ -269,6 +281,45 @@ def generate_final_video_asset(image_path, video_prompt, ad_copy_text):
     # # (يمكن إضافتها لاحقاً في video_gen.py)
     
     return final_video_path
+
+def refine_video_with_feedback(current_data, feedback):
+    """
+    دالة لتعديل الفيديو بناءً على ملاحظات المستخدم.
+    feedback: نص الملاحظات التي قد تحتوي على تفاصيل حول ما يجب تعديله في الفيديو.
+    """
+    director = get_director()
+    prompter = get_prompter()
+
+    user = autogen.UserProxyAgent(name="User_Feedback", human_input_mode="NEVER", code_execution_config=False)
+    groupchat = autogen.GroupChat(agents=[director, prompter, user], messages=[], max_round=3, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
+
+    task_msg = f"User Feedback: {feedback}\n Current Prompt: {current_data.get('video_prompt')}\nTask: Update video prompt. Output JSON."
+
+    chat_result = user.initiate_chat(manager, message=task_msg)
+
+    refined_output = {}
+    
+    for msg in chat_result.chat_history:
+        name = msg.get("name", "")
+        content = msg.get("content", "")
+
+        if name == "Prompt_Engineer":
+            data = json_match_extractor(content)
+            vid_p = normalize_prompts_data(data)
+            
+            refined_output["video_prompt"] = vid_p
+            try:
+                image_path = current_data.get("image_url")
+                
+                print(f"🎨 Regenerating Video...")
+                video_path = generate_veo_video(vid_p, image_path)
+                if video_path:
+                    refined_output["video_url"] = video_path
+            except Exception as e:
+                print(f"❌ Video Gen Error: {e}")
+
+    return refined_output
 
 
 if __name__ =="__main__":

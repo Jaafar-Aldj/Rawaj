@@ -185,7 +185,8 @@ def edit_draft_content(
     # نجهز البيانات الحالية لنرسلها للذكاء
     current_data = {
         "ad_copy": asset.ad_copy,
-        "image_prompt": asset.image_prompt
+        "image_prompt": asset.image_prompt,
+        "image_url": asset.campaign.product.processed_image_url, 
     }
     
     try:
@@ -262,7 +263,16 @@ def finalize_asset(
         try:
             video_path = manager.generate_veo_video(image_path=asset.image_url, prompt_text=asset.video_prompt)
             filename = os.path.basename(video_path)
-            asset.video_url = f"{req.base_url}assets/video/{filename}"
+            video_url = f"{req.base_url}assets/video/{filename}"
+            asset.video_url = video_url
+            
+            first_vid_ver = models.VideoVersions(
+                    asset_id=asset.id,
+                    video_url=video_url,
+                    prompt=asset.video_prompt,
+                    version_number=1
+                )
+            db.add(first_vid_ver)
         except Exception as e:
             print(f"Video Error: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate video")
@@ -287,30 +297,75 @@ def finalize_asset(
         db.commit()
     return asset
 
-@router.post("/asset/{asset_id}/restore_image/{version_id}", response_model=schemas.AssetResponse)
-def restore_image_version(
-        asset_id: int, 
-        version_id: int, 
-        db: Session = Depends(get_db), 
-        current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
-    ):
-    campaign = db.query(models.Campaigns).join(models.Products).filter(models.CampaignAssets.id == asset_id).first()
-    if campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
-    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
-    version = db.query(models.ImageVersions).filter(models.ImageVersions.id == version_id).first()
-    
-    if not asset or not version:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if version.asset_id != asset.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Version does not belong to this asset")
+
+
+@router.put("/regenerate_video", response_model=schemas.AssetResponse)
+def regenerate_video(
+    request: schemas.RegenerateVideoRequest, 
+    req: Request,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this asset")
+    if not asset: 
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if asset.campaign.product.user_id != current_user.id: 
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    current_data = {
+        "video_prompt": asset.video_prompt,
+        "image_url": asset.image_url, 
+    }
+
+    try:
+        updated_video_data = manager.refine_video_with_feedback(
+            current_data=current_data,
+            feedback=request.feedback
+        )
+    except Exception as e:
+        print(f"Edit Error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to refine video prompt")
         
-    # استرجاع البيانات من الإصدار القديم
-    asset.image_url = version.image_url
-    asset.image_prompt = version.prompt
-    
-    db.commit()
-    return asset
+    video_path = updated_video_data.get("video_url")
+    prompt_to_use = updated_video_data.get("video_prompt")
+    if video_path:
+        filename = os.path.basename(video_path)
+        new_video_url = f"{req.base_url}assets/video/{filename}"
+        
+        # تحديث الأصل الرئيسي
+        asset.video_url = new_video_url
+        asset.video_prompt = prompt_to_use
+        
+        # --- حفظ إصدار جديد ---
+        last_ver = db.query(models.VideoVersions)\
+            .filter(models.VideoVersions.asset_id == asset.id)\
+            .order_by(models.VideoVersions.version_number.desc())\
+            .first()
+        
+        next_ver = (last_ver.version_number + 1) if last_ver else 1
+        
+        new_version = models.VideoVersions(
+            asset_id=asset.id,
+            video_url=new_video_url,
+            prompt=prompt_to_use,
+            version_number=next_ver
+        )
+        db.add(new_version)
+        
+        db.commit()
+        db.refresh(asset)
+        return asset
+    else:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video generation returned None")
+
+
+
+# ==============================================================================
+# باقي العمليات: استرجاع الإصدار القديم، حذف الحملة/الأصل، جلب الحملة/الأصول
+# ==============================================================================
+
     
 @router.get("/{campaign_id}", response_model=schemas.CampaignResponse)
 def get_campaign(
@@ -400,3 +455,61 @@ def get_campaign_asset(
     
     return asset
 
+@router.post("/asset/{asset_id}/restore_image/{version_id}", response_model=schemas.AssetResponse)
+def restore_image_version(
+        asset_id: int, 
+        version_id: int, 
+        db: Session = Depends(get_db), 
+        current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+    ):
+    campaign = db.query(models.Campaigns).join(models.Products).filter(models.CampaignAssets.id == asset_id).first()
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    version = db.query(models.ImageVersions).filter(models.ImageVersions.id == version_id).first()
+    
+    if not asset or not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if version.asset_id != asset.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Version does not belong to this asset")
+        
+    # استرجاع البيانات من الإصدار القديم
+    asset.image_url = version.image_url
+    asset.image_prompt = version.prompt
+    
+    db.commit()
+    return asset
+
+@router.get("/asset/{asset_id}/versions/image", response_model=List[schemas.ImageVersionResponse])
+def get_image_versions(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).join(models.Products).filter(models.CampaignAssets.id == asset_id).first()
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    
+    
+    versions = db.query(models.ImageVersions).filter(models.ImageVersions.asset_id == asset_id).order_by(models.ImageVersions.version_number.desc()).all()
+    return versions
+
+@router.get("/asset/{asset_id}/versions/video", response_model=List[schemas.VideoVersionResponse])
+def get_video_versions(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).join(models.Products).filter(models.CampaignAssets.id == asset_id).first()
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    
+    
+    versions = db.query(models.VideoVersions).filter(models.VideoVersions.asset_id == asset_id).order_by(models.VideoVersions.version_number.desc()).all()
+    return versions
