@@ -384,6 +384,8 @@ def get_campaign(
 @router.get("/", response_model=List[schemas.CampaignResponse])
 def get_user_campaigns(
     status: Optional[str] = None,    
+    limit: Optional[int] = 10,
+    skip: Optional[int] = 0,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -392,9 +394,9 @@ def get_user_campaigns(
         .join(models.Products)\
         .filter(models.Products.user_id == current_user.id)
     if status:
-        campaigns = campaigns_query.filter(models.Campaigns.status == status.upper()).all()
+        campaigns = campaigns_query.filter(models.Campaigns.status == status.upper()).limit(limit).offset(skip).all()
     else:
-        campaigns = campaigns_query.all()
+        campaigns = campaigns_query.limit(limit).offset(skip).all()
     return campaigns
 
 @router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
