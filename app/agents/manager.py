@@ -3,7 +3,7 @@ from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProx
 from app.agents.roles import get_director, get_copywriter, get_prompter
 from app.services.image_gen import generate_image_with_imagen
 from app.services.video_gen import create_video_from_image_and_audio, generate_veo_video
-from app.services.audio_gen import generate_audio_elevenlabs
+# from app.services.audio_gen import generate_audio_elevenlabs
 import os
 import json
 import re

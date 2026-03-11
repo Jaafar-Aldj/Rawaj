@@ -482,6 +482,31 @@ def restore_image_version(
     db.commit()
     return asset
 
+@router.post("/asset/{asset_id}/restore_video/{version_id}", response_model=schemas.AssetResponse)
+def restore_video_version(
+        asset_id: int, 
+        version_id: int, 
+        db: Session = Depends(get_db), 
+        current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+    ):
+    campaign = db.query(models.Campaigns).join(models.Products).filter(models.CampaignAssets.id == asset_id).first()
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    asset = db.query(models.CampaignAssets).filter(models.CampaignAssets.id == asset_id).first()
+    version = db.query(models.VideoVersions).filter(models.VideoVersions.id == version_id).first()
+    
+    if not asset or not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if version.asset_id != asset.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Version does not belong to this asset")
+        
+    # استرجاع البيانات من الإصدار القديم
+    asset.video_url = version.video_url
+    asset.video_prompt = version.prompt
+    
+    db.commit()
+    return asset
+
 @router.get("/asset/{asset_id}/versions/image", response_model=List[schemas.ImageVersionResponse])
 def get_image_versions(
     asset_id: int,

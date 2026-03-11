@@ -24,7 +24,7 @@ const Header = () => {
         </nav>
 
         {/* Action Button */}
-        <Link href="/login" className="hidden sm:inline-block bg-gradient-to-br from-blue-600 to-blue-500 text-white font-semibold py-2 px-6 rounded-full shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform">
+        <Link href="/upload-image" className="hidden sm:inline-block bg-gradient-to-br from-blue-600 to-blue-500 text-white font-semibold py-2 px-6 rounded-full shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform">
           ابدأ الآن
         </Link>
         

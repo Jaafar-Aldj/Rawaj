@@ -34,7 +34,7 @@ const HeroSection = () => {
         </p>
         <div className="flex justify-center gap-4 flex-wrap">
           <Link 
-            href="/dashboard" 
+            href="/upload-image" 
             className="bg-gradient-to-br from-blue-600 to-blue-500 text-white font-semibold py-3 px-8 rounded-full shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform"
           >
             جرب المنصة الآن

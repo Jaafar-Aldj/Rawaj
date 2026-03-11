@@ -1,83 +1,136 @@
-# from gtts import gTTS
-import os
-import requests
-from ..config import settings
+# import os
+# from elevenlabs.client import ElevenLabs
+# from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip
+# # تأكد من أن ملف الإعدادات يحتوي على مفتاح ElevenLabs الصالح
+# from ..config import settings 
 
-AUDIO_DIR = "rawaj-frontend/assets/audio"
-os.makedirs(AUDIO_DIR, exist_ok=True)
+# # إعداد العميل (تأكد أن المفتاح هنا صالح وجديد)
+# client = ElevenLabs(api_key=settings.elevenlabs_api_key) 
 
-# def generate_audio(text, output_path=None, lang='ar'):
-#     """
-#     تحويل النص إلى صوت (MP3)
-#     """
+# def generate_voiceover(text: str, output_path="voice.mp3"):
+#     """توليد تعليق صوتي (Speech)"""
+#     print(f"🗣️ Generating Voiceover: {text[:30]}...")
 #     try:
-#         print(f"🎙️ Generating audio for text: {text[:30]}...")
+#         # ✅ التصحيح: استخدام convert بدلاً من generate
+#         audio_stream = client.text_to_speech.convert(
+#             text=text,
+#             voice_id="JBFqnCBsd6RMkjVDRZzb", # هذا ID لصوت 'Rachel'
+#             model_id="eleven_multilingual_v2",
+#             output_format="mp3_44100_128"
+#         )
         
-#         tts = gTTS(text=text, lang=lang, slow=False)
+#         # حفظ الملف (لأن النتيجة تأتي كتدفق بيانات Stream)
+#         with open(output_path, "wb") as f:
+#             for chunk in audio_stream:
+#                 if chunk:
+#                     f.write(chunk)
         
-#         if not output_path:
-#             output_path = f"rawaj-frontend/assets/audio_{os.urandom(4).hex()}.mp3"
-            
-#         tts.save(output_path)
-#         print(f"✅ Audio saved at: {output_path}")
+#         print(f"✅ Voiceover saved: {output_path}")
 #         return output_path
 
 #     except Exception as e:
-#         print(f"❌ Audio Generation Failed: {e}")
+#         print(f"❌ Voiceover failed: {e}")
 #         return None
+
+# def generate_sfx(prompt: str, duration_seconds=5, output_path="sfx.mp3"):
+#     """توليد مؤثرات صوتية (Sound Effects)"""
+#     print(f"🔊 Generating SFX: {prompt}...")
+#     try:
+#         # ✅ هذه الميزة تتطلب حساباً فيه رصيد كافٍ
+#         result = client.text_to_sound_effects.convert(
+#             text=prompt,
+#             duration_seconds=duration_seconds, 
+#             prompt_influence=0.5
+#         )
+        
+#         with open(output_path, "wb") as f:
+#             for chunk in result:
+#                 if chunk:
+#                     f.write(chunk)
+                
+#         print(f"✅ SFX saved: {output_path}")
+#         return output_path
+
+#     except Exception as e:
+#         print(f"❌ SFX failed: {e}")
+#         return None
+
+# def merge_video_audio(video_path, voice_path=None, sfx_path=None, output_path="final_output.mp4"):
+#     """دمج الفيديو مع الأصوات"""
+#     print("🎬 Merging Audio & Video...")
     
+#     if not os.path.exists(video_path):
+#         print(f"❌ Video path not found: {video_path}")
+#         return None
 
+#     try:
+#         video = VideoFileClip(video_path)
+#         audio_tracks = []
 
+#         # 1. إضافة التعليق الصوتي
+#         if voice_path and os.path.exists(voice_path):
+#             voice_clip = AudioFileClip(voice_path)
+#             # رفع صوت المعلق ليكون واضحاً
+#             voice_clip = voice_clip.with_volume_scaled(1.8) 
+            
+#             # إذا كان الصوت أطول من الفيديو، نمدد الفيديو (Loop)
+#             if voice_clip.duration > video.duration:
+#                 print("ℹ️ Audio is longer than video. Looping video.")
+#                 video = video.loop(duration=voice_clip.duration)
+                
+#             audio_tracks.append(voice_clip)
 
-def generate_audio_elevenlabs(text: str, voice_id: str = settings.elevenlabs_voice_id):
-    """
-    توليد صوت احترافي باستخدام ElevenLabs API.
-    """
-    if not settings.elevenlabs_api_key:
-        print("❌ Error: ELEVENLABS_API_KEY missing in .env file.")
-        return None
+#         # 2. إضافة المؤثرات الصوتية (اختياري)
+#         if sfx_path and os.path.exists(sfx_path):
+#             sfx_clip = AudioFileClip(sfx_path)
+#             # تكرار المؤثرات لتغطي كامل الفيديو
+#             if sfx_clip.duration < video.duration:
+#                 sfx_clip = sfx_clip.loop(duration=video.duration)
+#             else:
+#                 sfx_clip = sfx_clip.subclipped(0, video.duration)
+            
+#             # خفض صوت المؤثرات لتكون خلفية فقط
+#             sfx_clip = sfx_clip.with_volume_scaled(0.3) 
+#             audio_tracks.append(sfx_clip)
 
-    # عنوان API الخاص بـ ElevenLabs لتوليد الصوت
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+#         if audio_tracks:
+#             # دمج المسارات الصوتية
+#             final_audio = CompositeAudioClip(audio_tracks)
+#             # التأكد من أن الصوت بنفس طول الفيديو النهائي
+#             final_audio = final_audio.subclipped(0, video.duration)
+            
+#             final_video = video.with_audio(final_audio)
+            
+#             # تصدير الفيديو النهائي
+#             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
+#             print(f"✅ Final video saved successfully at: {output_path}")
+#             return output_path
+#         else:
+#             print("⚠️ No audio tracks found to merge.")
+#             return None
 
-    headers = {
-        "xi-api-key": settings.elevenlabs_api_key,
-        "Content-Type": "application/json"
-    }
+#     except Exception as e:
+#         print(f"❌ Merge failed: {e}")
+#         return None
 
-    # البيانات المطلوبة (نص، موديل الصوت)
-    payload = {
-        "text": text,
-        "model_id": "eleven_multimodal_v2", # يمكنك اختيار موديل أفضل إذا أردت
-        "voice_id": voice_id,
-        "output_format": "mp3"
-    }
+# # --- تجربة النظام ---
+# if __name__ == "__main__":
+#     # 1. حدد مسار الفيديو الذي استعدته من Veo
+#     video_file = r"final_video.mp4"  # تأكد أن هذا الملف موجود بجانب الكود
+    
+#     # 2. النص المراد تحويله لصوت
+#     text_prompt = "Experience the ultimate performance with our new smart tracker."
+    
+#     # 3. وصف المؤثرات الصوتية
+#     sfx_prompt = "Cinematic futuristic whoosh and high tech ambiance"
 
-    print(f"🎙️ Generating audio for text using ElevenLabs (Voice: {voice_id})...")
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status() # ارمِ خطأ إذا كان الرد غير ناجح
-        filename = f"audio_{os.urandom(4).hex()}.mp3"
-        output_path = os.path.join(AUDIO_DIR, filename)
-
-        with open(output_path, "wb") as f:
-            f.write(response.content)
-
-        print(f"✅ Audio saved at: {output_path}")
-        return output_path
-
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Audio Generation Failed: {e}")
-        if response is not None:
-            print(f"Response Status Code: {response.status_code}")
-            print(f"Response Text: {response.text}")
-        return None
-    except Exception as e:
-        print(f"❌ An unexpected error occurred: {e}")
-        return None
-
-# --- تجربة مباشرة عند تشغيل الملف ---
-if __name__ == "__main__":
-    test_text = "مرحباً، هذا اختبار للصوت الخاص بـ ElevenLabs."
-    generate_audio_elevenlabs(test_text)
+#     # تشغيل العمليات
+#     if os.path.exists(video_file):
+#         voice = generate_voiceover(text_prompt)
+#         sfx = generate_sfx(sfx_prompt, duration_seconds=5) # مدة قصيرة للتجربة
+        
+#         # الدمج
+#         if voice:
+#             merge_video_audio(video_file, voice, sfx)
+#     else:
+#         print("❌ Please put a video file named 'final_video.mp4' to test.")
