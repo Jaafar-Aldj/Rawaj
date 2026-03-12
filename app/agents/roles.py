@@ -19,7 +19,15 @@ def get_copywriter()-> autogen.AssistantAgent:
         system_message= sys_msg.copywriter,
     )
 
-# 3. Prompt Engineer (Generates Visual Descriptions)
+# 3. Video Director (Visual Storytelling - The Most Important)
+def get_video_director() -> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Video_Director",
+        llm_config=llm_config,
+        system_message=sys_msg.video_director,
+    )
+
+# 4. Prompt Engineer (Generates Visual Descriptions)
 def get_prompter()-> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Prompt_Engineer",

@@ -62,6 +62,7 @@ class AnalyzeRequest(BaseModel):
 class DraftRequest(BaseModel):
     campaign_id: int
     selected_audiences: List[str]
+    video_duration: Optional[int] = 8 # 8 or 16 or 24 seconds
 
 class DraftEditRequest(BaseModel):
     asset_id: int
@@ -85,7 +86,8 @@ class AssetBase(BaseModel):
 
 class AssetCreate(AssetBase):
     image_prompt: Optional[str] = None
-    video_prompt: Optional[str] = None
+    video_storyboard: Optional[List[Dict[str, Any]]] = None 
+    video_duration: Optional[int] = 8
 
 class ImageVersionResponse(BaseModel):
     id: int

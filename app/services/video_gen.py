@@ -60,12 +60,19 @@ def get_access_token():
 
 def generate_veo_video(prompt_text: str, image_path: str = None):
     if not image_path:
+        print(f"❌ No image provided. Veo model requires an image input.")
         return None
+    
     if "image/" in image_path:
         filename = image_path.split("image/")[-1]
         local_path = os.path.join("rawaj-frontend", "assets", "image", filename)
+    elif "upload/" in image_path: # إضافة دعم مجلد الرفع هنا أيضاً
+            filename = image_path.split("upload/")[-1]
+            local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
     else:
         local_path = image_path # افتراض أنه مسار محلي
+
+
     if local_path:
         print(f"🖼️  Using image input: {local_path}")
         if not os.path.exists(local_path):

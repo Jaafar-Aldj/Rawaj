@@ -49,10 +49,10 @@ class CampaignAssets(Base):
     ad_copy = Column(JSONB, nullable=True) 
     image_prompt = Column(Text, nullable=True)
     image_url = Column(String, nullable=True)
-    video_prompt = Column(Text, nullable=True)
-    # video_storyboard = Column(JSONB, nullable=True)
+    # video_prompt = Column(Text, nullable=True)
+    video_storyboard = Column(JSONB, nullable=True)
     video_url = Column(String, nullable=True)
-    # video_duration = Column(Integer, server_default=text('8')) # 8 or 16 or 24 se
+    video_duration = Column(Integer, server_default=text('8')) # 8 or 16 or 24 se
     is_approved = Column(Boolean, server_default=text('false'))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     campaign = relationship("Campaigns", back_populates="assets")
@@ -80,8 +80,8 @@ class VideoVersions(Base):
     asset_id = Column(Integer, ForeignKey("campaign_assets.id", ondelete="CASCADE"), nullable=False)
     
     video_url = Column(String, nullable=False)
-    prompt = Column(Text, nullable=True)
-    # video_storyboard = Column(JSONB, nullable=True)
+    # prompt = Column(Text, nullable=True)
+    video_storyboard = Column(JSONB, nullable=True)
     version_number = Column(Integer, default=1)
     
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))

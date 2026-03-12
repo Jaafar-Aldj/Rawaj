@@ -95,7 +95,8 @@ async def generate_drafts(
                 campaign.product.description, 
                 audience,
                 product_analysis=campaign.product.image_analysis,
-                image_ref=campaign.product.processed_image_url
+                image_ref=campaign.product.processed_image_url,
+                requested_duration=request.video_duration # <-- تمرير المدة المطلوبة للمانجر
             )
             image_url = ai_result.get("image_url")
             public_image_url = None
@@ -111,7 +112,7 @@ async def generate_drafts(
         except Exception as e :
             print(f"❌ Error generating for {audience}: {e}")
             return {"audience": audience, "success": False, "error": str(e)}
-
+        
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as pool:
         tasks =[]   
@@ -134,7 +135,8 @@ async def generate_drafts(
                 ad_copy=ai_data.get("ad_copy"),
                 image_prompt=ai_data.get("image_prompt"),
                 image_url=final_image_url,
-                video_prompt=ai_data.get("video_prompt"),
+                video_storyboard=ai_data.get("video_storyboard"), 
+                video_duration=request.video_duration,            
                 is_approved=False
             )
             db.add(new_asset)
@@ -259,9 +261,12 @@ def finalize_asset(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Asset already approved")
 
     # 2. توليد الفيديو (إذا كان هناك وصف)
-    if asset.video_prompt:
+    if asset.video_storyboard and len(asset.video_storyboard) > 0:
         try:
-            video_path = manager.generate_veo_video(image_path=asset.image_url, prompt_text=asset.video_prompt)
+            video_path = manager.generate_final_video_asset(
+                storyboard_json=asset.video_storyboard, 
+                base_image_path=asset.campaign.product.processed_image_url
+            )
             filename = os.path.basename(video_path)
             video_url = f"{req.base_url}assets/video/{filename}"
             asset.video_url = video_url
@@ -269,7 +274,7 @@ def finalize_asset(
             first_vid_ver = models.VideoVersions(
                     asset_id=asset.id,
                     video_url=video_url,
-                    prompt=asset.video_prompt,
+                    video_storyboard=str(asset.video_storyboard),
                     version_number=1
                 )
             db.add(first_vid_ver)
@@ -281,7 +286,7 @@ def finalize_asset(
     asset.is_approved = True
     db.commit()
 
-    # 3. (إضافة ذكية) التحقق هل اكتملت الحملة؟
+    # 4. (إضافة ذكية) التحقق هل اكتملت الحملة؟
     # نعد كم أصل في الحملة، وكم واحد منهم Approved
     total_assets = db.query(models.CampaignAssets).filter(
         models.CampaignAssets.campaign_id == asset.campaign_id
