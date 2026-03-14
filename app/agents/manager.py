@@ -108,7 +108,12 @@ def generate_content_for_audience(product_name, product_desc, audience, product_
     video_director = get_video_director()
     prompter = get_prompter()
     
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    user = autogen.UserProxyAgent(
+        name="User", 
+        human_input_mode="NEVER", 
+        code_execution_config=False, 
+        is_termination_msg=lambda msg: "TERMINATE" in msg.get("content", "").upper()
+    )
 
     def custom_speaker_selection(last_speaker, groupchat):
         messages = groupchat.messages
@@ -130,10 +135,15 @@ def generate_content_for_audience(product_name, product_desc, audience, product_
         agents=[user, director, copywriter, video_director, prompter],
         messages=[],
         max_round=10,
-        speaker_selection_method=custom_speaker_selection
+        speaker_selection_method=custom_speaker_selection,
+    
     )
     
-    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
+    manager = autogen.GroupChatManager(
+        groupchat=groupchat, 
+        llm_config=director.llm_config, 
+        
+    )
     
     num_scenes = max(1, requested_duration // 8)
     # 2. إعداد الرسالة (نصية فقط، لكنها تحتوي على تفاصيل الصورة)
@@ -302,7 +312,7 @@ def process_single_scene(scene, valid_image_path):
     # 2. تجهيز برومبت الفيديو (الصوت اختياري)
     veo_prompt = motion_p
     if voice_p and str(voice_p).strip() != "" and str(voice_p).lower() != "none":
-        veo_prompt += f". Voiceover says: '{voice_p}'"
+        veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
         
     # 3. توليد الفيديو
     try:

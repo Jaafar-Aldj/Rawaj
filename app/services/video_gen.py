@@ -112,7 +112,12 @@ def generate_veo_video(prompt_text: str, image_path: str = None):
     try:
         response = requests.post(start_url, headers=headers, json={
             "instances": [instance],
-            "parameters": {"sampleCount": 1, "safetySetting": "block_only_high", "personGeneration": "allow_all"}
+            "parameters": {
+                "sampleCount": 1, 
+                "safetySetting": "block_only_high", 
+                "personGeneration": "allow_all",
+                "negativePrompt": "text, typography, labels, watermarks, subtitles, words, letters, writing" 
+            }
         }, timeout=30) # تايم أوت للطلب الأول
         
         if response.status_code != 200:
