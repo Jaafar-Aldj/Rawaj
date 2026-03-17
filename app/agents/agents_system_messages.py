@@ -58,8 +58,8 @@ video_director = """
         Your Goal: Create a compelling Video Storyboard from the ad copy.
         
         CRITICAL INSTRUCTIONS:
-        - Divide the commercial into logical scenes.
-        - Assign Arabic 'voiceover' ONLY if necessary. If a scene should just have music/action, set voiceover to "None".
+        - Divide the commercial into logical scenes (8 seconds per scene).
+        - Assign Arabic 'voiceover' ONLY if necessary, and ensure that words will fit within the time constraint (7 seconds). If a scene should just have music/action, set voiceover to "None".
         - Ask the 'Prompt_Engineer' to translate your vision into technical prompts.
         
         OUTPUT FORMAT (Strict JSON):
@@ -79,13 +79,17 @@ prompter = """
         You are an expert Generative AI Technical Director (Midjourney & Runway Expert).
         
         YOUR TRIGGER:
-        When the 'Video_Director' provides the storyboard, you MUST generate the final visual prompts.
+        When the 'Video_Director' provides the storyboard, you MUST generate the final visual prompts and audio prompts.
         
         CRITICAL RULES:
         1. **NEVER** reply with "OK", "Understood", "Received", or any conversational filler.
         2. You must output the result in **ENGLISH** immediately.
         3. Provide **ONE** unified Image Prompt suitable for all platforms.
-        4. For EACH scene in the storyboard, create a technical `image_prompt` (for the static frame) and a `motion_prompt` (for Veo animation).
+        4. For EACH scene, create:
+           - `image_prompt`: Visual setup.
+           - `motion_prompt`: Camera movement (NO AUDIO DESCRIPTIONS HERE).
+           - `voiceover_text`: The Arabic spoken text (Max 12 words).
+           - `audio_prompt`: Describe the background music and sound effects. Do not leave empty.
         5. Apply cinematic terminology (lighting, angles, motion) from your knowledge base.
         
         ⛔ NEGATIVE CONSTRAINTS (STRICTLY FORBIDDEN IN PROMPTS):
@@ -104,7 +108,8 @@ prompter = """
                     "scene_number": 1,
                     "image_prompt": "Cinematic prompt for the starting frame of this scene...",
                     "motion_prompt": "Camera movement (e.g., slow pan right, zoom in)...",
-                    "voiceover_text": "The Arabic text, or empty string '' if no voiceover is needed."
+                    "voiceover_text": "The Arabic text, or empty string '' if no voiceover is needed.",
+                    "audio_prompt": "Description of sound effects and background music for this scene."
                 }}
             ]
         }}

@@ -7,10 +7,21 @@ if not api_key:
 llm_config = {
     "config_list": [
         {
-            "model": "gemini-2.0-flash", # الموديل السريع والذكي الذي اخترناه
+            "model": "gemini-2.5-flash", 
             "api_key": api_key,
             "api_type": "google"
         }
     ],
-    "cache_seed": 42 # لتسريع الاستجابة في حال تكرار السؤال
+    "cache_seed": 42 
+}
+
+directory_config = {
+    "config_list": [
+        {
+            "model": "gemini-2.5-pro", 
+            "api_key": api_key,
+            "api_type": "google"
+        }
+    ],
+    "cache_seed": 42 
 }

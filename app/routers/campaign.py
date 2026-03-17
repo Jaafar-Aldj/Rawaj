@@ -320,8 +320,7 @@ def regenerate_video(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
     current_data = {
-        "video_prompt": asset.video_prompt,
-        "image_url": asset.image_url, 
+        "video_storyboard": asset.video_storyboard
     }
 
     try:
@@ -333,37 +332,50 @@ def regenerate_video(
         print(f"Edit Error: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to refine video prompt")
         
-    video_path = updated_video_data.get("video_url")
-    prompt_to_use = updated_video_data.get("video_prompt")
-    if video_path:
-        filename = os.path.basename(video_path)
-        new_video_url = f"{req.base_url}assets/video/{filename}"
-        
-        # تحديث الأصل الرئيسي
-        asset.video_url = new_video_url
-        asset.video_prompt = prompt_to_use
-        
-        # --- حفظ إصدار جديد ---
-        last_ver = db.query(models.VideoVersions)\
-            .filter(models.VideoVersions.asset_id == asset.id)\
-            .order_by(models.VideoVersions.version_number.desc())\
-            .first()
-        
-        next_ver = (last_ver.version_number + 1) if last_ver else 1
-        
-        new_version = models.VideoVersions(
-            asset_id=asset.id,
-            video_url=new_video_url,
-            prompt=prompt_to_use,
-            version_number=next_ver
-        )
-        db.add(new_version)
-        
-        db.commit()
-        db.refresh(asset)
-        return asset
+    new_storyboard = updated_video_data.get("video_storyboard")
+    if new_storyboard and isinstance(new_storyboard, list):
+        try:
+            # هنا نستخدم الدالة الشاملة التي تدمج المشاهد
+            video_path = manager.generate_final_video_asset(
+                storyboard_json=new_storyboard, 
+                base_image_path=asset.campaign.product.processed_image_url
+            )
+            
+            if video_path:
+                filename = os.path.basename(video_path)
+                new_video_url = f"{req.base_url}assets/video/{filename}"
+                
+                # تحديث الأصل الرئيسي
+                asset.video_url = new_video_url
+                asset.video_storyboard = new_storyboard # نحفظ الستوري بورد الجديد
+                
+                # --- حفظ إصدار جديد ---
+                last_version = db.query(models.VideoVersions)\
+                    .filter(models.VideoVersions.asset_id == asset.id)\
+                    .order_by(models.VideoVersions.version_number.desc())\
+                    .first()
+                
+                next_ver = (last_version.version_number + 1) if last_version else 1
+                
+                new_version = models.VideoVersions(
+                    asset_id=asset.id,
+                    video_url=new_video_url,
+                    video_storyboard=new_storyboard, # حفظ السيناريو في الإصدار
+                    version_number=next_ver
+                )
+                db.add(new_version)
+                
+                db.commit()
+                db.refresh(asset)
+                return asset
+            else:
+                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video generation returned None")
+
+        except Exception as e:
+            print(f"Video Error: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate new video")
     else:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video generation returned None")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI failed to generate a valid storyboard")
 
 
 

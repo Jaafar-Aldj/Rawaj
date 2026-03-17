@@ -1,5 +1,5 @@
 import autogen
-from app.agents.config import llm_config
+from app.agents.config import llm_config, directory_config
 import app.agents.agents_system_messages as sys_msg
 
 
@@ -7,7 +7,7 @@ import app.agents.agents_system_messages as sys_msg
 def get_director():
     return autogen.AssistantAgent(
         name="Creative_Director",
-        llm_config=llm_config,
+        llm_config=directory_config,
         system_message= sys_msg.director,
     )
 

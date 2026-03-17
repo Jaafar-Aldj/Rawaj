@@ -8,6 +8,7 @@ from app.services.video_processing import concatenate_veo_videos
 import os
 import json
 import re
+import concurrent.futures
 
 
 
@@ -283,8 +284,6 @@ def refine_draft(current_data, feedback, edit_type="both"):
 
     return refined_output
 
-import concurrent.futures
-# (تأكد من وجود استيراد generate_image_with_imagen و generate_veo_video)
 
 def process_single_scene(scene, valid_image_path):
     """
@@ -296,6 +295,7 @@ def process_single_scene(scene, valid_image_path):
     
     motion_p = scene.get("motion_prompt", "")
     voice_p = scene.get("voiceover_text", "")
+    audio_p = scene.get("audio_prompt", "")
     scene_img_prompt = scene.get("image_prompt", "")
     
     # 1. توليد الصورة الخاصة بالمشهد
@@ -310,7 +310,9 @@ def process_single_scene(scene, valid_image_path):
             print(f"⚠️ [Scene {scene_num}] Image Gen failed, using base image. Error: {e}")
 
     # 2. تجهيز برومبت الفيديو (الصوت اختياري)
-    veo_prompt = motion_p
+    veo_prompt = f"{motion_p}."
+    if audio_p and str(audio_p).strip() != "":
+            veo_prompt += f" [Audio generation: {audio_p}]."
     if voice_p and str(voice_p).strip() != "" and str(voice_p).lower() != "none":
         veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
         
@@ -391,36 +393,52 @@ def refine_video_with_feedback(current_data, feedback):
     feedback: نص الملاحظات التي قد تحتوي على تفاصيل حول ما يجب تعديله في الفيديو.
     """
     director = get_director()
+    video_director = get_video_director()
     prompter = get_prompter()
 
-    user = autogen.UserProxyAgent(name="User_Feedback", human_input_mode="NEVER", code_execution_config=False)
-    groupchat = autogen.GroupChat(agents=[director, prompter, user], messages=[], max_round=3, speaker_selection_method="round_robin")
+    user = autogen.UserProxyAgent(
+        name="User_Feedback", 
+        human_input_mode="NEVER", 
+        code_execution_config=False, 
+        is_termination_msg=lambda msg: "TERMINATE" in msg.get("content", "").upper()
+    )
+    groupchat = autogen.GroupChat(
+        agents=[director, video_director, prompter, user], 
+        messages=[], 
+        max_round=6, 
+        speaker_selection_method="round_robin"
+    )
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
 
-    task_msg = f"User Feedback: {feedback}\n Current Prompt: {current_data.get('video_prompt')}\nTask: Update video prompt. Output JSON."
+    old_storyboard = json.dumps(current_data.get('video_storyboard', []), ensure_ascii=False)
+
+    task_msg = f"""
+    User Feedback: {feedback}
+    
+    Current Video Storyboard: 
+    {old_storyboard}
+    
+    TASK:
+    1. Video_Director: Analyze the feedback and rewrite the scenes if needed.
+    2. Prompt_Engineer: Output the updated JSON with the new `video_storyboard` array.
+    """
 
     chat_result = user.initiate_chat(manager, message=task_msg)
 
     refined_output = {}
     
-    for msg in chat_result.chat_history:
+    for msg in reversed(chat_result.chat_history):
         name = msg.get("name", "")
         content = msg.get("content", "")
 
         if name == "Prompt_Engineer":
             data = json_match_extractor(content)
-            vid_p = normalize_prompts_data(data)
+            # نستخدم دالتنا الذكية لاستخراج الستوري بورد
+            img_p, vid_storyboard = normalize_prompts_data(data)
             
-            refined_output["video_prompt"] = vid_p
-            try:
-                image_path = current_data.get("image_url")
-                
-                print(f"🎨 Regenerating Video...")
-                video_path = generate_veo_video(vid_p, image_path)
-                if video_path:
-                    refined_output["video_url"] = video_path
-            except Exception as e:
-                print(f"❌ Video Gen Error: {e}")
+            if vid_storyboard:
+                refined_output["video_storyboard"] = vid_storyboard
+                break # وجدنا المطلوب، نخرج من الحلقة
 
     return refined_output
 
