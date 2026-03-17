@@ -2,8 +2,10 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr 
 from typing import List, Optional, Dict, Any
 
-# --- User Schemas ---
-class UserCreate(BaseModel): # للفصل بين الإنشاء والقراءة
+# ==============================================================================
+# User Schemas
+# ==============================================================================
+class UserCreate(BaseModel):
     name: str
     email: EmailStr
     password: str
@@ -12,7 +14,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = None
     password: Optional[str] = None
 
-class UserResponse(BaseModel): # ما نعيده للمستخدم (بدون باسورد)
+class UserResponse(BaseModel):
     id: int
     name: str
     email: EmailStr
@@ -30,12 +32,13 @@ class UserVerify(BaseModel):
     user_id: int
     code: str
 
-# --- Product Schemas ---
+# ==============================================================================
+# Product Schemas
+# ==============================================================================
 class ProductBase(BaseModel):
     name: str
     description: str
     original_image_url: Optional[str] = None
-    
 
 class ProductCreate(ProductBase):
     pass
@@ -50,88 +53,109 @@ class ProductResponse(ProductBase):
     class Config:
         from_attributes = True
 
-# --- Campaign Schemas ---
-class CampaignBase(BaseModel):
-    product_id: int
-    status: Optional[str] = "DRAFT"
-    suggested_audiences: Optional[Dict[str, Any]] = None 
-
-class AnalyzeRequest(BaseModel):
-    product_id: int
-
-class DraftRequest(BaseModel):
-    campaign_id: int
-    selected_audiences: List[str]
-    video_duration: Optional[int] = 8 # 8 or 16 or 24 seconds
-
-class DraftEditRequest(BaseModel):
+# ==============================================================================
+# Media Assets Schemas (الجديدة)
+# ==============================================================================
+class ImageAssetResponse(BaseModel):
+    id: int
     asset_id: int
-    feedback: str 
-    edit_type: str #"text", "image", or "both"
+    image_url: str
+    prompt: Optional[str] = None
+    aspect_ratio: str
+    platform: Optional[str] = None
+    created_at: datetime
 
-class FinalizeRequest(BaseModel):
-    campaign_id: int
+    class Config:
+        from_attributes = True
 
-class RegenerateVideoRequest(BaseModel):
+class VideoAssetResponse(BaseModel):
+    id: int
     asset_id: int
-    feedback: str
+    video_url: str
+    video_storyboard: Optional[List[Dict[str, Any]]] = None
+    duration_seconds: int
+    aspect_ratio: str
+    created_at: datetime
 
-# --- Assets Schemas ---
+    class Config:
+        from_attributes = True
+
+# ==============================================================================
+# Campaign Assets Schemas (تم تحديثها لتشمل قوائم الميديا)
+# ==============================================================================
 class AssetBase(BaseModel):
     target_audience: str
-    ad_copy: Optional[Any] = None 
-    image_url: Optional[str] = None
-    video_url: Optional[str] = None
+    ad_copy: Optional[Dict[str, Any]] = None 
     is_approved: bool = False
 
 class AssetCreate(AssetBase):
-    image_prompt: Optional[str] = None
-    video_storyboard: Optional[List[Dict[str, Any]]] = None 
-    video_duration: Optional[int] = 8
-
-class ImageVersionResponse(BaseModel):
-    id: int
-    image_url: str
-    version_number: int
-    created_at: datetime
-    class Config: 
-        from_attributes = True
-
-class VideoVersionResponse(BaseModel):
-    id: int
-    video_url: str
-    version_number: int
-    created_at: datetime
-    class Config: 
-        from_attributes = True
-
+    pass
 
 class AssetResponse(AssetBase):
     id: int
     campaign_id: int
+    target_audience: str
+    ad_copy: Optional[Dict[str, Any]] = None 
+    is_approved: bool
     created_at: datetime
-    image_versions: List[ImageVersionResponse] = []
-    video_versions: List[VideoVersionResponse] = []
+    
+    # العلاقات الجديدة (قوائم الصور والفيديو)
+    images: List[ImageAssetResponse] = []
+    videos: List[VideoAssetResponse] = []
     
     class Config:
         from_attributes = True
 
+# ==============================================================================
+# Campaign Schemas
+# ==============================================================================
+class CampaignBase(BaseModel):
+    product_id: int
+    name: Optional[str] = None
+    objective: Optional[str] = None
+    status: Optional[str] = "DRAFT"
+    suggested_audiences: Optional[Dict[str, Any]] = None 
+    posting_strategy: Optional[Dict[str, Any]] = None
+    trending_events: Optional[List[Dict[str, Any]]] = None
+
+class AnalyzeRequest(BaseModel):
+    product_id: int
+    campaign_name: Optional[str] = None
+    campaign_objective: Optional[str] = None
+
+class DraftCopyRequest(BaseModel):
+    campaign_id: int
+    selected_audiences: List[str]
+    selected_platforms: List[str] # مثال: ["Instagram", "Facebook"]
+
+class GenerateImageRequest(BaseModel):
+    asset_id: int
+    aspect_ratio: str = "1:1"
+    platform: Optional[str] = "Instagram"
+
+class GenerateVideoRequest(BaseModel):
+    asset_id: int
+    duration_seconds: int = 8
+    aspect_ratio: str = "16:9"
+
+class FinalizeRequest(BaseModel):
+    campaign_id: int
+
 class ApproveRequest(BaseModel):
     asset_id: int
 
-
-# --- Campaign Response Schema ---
 class CampaignResponse(CampaignBase):
     id: int
     created_at: datetime
+    product: Optional[ProductResponse] = None
     assets: List[AssetResponse] = [] 
     
     class Config:
         from_attributes = True
 
-
-
-## --- Token Schemas --- 
+# ==============================================================================
+# Token Schemas
+# ==============================================================================
 class Token(BaseModel):
     access_token: str
     token_type: str

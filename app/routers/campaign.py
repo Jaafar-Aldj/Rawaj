@@ -28,19 +28,19 @@ def analyze_product(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with id {request.product_id} was not found")
     if product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this product")
-    
-    campaign_query = db.query(models.Campaigns).filter(models.Campaigns.product_id == request.product_id)
-    campaign = campaign_query.first()
-    if campaign and campaign.suggested_audiences:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Campaign already exsist for this product")
-    elif campaign :
-        campaign_query.delete(synchronize_session=False)
-        db.commit()
 
     # 2. استدعاء وكيل الذكاء الاصطناعي (المدير فقط) لاقتراح الفئات
     # (سنفترض وجود دالة suggest_audiences في manager.py)
+    campaign_name = request.campaign_name if request.campaign_name.strip() else None
+    campaign_objective = request.campaign_objective if request.campaign_objective.strip() else None
     try:
-        suggestions = manager.suggest_audiences(product.name, product.description, product.image_analysis)
+        suggestions = manager.suggest_audiences(
+            product.name, 
+            product.description, 
+            product.image_analysis,
+            user_campaign_name=campaign_name, 
+            user_campaign_objective=campaign_objective
+        )
     except Exception as e:
         print(f"AI Error: {e}")
         # في حال فشل الـ AI، نضع فئات افتراضية لكي لا يتوقف النظام
@@ -50,7 +50,11 @@ def analyze_product(
     new_campaign = models.Campaigns(
         product_id=product.id,
         status="DRAFT",
-        suggested_audiences=suggestions # يحفظ كـ JSON تلقائياً
+        name=suggestions.get("name", "حملة تسويقية جديدة"),
+        objective=suggestions.get("objective", "زيادة المبيعات"),
+        suggested_audiences=suggestions.get("suggested_audiences"), 
+        posting_strategy=suggestions.get("posting_strategy"),
+        trending_events=suggestions.get("trending_events", [])
     )
     db.add(new_campaign)
     db.commit()

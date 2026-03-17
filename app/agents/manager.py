@@ -9,6 +9,7 @@ import os
 import json
 import re
 import concurrent.futures
+from datetime import datetime
 
 
 
@@ -74,18 +75,56 @@ def normalize_prompts_data(data):
 
 
 
-def suggest_audiences(product_name, product_desc, product_analysis=None):
+def suggest_audiences(product_name, product_desc, product_analysis=None, user_campaign_name=None, user_campaign_objective=None):
     director = get_director()
     rag_proxy = get_rag_proxy(director.llm_config)
+
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_month = datetime.now().strftime("%B")
+
+    name_instruction = f"Use the user's provided Campaign Name: '{user_campaign_name}'" if user_campaign_name else "Create a catchy, creative 'Campaign Name' in Arabic."
+    objective_instruction = f"Use the user's provided Campaign Objective: '{user_campaign_objective}'" if user_campaign_objective else "Define a main 'Campaign Objective' (e.g., Brand Awareness, Sales, Engagement)."
 
     # 2. دمج الوصف النصي مع وصف الصورة
     message = f"""
     Product: {product_name}
     Description: {product_desc}
-    {product_analysis}
+    {product_analysis}  
     
-    TASK: Based on the knowledge base strategies, suggest up to 5 distinct Target Audiences.
-    IMPORTANT: Output ONLY a valid JSON structure: {{ "suggestions": [ {{ "audience": "Name", "reason": "Why" }} ] }}
+    CONTEXT:
+    Today's Date is: {current_date} (Month: {current_month}).
+    Target Region: Middle East and North Africa (MENA).
+    
+    CRITICAL ROLE OVERRIDE:
+    For this specific task, DO NOT instruct the Copywriter or Prompt Engineer. 
+    Act ONLY as a Strategic Analyst.    
+
+    TASK: Based on the knowledge base strategies, suggest distinct Target Audiences.
+    Provide the following :
+    1. {name_instruction}
+    2. {objective_instruction}
+    3. Up to 3 'Target Audiences' with a brief reason for each.
+    4. A 'Posting Strategy' specifying the best days and times to post for this product in the MENA region, and why.
+    5. Up to 2 'Trending Events' or holidays coming up soon (based on today's date) that we can hijack for this campaign, with a brief marketing angle.
+
+    IMPORTANT: Output ONLY a valid, strict JSON structure exactly like this format:
+    {{
+        "name": "اسم الحملة",
+        "objective": "الهدف من الحملة",
+        "suggested_audiences": {{
+            "suggestions": [
+                {{ "audience": "Name 1", "reason": "Why..." }}
+            ]
+        }},
+        "posting_strategy": {{
+            "best_days": ["Day 1", "Day 2"],
+            "best_times": ["18:00 - 21:00"],
+            "reason": "Why these times..."
+        }},
+        "trending_events": [
+            {{ "event": "Event Name (e.g., Ramadan, Back to School)", "angle": "How to connect the product to this event" }}
+        ]
+    }}
     """
 
     chat_result = rag_proxy.initiate_chat(
@@ -97,7 +136,7 @@ def suggest_audiences(product_name, product_desc, product_analysis=None):
     last_message = chat_result.chat_history[-1]['content']
     data = json_match_extractor(last_message)
     
-    if data and "suggestions" in data:
+    if data and "suggested_audiences" in data:
         return data
         
     raise Exception("NO data returned from agents!!")

@@ -34,9 +34,14 @@ class Campaigns(Base):
     __tablename__ = "campaigns"
     id = Column(Integer, primary_key=True, nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False) 
+    name = Column(String, nullable=True)          
+    objective = Column(String, nullable=True)
     status = Column(String, server_default='DRAFT') # DRAFT, PENDING, COMPLETED
     suggested_audiences = Column(JSONB, nullable=True) 
+    posting_strategy = Column(JSONB, nullable=True)  
+    trending_events = Column(JSONB, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+
     product = relationship("Products")
     assets = relationship("CampaignAssets", back_populates="campaign", cascade="all, delete")
 
@@ -47,43 +52,45 @@ class CampaignAssets(Base):
     campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
     target_audience = Column(String, nullable=True)
     ad_copy = Column(JSONB, nullable=True) 
-    image_prompt = Column(Text, nullable=True)
-    image_url = Column(String, nullable=True)
-    # video_prompt = Column(Text, nullable=True)
-    video_storyboard = Column(JSONB, nullable=True)
-    video_url = Column(String, nullable=True)
-    video_duration = Column(Integer, server_default=text('8')) # 8 or 16 or 24 se
     is_approved = Column(Boolean, server_default=text('false'))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
-    campaign = relationship("Campaigns", back_populates="assets")
-    image_versions = relationship("ImageVersions", back_populates="asset", cascade="all, delete")
-    video_versions = relationship("VideoVersions", back_populates="asset", cascade="all, delete")
 
-# 5. Image Versions (الجديد)
-class ImageVersions(Base):
-    __tablename__ = "image_versions"
+    campaign = relationship("Campaigns", back_populates="assets")
+    image = relationship("ImageAssets", back_populates="asset", cascade="all, delete")
+    video = relationship("VideoAssets", back_populates="asset", cascade="all, delete")
+
+
+# 5. Image Assets
+class ImageAssets(Base):
+    __tablename__ = "image_assets"
     id = Column(Integer, primary_key=True, nullable=False, index=True)
     asset_id = Column(Integer, ForeignKey("campaign_assets.id", ondelete="CASCADE"), nullable=False)
     
     image_url = Column(String, nullable=False)
     prompt = Column(Text, nullable=True)
-    version_number = Column(Integer, default=1)
+    
+    aspect_ratio = Column(String, default="1:1") # "1:1", "9:16", "16:9"
+    platform = Column(String, nullable=True) # "instagram", "tiktok"
     
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     
-    asset = relationship("CampaignAssets", back_populates="image_versions")
+    asset = relationship("CampaignAssets", back_populates="images")
 
-# 6. Video Versions (الجديد)
-class VideoVersions(Base):
-    __tablename__ = "video_versions"
+
+# 6. Video Assets
+class VideoAssets(Base):
+    __tablename__ = "video_assets"
     id = Column(Integer, primary_key=True, nullable=False, index=True)
     asset_id = Column(Integer, ForeignKey("campaign_assets.id", ondelete="CASCADE"), nullable=False)
     
     video_url = Column(String, nullable=False)
-    # prompt = Column(Text, nullable=True)
     video_storyboard = Column(JSONB, nullable=True)
-    version_number = Column(Integer, default=1)
+    
+    # إضافة جديدة: حفظ المدة والمقاس
+    duration_seconds = Column(Integer, default=8)
+    aspect_ratio = Column(String, default="16:9")
     
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     
-    asset = relationship("CampaignAssets", back_populates="video_versions")
+    asset = relationship("CampaignAssets", back_populates="videos")
+
