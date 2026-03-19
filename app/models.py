@@ -56,8 +56,8 @@ class CampaignAssets(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
 
     campaign = relationship("Campaigns", back_populates="assets")
-    image = relationship("ImageAssets", back_populates="asset", cascade="all, delete")
-    video = relationship("VideoAssets", back_populates="asset", cascade="all, delete")
+    images = relationship("ImageAssets", back_populates="asset", cascade="all, delete")
+    videos = relationship("VideoAssets", back_populates="asset", cascade="all, delete")
 
 
 # 5. Image Assets

@@ -10,9 +10,9 @@ client = genai.Client(api_key=settings.google_api_key)
 IMAGE_DIR = "rawaj-frontend/assets/image"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
-def generate_image_with_imagen(prompt, reference_image_path=None):
+def generate_image_with_imagen(prompt, reference_image_path=None, aspect_ratio="16:9"):
     """
-    توليد صورة باستخدام Gemini 2.0 Flash / Imagen 3
+    توليد صورة باستخدام Gemini 2. Flash / Imagen 3
     يدعم الإدخال (نص + صورة) لتوجيه التوليد.
     """
     try:
@@ -38,7 +38,7 @@ def generate_image_with_imagen(prompt, reference_image_path=None):
             contents.append(ref_img)
             
             # تعديل البرومبت ليطلب الحفاظ على المنتج
-            contents[0] = f"Generate a high-quality product marketing image based on this object. {prompt}. Make sure the product looks exactly like the provided image. High resolution, photorealistic."
+            contents[0] = f"Generate a high-quality product photography scene based on this object. {prompt}. CRITICAL: Do NOT alter the shape, text, logo, or color of the provided product image. Keep it exactly as is. High resolution, photorealistic."
         else:
             print(f"🎨 Generating from Text only: {prompt}")
 
@@ -52,7 +52,10 @@ def generate_image_with_imagen(prompt, reference_image_path=None):
             model=model_id,
             contents=contents,
             config=types.GenerateContentConfig(
-                response_modalities=["IMAGE"] # إجبار الموديل على إرجاع صورة
+                response_modalities=["IMAGE"],
+                image_config=  types.ImageConfig(
+                    aspect_ratio=aspect_ratio
+                )
             )
         )
 

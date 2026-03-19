@@ -58,7 +58,7 @@ def get_access_token():
     return credentials.token
 
 
-def generate_veo_video(prompt_text: str, image_path: str = None):
+def generate_veo_video(prompt_text: str, image_path: str = None, aspect_ratio: str = "16:9"):
     if not image_path:
         print(f"❌ No image provided. Veo model requires an image input.")
         return None
@@ -116,7 +116,8 @@ def generate_veo_video(prompt_text: str, image_path: str = None):
                 "sampleCount": 1, 
                 "safetySetting": "block_only_high", 
                 "personGeneration": "allow_all",
-                "negativePrompt": "text, typography, labels, watermarks, subtitles, words, letters, writing" 
+                "negativePrompt": "text, typography, labels, watermarks, subtitles, words, letters, writing",
+                "aspectRatio": aspect_ratio
             }
         }, timeout=30) # تايم أوت للطلب الأول
         

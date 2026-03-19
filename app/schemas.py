@@ -81,7 +81,7 @@ class VideoAssetResponse(BaseModel):
         from_attributes = True
 
 # ==============================================================================
-# Campaign Assets Schemas (تم تحديثها لتشمل قوائم الميديا)
+# Campaign Assets Schemas 
 # ==============================================================================
 class AssetBase(BaseModel):
     target_audience: str
@@ -95,7 +95,7 @@ class AssetResponse(AssetBase):
     id: int
     campaign_id: int
     target_audience: str
-    ad_copy: Optional[Dict[str, Any]] = None 
+    ad_copy: Optional[Any] = None 
     is_approved: bool
     created_at: datetime
     
@@ -126,17 +126,29 @@ class AnalyzeRequest(BaseModel):
 class DraftCopyRequest(BaseModel):
     campaign_id: int
     selected_audiences: List[str]
-    selected_platforms: List[str] # مثال: ["Instagram", "Facebook"]
+    selected_platforms: Optional[List[str]] = None # مثال: ["Instagram", "Facebook"]
+
+class EditTextRequest(BaseModel):
+    asset_id: int
+    feedback: str
 
 class GenerateImageRequest(BaseModel):
     asset_id: int
     aspect_ratio: str = "1:1"
     platform: Optional[str] = "Instagram"
 
+class EditImageRequest(BaseModel):
+    image_id: int 
+    feedback: str
+
 class GenerateVideoRequest(BaseModel):
     asset_id: int
-    duration_seconds: int = 8
+    video_duration: int = 8
     aspect_ratio: str = "16:9"
+
+class EditVideoRequest(BaseModel):
+    video_id: int 
+    feedback: str 
 
 class FinalizeRequest(BaseModel):
     campaign_id: int
