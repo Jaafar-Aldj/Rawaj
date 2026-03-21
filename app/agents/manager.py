@@ -15,8 +15,6 @@ import google.generativeai as genai
 import PIL.Image
 
 
-
-
 # إعداد مكتبة جوجل مباشرة لتحليل الصور
 if api_key:
     genai.configure(api_key=api_key)
@@ -88,54 +86,109 @@ def normalize_prompts_data(data):
 
     return image_prompt, video_storyboard
 
+
+
 # ==============================================================================
-# المرحلة 1: التحليل (Analyze)
+# المرحلة 1A: المحادثة التفاعلية (Interactive Chat)
 # ==============================================================================
-def suggest_audiences(product_name, product_desc, product_analysis=None, user_campaign_name=None, user_campaign_objective=None):
+def chat_with_director(product_name, product_desc, product_analysis, user_message, chat_history=None):
+    """
+    تدير محادثة مفتوحة بين المستخدم والمدير الإبداعي.
+    لا تولد JSON، بل ترجع رسالة نصية فقط.
+    """
     director = get_director()
-    rag_proxy = get_rag_proxy(director.llm_config)
+    
+    # ننشئ UserProxy ليمثل المستخدم
+    user = autogen.UserProxyAgent(
+        name="Client", 
+        human_input_mode="NEVER", 
+        code_execution_config=False,
+        max_consecutive_auto_reply=1
+    )
 
     current_date = datetime.now().strftime("%Y-%m-%d")
-    current_month = datetime.now().strftime("%B")
 
-    name_instruction = f"Use the user's provided Campaign Name: '{user_campaign_name}'" if user_campaign_name else "Create a catchy, creative 'Campaign Name' in Arabic."
-    objective_instruction = f"Use the user's provided Campaign Objective: '{user_campaign_objective}'" if user_campaign_objective else "Define a main 'Campaign Objective' (e.g., Brand Awareness, Sales, Engagement)."
+    # إذا كانت هذه أول رسالة (لا يوجد تاريخ)
+    if not chat_history or len(chat_history) == 0:
+        system_context = f"""
+        [SYSTEM CONTEXT - DO NOT SHOW TO USER]
+        Product: {product_name}
+        Description: {product_desc}
+        Visual Analysis: {product_analysis}
+        Today is {current_date}. Target Region: MENA.
+        [END OF SYSTEM CONTEXT]
+        
+        User Message: {user_message}
+        """
+    else:
+        # إذا كان هناك تاريخ محادثة، نرسل الرسالة الجديدة فقط
+        # (يفضل حقن التاريخ السريع للتذكير)
+        system_context = f"[SYSTEM: Today is {current_date}] User Message: {user_message}"
 
-    message = f"""
-    Product: {product_name}
-    Description: {product_desc}
-    Visual Analysis: {product_analysis}
+    # تمرير تاريخ المحادثة لـ AutoGen (للاسف AutoGen لا يدعم تمرير History بسهولة كقائمة،
+    # الحل الهندسي: ندمج التاريخ السابق في رسالة واحدة كـ "نص" للذكاء الاصطناعي ليقرأه)
     
-    CONTEXT: Today is {current_date} ({current_month}). Region: MENA.
+    full_prompt = system_context
+    if chat_history:
+        history_text = "\n--- PREVIOUS CHAT HISTORY ---\n"
+        for msg in chat_history:
+            history_text += f"{msg['role'].capitalize()}: {msg['content']}\n"
+        history_text += "--- END OF HISTORY ---\n\n"
+        full_prompt = history_text + system_context
+
+    print("🗣️ Sending message to Creative Director...")
     
-    CRITICAL ROLE OVERRIDE: DO NOT instruct the Copywriter. Act ONLY as a Strategic Analyst.
+    # بدء المحادثة (ذهاب وعودة واحدة فقط)
+    chat_result = user.initiate_chat(
+        director,
+        message=full_prompt,
+        max_turns=1 # نأخذ رد المدير فقط ونتوقف
+    )
+
+    # استخراج رد المدير (آخر رسالة في المحادثة)
+    director_reply = chat_result.chat_history[-1]['content']
     
-    TASK:
-    1. {name_instruction}
-    2. {objective_instruction}
-    3. Suggest exactly 3 'Target Audiences' with a brief reason.
-    4. Define a 'Posting Strategy' (best days/times in MENA and why).
-    5. Suggest up to 2 'Trending Events' or upcoming holidays to hijack for this campaign.
+    return director_reply
+
+# ==============================================================================
+# المرحلة 1B: اعتماد الخطة وتوليد الـ JSON (Finalize Strategy)
+# ==============================================================================
+def finalize_strategy(product_name, chat_history):
+    """
+    تجبر المدير على تلخيص المحادثة السابقة وإخراجها كـ JSON صارم.
+    """
+    director = get_director()
+    user = autogen.UserProxyAgent(name="System", human_input_mode="NEVER", code_execution_config=False)
     
-    ABSOLUTE RULE: Output NOTHING but the JSON. JUST THE JSON.
+    history_text = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history])
     
-    FORMAT:
-    {{
-        "name": "اسم الحملة",
-        "objective": "الهدف",
-        "suggested_audiences": {{"suggestions": [{{ "audience": "Name 1", "reason": "Why..." }}]}},
-        "posting_strategy": {{"best_days": ["Day 1"], "best_times": ["18:00"], "reason": "Why..."}},
-        "trending_events": [{{ "event": "Event Name", "angle": "Marketing angle" }}]
-    }}
+    # الكلمة السرية التي تكلمنا عنها في roles.py
+    magic_prompt = f"""
+    {history_text}
+    
+    [SYSTEM: FINALIZE_STRATEGY]
+    Based on the agreed chat history above for the product '{product_name}', output the final JSON strategy exactly as requested in your system instructions. Do not add any text before or after the JSON.
     """
 
-    chat_result = rag_proxy.initiate_chat(director, message=message, max_turns=2)
-    last_message = chat_result.chat_history[-1]['content']
-    data = json_match_extractor(last_message)
+    print("📄 Forcing Director to output JSON Strategy...")
+    chat_result = user.initiate_chat(director, message=magic_prompt, max_turns=1)
     
-    if data and "suggested_audiences" in data: return data
+    last_message = chat_result.chat_history[-1]['content']
+    
+    # استخراج الـ JSON
+    data = json_match_extractor(last_message)
+    if data and "suggested_audiences" in data:
+        return data
         
-    raise ValueError("Failed to extract valid JSON with suggested audiences.")
+    print("⚠️ Fallback strategy used due to JSON parsing error.")
+    return {
+        "name": f"حملة {product_name}",
+        "objective": "تم الاتفاق في المحادثة",
+        "suggested_audiences": {"suggestions": [{"audience": "الجمهور المستهدف", "reason": "حسب النقاش"}]},
+        "posting_strategy": {"best_days": ["الخميس"], "best_times": ["19:00"], "reason": "اوقات الذروة"},
+        "trending_events": []
+    }
+
 
 # ==============================================================================
 # المرحلة 2: توليد النصوص فقط (Generate Copy)

@@ -117,6 +117,19 @@ class CampaignBase(BaseModel):
     suggested_audiences: Optional[Dict[str, Any]] = None 
     posting_strategy: Optional[Dict[str, Any]] = None
     trending_events: Optional[List[Dict[str, Any]]] = None
+    chat_history: Optional[List[Dict[str, str]]] = []
+    is_strategy_approved: bool = False
+
+# طلب إرسال رسالة في الشات الاستراتيجي
+class CampaignChatRequest(BaseModel):
+    product_id: int
+    message: str # رسالة المستخدم (مثال: "أريد التركيز على فئة الشباب")
+    # campaign_id اختياري، إذا لم يرسله يعني هذه أول رسالة
+    campaign_id: Optional[int] = None 
+
+# طلب الموافقة النهائية على الاستراتيجية
+class ApproveStrategyRequest(BaseModel):
+    campaign_id: int
 
 class AnalyzeRequest(BaseModel):
     product_id: int

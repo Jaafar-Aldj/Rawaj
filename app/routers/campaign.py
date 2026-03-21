@@ -2,8 +2,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from sqlalchemy.orm.attributes import flag_modified
 
 from .. import models, schemas, oauth2
 from ..database import get_db
@@ -16,51 +15,121 @@ router = APIRouter(
 )
 
 # ==============================================================================
-# المرحلة 1: إنشاء الحملة وتحليل المنتج (Audience Suggestion)
+# المرحلة 1A: الدردشة الاستراتيجية (Interactive Strategy Chat)
 # ==============================================================================
-@router.post("/analyze", response_model=schemas.CampaignResponse, status_code=status.HTTP_201_CREATED)
-def analyze_product(
-    request: schemas.AnalyzeRequest,
+@router.post("/analyze/chat", response_model=schemas.CampaignResponse, status_code=status.HTTP_200_OK)
+def chat_with_strategist(
+    request: schemas.CampaignChatRequest,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
+    # 1. التحقق من المنتج
     product = db.query(models.Products).filter(models.Products.id == request.product_id).first()
-    if not product:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with id {request.product_id} was not found")
-    if product.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this product")
+    if not product or product.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Product not found or unauthorized")
 
-    # 2. استدعاء وكيل الذكاء الاصطناعي (المدير فقط) لاقتراح الفئات
-    # (سنفترض وجود دالة suggest_audiences في manager.py)
-    campaign_name = request.campaign_name if request.campaign_name.strip() else None
-    campaign_objective = request.campaign_objective if request.campaign_objective.strip() else None
+    campaign = None
+    chat_history = []
+
+    # 2. إدارة جلسة الحملة (Session Management)
+    if request.campaign_id:
+        # هذه رسالة متابعة (Follow-up) لحملة موجودة مسبقاً
+        campaign = db.query(models.Campaigns).filter(models.Campaigns.id == request.campaign_id).first()
+        if not campaign or campaign.product_id != product.id:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # التأكد من أن الحملة لم تعتمد بعد
+        if campaign.is_strategy_approved:
+            raise HTTPException(status_code=400, detail="Strategy already approved. Cannot chat further.")
+            
+        chat_history = campaign.chat_history if campaign.chat_history else []
+    else:
+        # هذه أول رسالة (New Chat)، ننشئ حملة جديدة في الداتا بيز
+        campaign = models.Campaigns(
+            product_id=product.id,
+            status="DRAFTING_STRATEGY",
+            chat_history=[],
+            is_strategy_approved=False
+        )
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+
+    # 3. تسجيل رسالة المستخدم في التاريخ (History)
+    user_msg = {"role": "user", "content": request.message}
+    chat_history.append(user_msg)
+
+    # 4. استدعاء الذكاء الاصطناعي (المدير الإبداعي كـ "مستشار")
     try:
-        suggestions = manager.suggest_audiences(
+        # نمرر التاريخ السابق ليفهم السياق
+        ai_reply_text = manager.chat_with_director(
             product.name, 
             product.description, 
-            product.image_analysis,
-            user_campaign_name=campaign_name, 
-            user_campaign_objective=campaign_objective
+            product.image_analysis, 
+            request.message,
+            chat_history[:-1] # نرسل التاريخ القديم بدون الرسالة الحالية (لأننا نرسلها كـ message)
         )
     except Exception as e:
-        print(f"AI Error: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to analyze product for audience suggestions")
+        print(f"AI Chat Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get a response from the strategist.")
 
-    # 3. إنشاء الحملة في قاعدة البيانات (Status: DRAFT)
-    new_campaign = models.Campaigns(
-        product_id=product.id,
-        status="DRAFT",
-        name=suggestions.get("name", "حملة تسويقية جديدة"),
-        objective=suggestions.get("objective", "زيادة المبيعات"),
-        suggested_audiences=suggestions.get("suggested_audiences"), 
-        posting_strategy=suggestions.get("posting_strategy"),
-        trending_events=suggestions.get("trending_events", [])
-    )
-    db.add(new_campaign)
+    # 5. تسجيل رد الذكاء الاصطناعي في التاريخ
+    ai_msg = {"role": "assistant", "content": ai_reply_text}
+    chat_history.append(ai_msg)
+
+    # 6. تحديث قاعدة البيانات وحفظ المحادثة
+    # ملاحظة مهمة في SQLAlchemy: لتحديث عمود JSONB، يجب إسناد قائمة جديدة بالكامل
+    campaign.chat_history = list(chat_history) 
+    flag_modified(campaign, "chat_history")
     db.commit()
-    db.refresh(new_campaign)
+    db.refresh(campaign)
     
-    return new_campaign
+    return campaign
+
+# ==============================================================================
+# المرحلة 1B: اعتماد الاستراتيجية وتوليد الـ JSON (Approve Strategy)
+# ==============================================================================
+
+@router.post("/analyze/approve", response_model=schemas.CampaignResponse, status_code=status.HTTP_200_OK)
+def approve_strategy(
+    request: schemas.ApproveStrategyRequest,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # 1. جلب الحملة
+    campaign = db.query(models.Campaigns).join(models.Products).filter(
+        models.Campaigns.id == request.campaign_id,
+        models.Products.user_id == current_user.id
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+        
+    if campaign.is_strategy_approved:
+         raise HTTPException(status_code=400, detail="Strategy already approved.")
+
+    # 2. استدعاء الذكاء لإخراج الـ JSON بناءً على المحادثة السابقة
+    try:
+        final_json_strategy = manager.finalize_strategy(campaign.product.name, campaign.chat_history)
+    except Exception as e:
+        print(f"AI Finalize Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to finalize the strategy JSON.")
+
+    # 3. حفظ الـ JSON في قاعدة البيانات (كما فعلنا في الكود القديم)
+    campaign.name = final_json_strategy.get("name", "حملة مخصصة")
+    campaign.objective = final_json_strategy.get("objective", "هدف مخصص")
+    campaign.suggested_audiences = final_json_strategy.get("suggested_audiences")
+    campaign.posting_strategy = final_json_strategy.get("posting_strategy")
+    campaign.trending_events = final_json_strategy.get("trending_events", [])
+    
+    # تغيير الحالة لتسمح بالانتقال للمرحلة التالية (توليد النصوص)
+    campaign.is_strategy_approved = True
+    campaign.status = "STRATEGY_APPROVED"
+    
+    db.commit()
+    db.refresh(campaign)
+    
+    return campaign
 
 # ==============================================================================
 # المرحلة 2: اختيار الفئات وتوليد المسودات (Draft Generation)

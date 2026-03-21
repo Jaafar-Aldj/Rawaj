@@ -40,6 +40,8 @@ class Campaigns(Base):
     suggested_audiences = Column(JSONB, nullable=True) 
     posting_strategy = Column(JSONB, nullable=True)  
     trending_events = Column(JSONB, nullable=True)
+    chat_history = Column(JSONB, nullable=True, default=[])
+    is_strategy_approved = Column(Boolean, server_default=text('false'))
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
 
     product = relationship("Products")
