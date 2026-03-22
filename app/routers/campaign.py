@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from sqlalchemy.orm.attributes import flag_modified
@@ -7,6 +7,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from .. import models, schemas, oauth2
 from ..database import get_db
 from ..agents import manager 
+from ..cleanup import cleanup_orphaned_files
 
 
 router = APIRouter(
@@ -507,6 +508,7 @@ def get_campaign(
 @router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_campaign(
     campaign_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -518,11 +520,15 @@ def delete_campaign(
     
     db.delete(campaign)
     db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.delete("/asset/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_asset(
     asset_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -544,12 +550,16 @@ def delete_asset(
     if total_assets == approved_assets:
         asset.campaign.status = "COMPLETED"
         db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/asset/image/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_image_asset(
     image_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -561,11 +571,15 @@ def delete_image_asset(
     
     db.delete(image_asset)
     db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @router.delete("/asset/video/{video_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_video_asset(
     video_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -577,4 +591,7 @@ def delete_video_asset(
     
     db.delete(video_asset)
     db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
