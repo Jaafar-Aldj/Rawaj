@@ -34,3 +34,11 @@ def get_prompter()-> autogen.AssistantAgent:
         llm_config=llm_config,
         system_message=sys_msg.prompter,
     )
+
+# 5. Art Director (QA)
+def get_art_director() -> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Art_Director",
+        llm_config=directory_config, 
+        system_message=sys_msg.art_director,
+    )

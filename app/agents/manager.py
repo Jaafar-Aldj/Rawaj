@@ -4,6 +4,7 @@ from app.agents.roles import get_director, get_copywriter, get_video_director, g
 from app.services.image_gen import generate_image_with_imagen
 from app.services.video_gen import  generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
+from app.services.vision_qa import analyze_media 
 # from app.services.audio_gen import generate_audio_elevenlabs
 import os
 import json
@@ -87,6 +88,128 @@ def normalize_prompts_data(data):
     return image_prompt, video_storyboard
 
 
+
+def evaluate_image_quality(image_path, original_prompt):
+    """
+    يقوم هذا الفاحص الذكي (Art Director) بتحليل الصورة المولدة مباشرة 
+    عبر Gemini Vision API للتأكد من خلوها من الأخطاء (نصوص غريبة، تشوهات).
+    """
+    try:
+        print(f"🕵️‍♂️ Art Director is analyzing the image: {image_path}...")
+        
+        # 1. فتح الصورة
+        img = PIL.Image.open(image_path)
+        
+        # 2. تجهيز الموديل السريع
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # 3. توجيه سؤال صارم للمخرج الفني
+        prompt = f"""
+        You are the Chief Art Director. Review this generated ad image based on the original prompt: '{original_prompt}'.
+        
+        CRITICAL CHECKS:
+        1. Are there ANY weird text, random letters, typos, or watermarks on the image? (Images MUST be text-free unless it's a clear product logo).
+        2. Are there any deformed people, extra fingers, or distorted faces?
+        3. Does it violate rules (e.g., contains alcohol when it shouldn't)?
+        
+        If the image passes all checks and looks professional, output exactly: APPROVED
+        If the image fails ANY check, output exactly: REJECTED | [Reason for rejection]
+        """
+        
+        # 4. طلب التقييم
+        response = model.generate_content([prompt, img])
+        result_text = response.text.strip()
+        
+        if result_text.startswith("APPROVED"):
+            print("✅ Art Director APPROVED the image!")
+            return True, ""
+        elif result_text.startswith("REJECTED"):
+            reason = result_text.split("|")[-1].strip() if "|" in result_text else "Quality issues detected."
+            print(f"❌ Art Director REJECTED the image. Reason: {reason}")
+            return False, reason
+        else:
+            # إذا أرجع رداً غير متوقع، نقبله كاحتياط
+            print(f"⚠️ Unclear Art Director response: {result_text}. Approving by default.")
+            return True, ""
+            
+    except Exception as e:
+        print(f"⚠️ Art Director Analysis Failed: {e}. Approving by default to prevent blocking.")
+        return True, ""
+
+
+def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ratio="16:9", max_retries=2):
+    current_prompt = image_prompt
+    attempt = 1
+    last_generated_image = None
+
+    while attempt <= max_retries:
+        print(f"\n🔄 [Image QA] Attempt {attempt}/{max_retries}...")
+        image_path = generate_image_with_imagen(current_prompt, reference_image_path, aspect_ratio)
+        
+        if not image_path or not os.path.exists(image_path):
+            print(f"❌ Image generation failed at attempt {attempt}.")
+            return last_generated_image
+        last_generated_image = image_path
+        # استدعاء المخرج الفني لتقييم الصورة
+        review = analyze_media(image_path, current_prompt, media_type="image")
+
+        if review.startswith("APPROVED"):
+            print("✅ Art Director APPROVED the image!")
+            return image_path
+        elif review.startswith("REJECTED"):
+            reason = review.split("|")[-1].strip()
+            print(f"❌ Art Director REJECTED the image: {reason}")
+            
+            # حذف الصورة المعيبة
+            if attempt < max_retries: # فقط نحذف إذا كنا سنحاول مرة أخرى
+                try: os.remove(image_path)
+                except: pass
+            
+            # تحديث البرومبت بتعليمات المخرج
+            current_prompt = f"{image_prompt}. CRITICAL FIX: {reason}"
+            attempt += 1
+        else:
+            return image_path # كاحتياط
+
+    print("⚠️ Max retries reached. Returning last image.")
+    return last_generated_image
+
+def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="16:9", max_retries=2):
+    current_prompt = video_prompt
+    attempt = 1
+    last_generated_video = None
+
+    
+    while attempt <= max_retries:
+        print(f"\n🔄 [Video QA] Attempt {attempt}/{max_retries}...")
+        video_path = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
+        
+        if not video_path: return last_generated_video
+        last_generated_video = video_path
+        # استدعاء المخرج الفني لتقييم الفيديو
+        review = analyze_media(video_path, current_prompt, media_type="video")
+
+        if review.startswith("APPROVED"):
+            print("✅ Art Director APPROVED the video!")
+            return video_path
+        elif review.startswith("REJECTED"):
+            reason = review.split("|")[-1].strip()
+            print(f"❌ Art Director REJECTED the video: {reason}")
+            
+            # حذف الفيديو المعيب
+            if attempt < max_retries: # فقط نحذف إذا كنا سنحاول مرة أخرى   
+                try: os.remove(video_path)
+                except: pass
+            
+            # تحديث البرومبت بتعليمات المخرج
+            current_prompt = f"{video_prompt}. CRITICAL FIX: {reason}"
+            attempt += 1
+        else:
+            return video_path # كاحتياط
+
+    print("⚠️ Max retries reached. Returning last video.")
+    return last_generated_video
+    
 
 # ==============================================================================
 # المرحلة 1A: المحادثة التفاعلية (Interactive Chat)
@@ -266,7 +389,7 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 
     try:
         # تأكد أن الدالة في image_gen.py تستقبل aspect_ratio (سنعدلها لاحقاً إذا أردت)
-        image_path = generate_image_with_imagen(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio)
+        image_path = generate_and_review_image(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio)
     except Exception as e:
         print(f"❌ Image Gen Error: {e}")
         image_path = None
@@ -377,11 +500,18 @@ def refine_text(current_copy, feedback):
 def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None):
     prompter = get_prompter()
     user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    art_director_advice = analyze_media(
+        file_path=original_image_path,
+        prompt=current_prompt,
+        user_feedback=feedback,
+        media_type="image"
+    )
     
     msg = f"""
     User Feedback: {feedback}
     Current Prompt: {current_prompt}
     Aspect Ratio: {aspect_ratio}
+    ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER: {art_director_advice}
     TASK: Update the image prompt. Output JSON: {{ "main_image_prompt": "..." }}
     """
     chat_result = user.initiate_chat(prompter, message=msg, max_turns=1)
@@ -403,7 +533,7 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
     image_url = None
     if new_prompt:
         try:
-            image_url = generate_image_with_imagen(new_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio)
+            image_url = generate_and_review_image(new_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio)
         except: pass
         
     return {"image_prompt": new_prompt, "image_url": image_url}
@@ -427,7 +557,7 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9"):
     
     if scene_img_prompt:
         try:
-            generated_img = generate_image_with_imagen(scene_img_prompt, reference_image_path=valid_image_path, aspect_ratio=aspect_ratio)
+            generated_img = generate_and_review_image(scene_img_prompt, reference_image_path=valid_image_path, aspect_ratio=aspect_ratio)
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
         except Exception as e:
@@ -442,7 +572,7 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9"):
         
     # 3. توليد الفيديو
     try:
-        scene_video_path = generate_veo_video(prompt_text=veo_prompt, image_path=scene_image_path, aspect_ratio=aspect_ratio)
+        scene_video_path = generate_and_review_video(veo_prompt, scene_image_path, aspect_ratio)
         print(f"✅ [Thread] Scene {scene_num} completed.")
         # نرجع رقم المشهد مع المسار لضمان الترتيب لاحقاً
         return {"scene_number": scene_num, "path": scene_video_path}
@@ -510,17 +640,27 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
         return final_video     
 
 
-def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9"):
+def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None):
     video_director = get_video_director()
     prompter = get_prompter()
     user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
     
+
     groupchat = autogen.GroupChat(agents=[user, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
+    art_director_advice = ""
+    art_director_advice = analyze_media(
+        file_path=current_video_path,
+        prompt=current_storyboard,
+        user_feedback=feedback,
+        media_type="video",
+    )
+    print(f"👨‍🎨 Art Director's Advice to Prompt Engineer: {art_director_advice}")
 
     msg = f"""
     User Feedback: {feedback}
     Current Storyboard: {json.dumps(current_storyboard, ensure_ascii=False)}
+    ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER:\n{art_director_advice}\n
     TASK: Update the scenes based on feedback. DO NOT change image_prompts. Output JSON `video_storyboard`.
     """
     chat_result = user.initiate_chat(manager, message=msg)
@@ -547,3 +687,4 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
          video_url = generate_final_video_asset(vid_storyboard, base_image_path=local_ref_path, aspect_ratio=aspect_ratio)
          
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
+
