@@ -1,3 +1,4 @@
+import asyncio
 import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 from app.agents.roles import get_director, get_copywriter, get_video_director, get_prompter
@@ -5,6 +6,7 @@ from app.services.image_gen import generate_image_with_imagen
 from app.services.video_gen import  generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
+from app.notifications import send_notification
 # from app.services.audio_gen import generate_audio_elevenlabs
 import os
 import json
@@ -399,7 +401,7 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
-def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None):
+def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, process_id=None):
     video_director = get_video_director()
     prompter = get_prompter()
     prompter.update_system_message(f"""
@@ -474,7 +476,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
     if vid_storyboard:
         print(f"🎬 Sending Storyboard to Veo (Duration: {duration}s)...")
         # نستدعي الدالة الشاملة التي تدمج المشاهد (تأكد أنها موجودة في هذا الملف أو مستوردة)
-        video_url = generate_final_video_asset(vid_storyboard, base_image_path=local_ref_path,aspect_ratio=aspect_ratio)
+        video_url = generate_final_video_asset(vid_storyboard, base_image_path=local_ref_path,aspect_ratio=aspect_ratio, process_id=process_id)
         
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
 
@@ -539,7 +541,7 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
     return {"image_prompt": new_prompt, "image_url": image_url}
 
 
-def process_single_scene(scene, valid_image_path, aspect_ratio="16:9"):
+def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", process_id=None):
     """
     دالة مساعدة لمعالجة مشهد واحد (توليد صورة ثم توليد فيديو).
     صُممت لتعمل داخل Thread.
@@ -547,6 +549,25 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9"):
     scene_num = scene.get("scene_number", 1)
     print(f"⏳ [Thread] Started Processing Scene {scene_num}...")
     
+    def notify(msg):
+        if process_id:
+            from app.notifications import active_connections            
+            # إذا كان الاتصال موجوداً نضع الرسالة مباشرة
+            if process_id in active_connections:
+                # ملاحظة: في FastAPI يفضل استخدام طريقة thread-safe
+                # سنقوم باستيراد send_notification واستخدام run_coroutine_threadsafe
+                import asyncio
+                from app.notifications import send_notification
+                
+                try:
+                    # هذه الطريقة المضمونة لإرسال إشعار Async من داخل Thread Sync
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(send_notification(process_id, msg), loop)
+                except Exception as e:
+                    print(f"Notify error: {e}")
+
+    notify(f"⏳ جاري معالجة المشهد رقم {scene_num}...")
     motion_p = scene.get("motion_prompt", "")
     voice_p = scene.get("voiceover_text", "")
     audio_p = scene.get("audio_prompt", "")
@@ -560,7 +581,9 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9"):
             generated_img = generate_and_review_image(scene_img_prompt, reference_image_path=valid_image_path, aspect_ratio=aspect_ratio)
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
+                notify(f"✅ اكتمل تصميم الإطار الأول للمشهد {scene_num}.")
         except Exception as e:
+            notify(f"⚠️ فشل تصميم إطار المشهد {scene_num}، سيتم استخدام الصورة الأساسية.")
             print(f"⚠️ [Scene {scene_num}] Image Gen failed, using base image. Error: {e}")
 
     # 2. تجهيز برومبت الفيديو (الصوت اختياري)
@@ -571,23 +594,45 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9"):
         veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
         
     # 3. توليد الفيديو
+    notify(f"🎥 جاري تحريك المشهد {scene_num} عبر الذكاء الاصطناعي...")
     try:
         scene_video_path = generate_and_review_video(veo_prompt, scene_image_path, aspect_ratio)
         print(f"✅ [Thread] Scene {scene_num} completed.")
         # نرجع رقم المشهد مع المسار لضمان الترتيب لاحقاً
+        notify(f"✅ تم الانتهاء من تحريك المشهد {scene_num} بنجاح!")
         return {"scene_number": scene_num, "path": scene_video_path}
     except Exception as e:
         print(f"❌ [Scene {scene_num}] Video Gen failed: {e}")
+        notify(f"❌ فشل تحريك المشهد {scene_num}.")
         return {"scene_number": scene_num, "path": None}
 
 
-def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9"):
+def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", process_id=None):
     """
     تقرأ الستوري بورد، تولد كل مشهد بالتوازي (Parallel)، ثم تدمجها بالترتيب.
     """
     if not storyboard_json or not isinstance(storyboard_json, list):
         print("❌ Invalid storyboard format")
         return None
+
+    def notify(msg):
+        if process_id:
+            from app.notifications import active_connections            
+            # إذا كان الاتصال موجوداً نضع الرسالة مباشرة
+            if process_id in active_connections:
+                # ملاحظة: في FastAPI يفضل استخدام طريقة thread-safe
+                # سنقوم باستيراد send_notification واستخدام run_coroutine_threadsafe
+                import asyncio
+                from app.notifications import send_notification
+                
+                try:
+                    # هذه الطريقة المضمونة لإرسال إشعار Async من داخل Thread Sync
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(send_notification(process_id, msg), loop)
+                except Exception as e:
+                    print(f"Notify error: {e}")
+    notify(f"🚀 بدء عملية الإنتاج السينمائي ({len(storyboard_json)} مشاهد)...")
 
     print(f"🚀 Starting PARALLEL Multi-Scene Video Generation ({len(storyboard_json)} scenes)...")
 
@@ -608,7 +653,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(storyboard_json)) as executor:
         # إرسال المهام
         future_to_scene = {
-            executor.submit(process_single_scene, scene, valid_image_path, aspect_ratio): scene 
+            executor.submit(process_single_scene, scene, valid_image_path, aspect_ratio, process_id): scene 
             for scene in storyboard_json
         }
         
@@ -624,6 +669,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     # --- ترتيب المشاهد ودمجها ---
     if not results:
         print("⚠️ All Veo generations failed.")
+        notify("⚠️ فشلت عملية توليد جميع المشاهد.")
         return None
 
     # ترتيب النتائج تصاعدياً حسب scene_number لضمان تسلسل الفيديو
@@ -634,13 +680,16 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
 
     # الدمج
     if len(ordered_video_paths) == 1:
+        notify("🎉 اكتمل إنتاج الفيديو بنجاح!")
         return ordered_video_paths[0]
     else:
+        notify("🎞️ جاري دمج المشاهد وإخراج الفيديو النهائي...")
         final_video = concatenate_veo_videos(ordered_video_paths)
+        notify("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
         return final_video     
 
 
-def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None):
+def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None, process_id=None):
     video_director = get_video_director()
     prompter = get_prompter()
     user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
@@ -684,7 +733,7 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
 
     video_url = None
     if vid_storyboard:
-         video_url = generate_final_video_asset(vid_storyboard, base_image_path=local_ref_path, aspect_ratio=aspect_ratio)
+         video_url = generate_final_video_asset(vid_storyboard, base_image_path=local_ref_path, aspect_ratio=aspect_ratio, process_id=process_id)
          
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
 

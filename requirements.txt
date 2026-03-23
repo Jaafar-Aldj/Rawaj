@@ -30,3 +30,4 @@ rembg
 # onnxruntime
 pillow
 gTTS
+sse-starlette

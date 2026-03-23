@@ -1,13 +1,19 @@
+import asyncio
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from sqlalchemy.orm.attributes import flag_modified
+from sse_starlette.sse import EventSourceResponse
+from starlette.concurrency import run_in_threadpool
 
+from app.notifications import  get_queue, send_notification, close_connection, active_connections
 from .. import models, schemas, oauth2
 from ..database import get_db
 from ..agents import manager 
 from ..cleanup import cleanup_orphaned_files
+
+
 
 
 router = APIRouter(
@@ -139,6 +145,7 @@ def approve_strategy(
 @router.post("/generate_copies", response_model=List[schemas.AssetResponse], status_code=status.HTTP_201_CREATED) 
 async def generate_copies(
     request: schemas.DraftCopyRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -166,9 +173,15 @@ async def generate_copies(
     platforms = request.selected_platforms if request.selected_platforms else ["Instagram", "Facebook", "TikTok"]
     generated_assets = []
     
+    process_id = f"copies_{campaign.id}"
+    await send_notification(process_id, "🚀 بدأ الفريق بكتابة النصوص الإعلانية...")
+    
     for audience in request.selected_audiences:
         try:
-            ai_result = manager.generate_copy_only(
+            await send_notification(process_id, f"✍️ جاري كتابة إعلان مخصص لفئة: {audience}...")
+
+            ai_result = await run_in_threadpool( 
+                manager.generate_copy_only,
                 product_name=campaign.product.name, 
                 product_desc=campaign.product.description, 
                 audience=audience,
@@ -183,6 +196,8 @@ async def generate_copies(
             )
             db.add(new_asset)
             generated_assets.append(new_asset)
+
+            await send_notification(process_id, f"✅ اكتملت نصوص فئة: {audience}.")
         except Exception as e:
             print(f"❌ Error generating copy for {audience}: {e}")
 
@@ -193,15 +208,20 @@ async def generate_copies(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate copies")
     
     for asset in generated_assets: db.refresh(asset)
+
+    await send_notification(process_id, "🎉 اكتملت مرحلة النصوص بنجاح!")
+    background_tasks.add_task(close_connection, process_id)
+
     return generated_assets
 
 # ==============================================================================
 # المرحلة 3A: توليد صورة حسب الطلب (On-Demand Image)
 # ==============================================================================
 @router.post("/generate_image", response_model=schemas.ImageAssetResponse, status_code=status.HTTP_201_CREATED)
-def generate_image_asset(
+async def generate_image_asset(
     request: schemas.GenerateImageRequest,
     req: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -209,10 +229,13 @@ def generate_image_asset(
     asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
     if not asset or asset.campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found or unauthorized")
+    process_id = f"image_{request.asset_id}"
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
 
     try:
         # استدعاء المانجر لتوليد الصورة
-        ai_result = manager.generate_image_on_demand(
+        ai_result = await run_in_threadpool(
+            manager.generate_image_on_demand,
             product_name=asset.campaign.product.name,
             audience=asset.target_audience,
             ad_copy_json=asset.ad_copy,
@@ -239,10 +262,15 @@ def generate_image_asset(
         db.commit()
         db.refresh(new_image)
         
+        await send_notification(process_id, "✅ تم إنشاء الصورة بنجاح!")
+        background_tasks.add_task(close_connection, process_id)
+
         return new_image
 
     except Exception as e:
         print(f"Image Error: {e}")
+        await send_notification(process_id, f"❌ فشل التوليد: {e}")
+        background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
@@ -251,9 +279,10 @@ def generate_image_asset(
 # المرحلة 3B: توليد فيديو حسب الطلب (On-Demand Video)
 # ==============================================================================
 @router.post("/generate_video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
-def generate_video_asset(
+async def generate_video_asset(
     request: schemas.GenerateVideoRequest,
     req: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -261,14 +290,19 @@ def generate_video_asset(
     if not asset or asset.campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Asset not found or unauthorized")
 
+    process_id = f"video_{asset.id}"
+    await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
     try:
-        ai_result = manager.generate_video_on_demand(
+        ai_result = await run_in_threadpool(
+            manager.generate_video_on_demand,
             product_name=asset.campaign.product.name,
             audience=asset.target_audience,
             ad_copy_json=asset.ad_copy,
             duration=request.video_duration,
             aspect_ratio=request.aspect_ratio,
-            base_image_path=asset.campaign.product.processed_image_url
+            base_image_path=asset.campaign.product.processed_image_url,
+            process_id=process_id
         )
         
         video_path = ai_result.get("video_url")
@@ -290,10 +324,15 @@ def generate_video_asset(
         db.commit()
         db.refresh(new_video)
         
+        await send_notification(process_id, "✅ تم حفظ الفيديو في النظام.")
+        background_tasks.add_task(close_connection, process_id)
+
         return new_video
 
     except Exception as e:
         print(f"Video Error: {e}")
+        await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
+        background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 # ==============================================================================
@@ -301,8 +340,9 @@ def generate_video_asset(
 # ==============================================================================
 
 @router.put("/edit/text", response_model=schemas.AssetResponse)
-def edit_ad_copy(
+async def edit_ad_copy(
     request: schemas.EditTextRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -312,8 +352,11 @@ def edit_ad_copy(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found or unauthorized")
 
     # 2. استدعاء وكيل التعديل (يجب إضافة دالة refine_text في manager.py)
-    try:
-        updated_copy = manager.refine_text(
+    process_id = f"edit_text_{request.asset_id}"
+    try:    
+        await send_notification(process_id, "✍️ جاري تعديل النص بناءً على ملاحظاتك...")
+        updated_copy = await run_in_threadpool(
+            manager.refine_text,
             current_copy=asset.ad_copy,
             feedback=request.feedback
         )
@@ -326,18 +369,25 @@ def edit_ad_copy(
             asset.ad_copy = actual_copy
             db.commit()
             db.refresh(asset)
+            await send_notification(process_id, "✅ تم تعديل النص بنجاح!")
+            background_tasks.add_task(close_connection, process_id)
             return asset
         else:
+            await send_notification(process_id, "❌ فشل التعديل: AI لم يُعد النص المحدث")
+            background_tasks.add_task(close_connection, process_id)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI failed to return updated text")
             
     except Exception as e:
         print(f"Edit Text Error: {e}")
+        await send_notification(process_id, f"❌ فشل التعديل: {e}")
+        background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/edit/image", response_model=schemas.ImageAssetResponse, status_code=status.HTTP_201_CREATED)
-def edit_image_asset(
+async def edit_image_asset(
     request: schemas.EditImageRequest,
     req: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -350,8 +400,11 @@ def edit_image_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found or unauthorized")
 
     # 2. استدعاء الذكاء لتعديل البرومبت وتوليد صورة جديدة
+    process_id = f"image_{request.asset_id}"
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
     try:
-        ai_result = manager.refine_image(
+        ai_result = await run_in_threadpool(
+            manager.refine_image,
             current_prompt=old_image.prompt,
             feedback=request.feedback,
             aspect_ratio=old_image.aspect_ratio,
@@ -360,7 +413,9 @@ def edit_image_asset(
         
         image_path = ai_result.get("image_url")
         if not image_path:
-             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image regeneration failed")
+            await send_notification(process_id, "❌ فشل التوليد: AI لم يُعد الصورة المحدثة")
+            background_tasks.add_task(close_connection, process_id)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image regeneration failed")
              
         filename = os.path.basename(image_path)
         public_image_url = f"{req.base_url}assets/image/{filename}"
@@ -377,17 +432,23 @@ def edit_image_asset(
         db.commit()
         db.refresh(new_image)
         
+        await send_notification(process_id, "✅ تم تعديل الصورة بنجاح!")
+        background_tasks.add_task(close_connection, process_id)
+
         return new_image
 
     except Exception as e:
         print(f"Edit Image Error: {e}")
+        await send_notification(process_id, f"❌ فشل التعديل: {e}")
+        background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post("/edit/video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
-def edit_video_asset(
+async def edit_video_asset(
     request: schemas.EditVideoRequest,
     req: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
 ):
@@ -399,12 +460,18 @@ def edit_video_asset(
     if not old_video or old_video.asset.campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found or unauthorized")
 
+    process_id = f"video_{old_video.asset.id}"
+    await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
     # 2. استدعاء الذكاء لتعديل الستوري بورد وتوليد فيديو جديد
     try:
-        ai_result = manager.refine_video(
+        ai_result = await run_in_threadpool( 
+            manager.refine_video,
             current_storyboard=old_video.video_storyboard,
             feedback=request.feedback,
-            base_image_path=old_video.asset.campaign.product.processed_image_url
+            base_image_path=old_video.asset.campaign.product.processed_image_url,
+            aspect_ratio=old_video.aspect_ratio,
+            process_id=process_id
         )
         
         video_path = ai_result.get("video_url")
@@ -426,10 +493,15 @@ def edit_video_asset(
         db.commit()
         db.refresh(new_video)
         
+        await send_notification(process_id, "✅ تم حفظ الفيديو في النظام.")
+        background_tasks.add_task(close_connection, process_id)
+
         return new_video
 
     except Exception as e:
         print(f"Edit Video Error: {e}")
+        await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
+        background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 # ==============================================================================
@@ -595,3 +667,27 @@ def delete_video_asset(
     background_tasks.add_task(cleanup_orphaned_files)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/stream/{proccess_id}")
+async def stream_notifications(proccess_id: str):
+    """
+    الفرونت إند يتصل بهذا الرابط للاستماع للإشعارات.
+    يظل الاتصال مفتوحاً حتى نرسل [DONE].
+    """
+    queue = get_queue(proccess_id)
+
+    async def event_generator():
+        try:
+            while True:
+                message = await queue.get()
+                if message == "[DONE]":
+                    break
+                yield {"data": message}
+        except asyncio.CancelledError:
+            print(f"🔌 Connection for {proccess_id} cancelled.")
+        finally:
+            if proccess_id in active_connections:
+                del active_connections[proccess_id]  # تنظيف الطابور عند انتهاء الاتصال
+
+    return EventSourceResponse(event_generator())
