@@ -61,10 +61,13 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image"):
             # سيناريو الجودة (Automated QA)
             system_instruction += f"""
             
-            CRITICAL CHECKS:
-            1. Are there ANY weird text, typos, or watermarks? (MUST be text-free unless requested).
-            2. Are there deformed faces, extra fingers, or distorted objects?
-            3. Does it clearly violate the prompt?
+             BE LENIENT. Generative AI is not perfect. Ignore minor text misspellings, slight deviations in camera movement, or missing minor background details.
+
+            CRITICAL CHECKS (ONLY reject if one of these is true):
+            1. Severe Watermarks or giant, nonsensical floating text blocking the view.
+            2. Deformed humans, extra fingers, or distorted faces.
+            3. Violates safety rules (Contains alcohol, nudity, etc.).
+            4. The core subject is COMPLETELY wrong (e.g., asked for a car, got a shoe).
             
             If PERFECT: Output exactly: APPROVED
             If FAILED: Output exactly: REJECTED | [Explain technically what went wrong so the Prompt_Engineer can fix it].

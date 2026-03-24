@@ -155,19 +155,10 @@ async def generate_copies(
     if campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
 
-    assets_query = db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == request.campaign_id)
-    assets = assets_query.all()
-    is_all_ok = True if assets else False
-    for asset in assets:
-        if asset.image_url is None:
-            is_all_ok = False
-            break
-    if not is_all_ok and assets:
-        for asset in assets:
-            db.delete(asset)
-            db.commit()
-    if is_all_ok:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Assets already exsist for this campaign")
+    db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == request.campaign_id).delete()
+    db.commit()
+    
+
 
     # تحديد المنصات (إذا لم يرسل المستخدم، نتركها فارغة ليتصرف الذكاء)
     platforms = request.selected_platforms if request.selected_platforms else ["Instagram", "Facebook", "TikTok"]
@@ -232,6 +223,15 @@ async def generate_image_asset(
     process_id = f"image_{request.asset_id}"
     await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
 
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
     try:
         # استدعاء المانجر لتوليد الصورة
         ai_result = await run_in_threadpool(
@@ -240,7 +240,8 @@ async def generate_image_asset(
             audience=asset.target_audience,
             ad_copy_json=asset.ad_copy,
             aspect_ratio=request.aspect_ratio,
-            original_image_path=asset.campaign.product.processed_image_url
+            original_image_path=asset.campaign.product.processed_image_url,
+            notify_callback = sync_notify
         )
         
         image_path = ai_result.get("image_url")
@@ -293,6 +294,15 @@ async def generate_video_asset(
     process_id = f"video_{asset.id}"
     await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
 
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
     try:
         ai_result = await run_in_threadpool(
             manager.generate_video_on_demand,
@@ -302,7 +312,7 @@ async def generate_video_asset(
             duration=request.video_duration,
             aspect_ratio=request.aspect_ratio,
             base_image_path=asset.campaign.product.processed_image_url,
-            process_id=process_id
+            notify_callback=sync_notify
         )
         
         video_path = ai_result.get("video_url")
@@ -400,15 +410,26 @@ async def edit_image_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found or unauthorized")
 
     # 2. استدعاء الذكاء لتعديل البرومبت وتوليد صورة جديدة
-    process_id = f"image_{request.asset_id}"
+    process_id = f"edit_image_{request.asset_id}"
     await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
     try:
         ai_result = await run_in_threadpool(
             manager.refine_image,
             current_prompt=old_image.prompt,
             feedback=request.feedback,
             aspect_ratio=old_image.aspect_ratio,
-            original_image_path=old_image.asset.campaign.product.processed_image_url
+            original_image_path=old_image.asset.campaign.product.processed_image_url,
+            notify_callback=sync_notify
         )
         
         image_path = ai_result.get("image_url")
@@ -460,8 +481,17 @@ async def edit_video_asset(
     if not old_video or old_video.asset.campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found or unauthorized")
 
-    process_id = f"video_{old_video.asset.id}"
+    process_id = f"edit_video_{old_video.asset.id}"
     await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
 
     # 2. استدعاء الذكاء لتعديل الستوري بورد وتوليد فيديو جديد
     try:
@@ -471,7 +501,7 @@ async def edit_video_asset(
             feedback=request.feedback,
             base_image_path=old_video.asset.campaign.product.processed_image_url,
             aspect_ratio=old_video.aspect_ratio,
-            process_id=process_id
+            notify_callback=sync_notify
         )
         
         video_path = ai_result.get("video_url")
