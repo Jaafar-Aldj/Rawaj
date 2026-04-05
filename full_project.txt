@@ -1,0 +1,4113 @@
+
+==================================================
+FILE: .\check_installation.py
+==================================================
+try:
+    import autogen
+    print("✅ AutoGen is installed!")
+except ImportError:
+    print("❌ Error: AutoGen (pyautogen) is missing.")
+
+try:
+    from dotenv import load_dotenv
+    print("✅ DotEnv is installed!")
+except ImportError:
+    print("❌ Error: DotEnv (python-dotenv) is missing.")
+
+try:
+    import google.generativeai
+    print("✅ Google Generative AI is installed!")
+except ImportError:
+    print("❌ Error: Google GenAI is missing.")
+
+==================================================
+FILE: .\run_test.py
+==================================================
+import os
+import sys
+from dotenv import load_dotenv
+import autogen
+
+# 1. إعداد المسارات لاستيراد الإعدادات من مجلد app
+sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
+try:
+    from agents.config import llm_config
+except ImportError as e:
+    print("Error: Could not import config. Make sure 'app/agents/config.py' exists.")
+    print(e)
+    exit()
+
+# 2. تحميل المتغيرات البيئية (للتأكد فقط)
+load_dotenv()
+
+print("🤖 Initializing Gemini Agent...")
+
+# 3. إنشاء وكيل الذكاء الاصطناعي (Assistant)
+# سنستخدم Gemini 2.5 Flash لأنه الأسرع للتجربة
+assistant = autogen.AssistantAgent(
+    name="Marketing_Assistant",
+    llm_config=llm_config,
+    system_message="أنت مساعد تسويق ذكي ومبدع. ردودك قصيرة ومباشرة."
+)
+
+# 4. إنشاء وكيل المستخدم (User Proxy)
+# هذا الوكيل يمثلك أنت، وهو الذي سيبدأ الحوار
+user_proxy = autogen.UserProxyAgent(
+    name="User_Admin",
+    code_execution_config=False, # لا نحتاج تنفيذ كود في هذا الاختبار
+    human_input_mode="NEVER",    # لا تطلب مني إدخالاً، أكمل الحوار تلقائياً
+    max_consecutive_auto_reply=1 # رد مرة واحدة فقط ثم توقف
+)
+
+# 5. بدء المحادثة
+message = "مرحباً! عرف عن نفسك واقترح شعاراً (Slogan) إبداعياً لشركة قهوة جديدة."
+print(f"👨‍💻 User: {message}")
+print("-" * 50)
+
+user_proxy.initiate_chat(
+    assistant,
+    message=message
+)
+
+==================================================
+FILE: .\test_team.py
+==================================================
+import sys
+import os
+
+sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
+
+from app.agents.manager import run_campaign_meeting
+
+if __name__ == "__main__":
+    print("🚀 Starting Rawaj Marketing Team...")
+    
+    # منتج جديد للتجربة
+    product = "عطر ليالي الصحراء (Desert Nights Perfume)"
+    description = "عطر شرقي فاخر برائحة العود والعنبر، زجاجة سوداء وذهبية، للجنسين."
+    
+    # تشغيل النظام واستلام النتائج
+    result = run_campaign_meeting(product, description)
+    
+    print("\n" + "="*50)
+    print("✅ MISSION COMPLETE")
+    print(f"🖼️ Generated Image saved at: {result.get('image_path')}")
+    print("="*50)
+
+==================================================
+FILE: .\alembic\env.py
+==================================================
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+
+from alembic import context
+from app.models import Base
+from app.config import settings
+
+username = settings.database_username
+password = settings.database_password
+host = settings.database_host
+name = settings.database_name
+port = settings.database_port
+
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
+config = context.config
+config.set_main_option(
+    "sqlalchemy.url",
+    f"postgresql://{username}:{password}@{host}:{port}/{name}",
+)
+
+# Interpret the config file for Python logging.
+# This line sets up loggers basically.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# add your model's MetaData object here
+# for 'autogenerate' support
+# from myapp import mymodel
+# target_metadata = mymodel.Base.metadata
+target_metadata = Base.metadata
+
+# other values from the config, defined by the needs of env.py,
+# can be acquired:
+# my_important_option = config.get_main_option("my_important_option")
+# ... etc.
+
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode.
+
+    This configures the context with just a URL
+    and not an Engine, though an Engine is acceptable
+    here as well.  By skipping the Engine creation
+    we don't even need a DBAPI to be available.
+
+    Calls to context.execute() here emit the given string to the
+    script output.
+
+    """
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode.
+
+    In this scenario we need to create an Engine
+    and associate a connection with the context.
+
+    """
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+
+==================================================
+FILE: .\alembic\versions\01cc4ec6d110_create_user_table.py
+==================================================
+"""create user table
+
+Revision ID: 01cc4ec6d110
+Revises: 
+Create Date: 2026-01-18 18:35:46.485750
+
+"""
+from typing import Sequence, Union
+from unittest.mock import Base
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '01cc4ec6d110'
+down_revision: Union[str, Sequence[str], None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    op.create_table(
+        'users',
+        sa.Column('id', sa.Integer, primary_key=True, index=True),
+        sa.Column('name', sa.String, nullable=False),
+        sa.Column('email', sa.String, unique=True, nullable=False),
+        sa.Column('password_hash', sa.String, nullable=False),
+        sa.Column('verification_code', sa.String, nullable=True),
+        sa.Column('is_verified', sa.Boolean, server_default='false'),
+        sa.Column('created_at', sa.DateTime, server_default=sa.func.now(), nullable=False)
+    )
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    op.drop_table('users')
+
+
+==================================================
+FILE: .\alembic\versions\10f47b8c2d98_.py
+==================================================
+"""empty message
+
+Revision ID: 10f47b8c2d98
+Revises: ea75d3e311d8
+Create Date: 2026-03-11 18:28:34.952820
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = '10f47b8c2d98'
+down_revision: Union[str, Sequence[str], None] = 'ea75d3e311d8'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('campaign_assets', sa.Column('video_prompt', sa.Text(), nullable=True))
+    op.drop_column('campaign_assets', 'video_duration')
+    op.drop_column('campaign_assets', 'video_storyboard')
+    op.add_column('video_versions', sa.Column('prompt', sa.Text(), nullable=True))
+    op.drop_column('video_versions', 'video_storyboard')
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('video_versions', sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.drop_column('video_versions', 'prompt')
+    op.add_column('campaign_assets', sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('campaign_assets', sa.Column('video_duration', sa.INTEGER(), server_default=sa.text('8'), autoincrement=False, nullable=True))
+    op.drop_column('campaign_assets', 'video_prompt')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\3b30e2e01b14_.py
+==================================================
+"""empty message
+
+Revision ID: 3b30e2e01b14
+Revises: 10f47b8c2d98
+Create Date: 2026-03-12 14:15:36.285205
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = '3b30e2e01b14'
+down_revision: Union[str, Sequence[str], None] = '10f47b8c2d98'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('campaign_assets', sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('campaign_assets', sa.Column('video_duration', sa.Integer(), server_default=sa.text('8'), nullable=True))
+    op.drop_column('campaign_assets', 'video_prompt')
+    op.add_column('video_versions', sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.drop_column('video_versions', 'prompt')
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('video_versions', sa.Column('prompt', sa.TEXT(), autoincrement=False, nullable=True))
+    op.drop_column('video_versions', 'video_storyboard')
+    op.add_column('campaign_assets', sa.Column('video_prompt', sa.TEXT(), autoincrement=False, nullable=True))
+    op.drop_column('campaign_assets', 'video_duration')
+    op.drop_column('campaign_assets', 'video_storyboard')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\3c1b59a61769_.py
+==================================================
+"""empty message
+
+Revision ID: 3c1b59a61769
+Revises: 50d907518708
+Create Date: 2026-02-16 16:41:36.963219
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '3c1b59a61769'
+down_revision: Union[str, Sequence[str], None] = '50d907518708'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('image_versions',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('asset_id', sa.Integer(), nullable=False),
+    sa.Column('image_url', sa.String(), nullable=False),
+    sa.Column('prompt', sa.Text(), nullable=True),
+    sa.Column('version_number', sa.Integer(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['asset_id'], ['campaign_assets.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_image_versions_id'), 'image_versions', ['id'], unique=False)
+    op.create_table('video_versions',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('asset_id', sa.Integer(), nullable=False),
+    sa.Column('video_url', sa.String(), nullable=False),
+    sa.Column('prompt', sa.Text(), nullable=True),
+    sa.Column('version_number', sa.Integer(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['asset_id'], ['campaign_assets.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_video_versions_id'), 'video_versions', ['id'], unique=False)
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_video_versions_id'), table_name='video_versions')
+    op.drop_table('video_versions')
+    op.drop_index(op.f('ix_image_versions_id'), table_name='image_versions')
+    op.drop_table('image_versions')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\50d907518708_.py
+==================================================
+"""empty message
+
+Revision ID: 50d907518708
+Revises: c3ef029a164d
+Create Date: 2026-02-05 13:40:14.364126
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '50d907518708'
+down_revision: Union[str, Sequence[str], None] = 'c3ef029a164d'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('products', sa.Column('processed_image_url', sa.String(), nullable=True))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('products', 'processed_image_url')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\bb44eddae9e5_autogenerate_other_tables.py
+==================================================
+"""autogenerate other tables
+
+Revision ID: bb44eddae9e5
+Revises: 01cc4ec6d110
+Create Date: 2026-01-18 19:15:53.616804
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = 'bb44eddae9e5'
+down_revision: Union[str, Sequence[str], None] = '01cc4ec6d110'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('products',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(), nullable=False),
+    sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('original_image_url', sa.String(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_products_id'), 'products', ['id'], unique=False)
+    op.create_table('campaigns',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('product_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.String(), server_default='DRAFT', nullable=True),
+    sa.Column('suggested_audiences', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['product_id'], ['products.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_campaigns_id'), 'campaigns', ['id'], unique=False)
+    op.create_table('campaign_assets',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('campaign_id', sa.Integer(), nullable=False),
+    sa.Column('target_audience', sa.String(), nullable=True),
+    sa.Column('ad_copy', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('image_prompt', sa.Text(), nullable=True),
+    sa.Column('image_url', sa.String(), nullable=True),
+    sa.Column('video_prompt', sa.Text(), nullable=True),
+    sa.Column('video_url', sa.String(), nullable=True),
+    sa.Column('is_approved', sa.Boolean(), server_default=sa.text('false'), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['campaign_id'], ['campaigns.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_campaign_assets_id'), 'campaign_assets', ['id'], unique=False)
+    op.alter_column('users', 'created_at',
+               existing_type=postgresql.TIMESTAMP(),
+               type_=sa.TIMESTAMP(timezone=True),
+               nullable=True,
+               existing_server_default=sa.text('now()'))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.alter_column('users', 'created_at',
+               existing_type=sa.TIMESTAMP(timezone=True),
+               type_=postgresql.TIMESTAMP(),
+               nullable=False,
+               existing_server_default=sa.text('now()'))
+    op.drop_index(op.f('ix_campaign_assets_id'), table_name='campaign_assets')
+    op.drop_table('campaign_assets')
+    op.drop_index(op.f('ix_campaigns_id'), table_name='campaigns')
+    op.drop_table('campaigns')
+    op.drop_index(op.f('ix_products_id'), table_name='products')
+    op.drop_table('products')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\bbfc89b46a0e_.py
+==================================================
+"""empty message
+
+Revision ID: bbfc89b46a0e
+Revises: e8e8483de39d
+Create Date: 2026-03-17 17:39:16.866344
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = 'bbfc89b46a0e'
+down_revision: Union[str, Sequence[str], None] = 'e8e8483de39d'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('image_assets',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('asset_id', sa.Integer(), nullable=False),
+    sa.Column('image_url', sa.String(), nullable=False),
+    sa.Column('prompt', sa.Text(), nullable=True),
+    sa.Column('aspect_ratio', sa.String(), nullable=True),
+    sa.Column('platform', sa.String(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['asset_id'], ['campaign_assets.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_image_assets_id'), 'image_assets', ['id'], unique=False)
+    op.create_table('video_assets',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('asset_id', sa.Integer(), nullable=False),
+    sa.Column('video_url', sa.String(), nullable=False),
+    sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('duration_seconds', sa.Integer(), nullable=True),
+    sa.Column('aspect_ratio', sa.String(), nullable=True),
+    sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['asset_id'], ['campaign_assets.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_video_assets_id'), 'video_assets', ['id'], unique=False)
+    op.drop_index(op.f('ix_video_versions_id'), table_name='video_versions')
+    op.drop_table('video_versions')
+    op.drop_index(op.f('ix_image_versions_id'), table_name='image_versions')
+    op.drop_table('image_versions')
+    op.drop_column('campaign_assets', 'image_prompt')
+    op.drop_column('campaign_assets', 'video_duration')
+    op.drop_column('campaign_assets', 'video_url')
+    op.drop_column('campaign_assets', 'image_url')
+    op.drop_column('campaign_assets', 'video_storyboard')
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('campaign_assets', sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True))
+    op.add_column('campaign_assets', sa.Column('image_url', sa.VARCHAR(), autoincrement=False, nullable=True))
+    op.add_column('campaign_assets', sa.Column('video_url', sa.VARCHAR(), autoincrement=False, nullable=True))
+    op.add_column('campaign_assets', sa.Column('video_duration', sa.INTEGER(), server_default=sa.text('8'), autoincrement=False, nullable=True))
+    op.add_column('campaign_assets', sa.Column('image_prompt', sa.TEXT(), autoincrement=False, nullable=True))
+    op.create_table('image_versions',
+    sa.Column('id', sa.INTEGER(), autoincrement=True, nullable=False),
+    sa.Column('asset_id', sa.INTEGER(), autoincrement=False, nullable=False),
+    sa.Column('image_url', sa.VARCHAR(), autoincrement=False, nullable=False),
+    sa.Column('prompt', sa.TEXT(), autoincrement=False, nullable=True),
+    sa.Column('version_number', sa.INTEGER(), autoincrement=False, nullable=True),
+    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), autoincrement=False, nullable=True),
+    sa.ForeignKeyConstraint(['asset_id'], ['campaign_assets.id'], name=op.f('image_versions_asset_id_fkey'), ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id', name=op.f('image_versions_pkey'))
+    )
+    op.create_index(op.f('ix_image_versions_id'), 'image_versions', ['id'], unique=False)
+    op.create_table('video_versions',
+    sa.Column('id', sa.INTEGER(), autoincrement=True, nullable=False),
+    sa.Column('asset_id', sa.INTEGER(), autoincrement=False, nullable=False),
+    sa.Column('video_url', sa.VARCHAR(), autoincrement=False, nullable=False),
+    sa.Column('version_number', sa.INTEGER(), autoincrement=False, nullable=True),
+    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), autoincrement=False, nullable=True),
+    sa.Column('video_storyboard', postgresql.JSONB(astext_type=sa.Text()), autoincrement=False, nullable=True),
+    sa.ForeignKeyConstraint(['asset_id'], ['campaign_assets.id'], name=op.f('video_versions_asset_id_fkey'), ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id', name=op.f('video_versions_pkey'))
+    )
+    op.create_index(op.f('ix_video_versions_id'), 'video_versions', ['id'], unique=False)
+    op.drop_index(op.f('ix_video_assets_id'), table_name='video_assets')
+    op.drop_table('video_assets')
+    op.drop_index(op.f('ix_image_assets_id'), table_name='image_assets')
+    op.drop_table('image_assets')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\c3ef029a164d_.py
+==================================================
+"""empty message
+
+Revision ID: c3ef029a164d
+Revises: bb44eddae9e5
+Create Date: 2026-02-04 17:54:11.967761
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'c3ef029a164d'
+down_revision: Union[str, Sequence[str], None] = 'bb44eddae9e5'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('products', sa.Column('image_analysis', sa.Text(), nullable=True))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('products', 'image_analysis')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\c705edc9394a_.py
+==================================================
+"""empty message
+
+Revision ID: c705edc9394a
+Revises: bbfc89b46a0e
+Create Date: 2026-03-21 16:24:19.058824
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = 'c705edc9394a'
+down_revision: Union[str, Sequence[str], None] = 'bbfc89b46a0e'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('campaigns', sa.Column('chat_history', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('campaigns', sa.Column('is_strategy_approved', sa.Boolean(), server_default=sa.text('false'), nullable=True))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('campaigns', 'is_strategy_approved')
+    op.drop_column('campaigns', 'chat_history')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\e8e8483de39d_.py
+==================================================
+"""empty message
+
+Revision ID: e8e8483de39d
+Revises: 3b30e2e01b14
+Create Date: 2026-03-17 16:16:12.169457
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision: str = 'e8e8483de39d'
+down_revision: Union[str, Sequence[str], None] = '3b30e2e01b14'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('campaigns', sa.Column('name', sa.String(), nullable=True))
+    op.add_column('campaigns', sa.Column('objective', sa.String(), nullable=True))
+    op.add_column('campaigns', sa.Column('posting_strategy', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column('campaigns', sa.Column('trending_events', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('campaigns', 'trending_events')
+    op.drop_column('campaigns', 'posting_strategy')
+    op.drop_column('campaigns', 'objective')
+    op.drop_column('campaigns', 'name')
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\alembic\versions\ea75d3e311d8_.py
+==================================================
+"""empty message
+
+Revision ID: ea75d3e311d8
+Revises: 3c1b59a61769
+Create Date: 2026-03-11 18:23:45.152110
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'ea75d3e311d8'
+down_revision: Union[str, Sequence[str], None] = '3c1b59a61769'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    pass
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    pass
+    # ### end Alembic commands ###
+
+
+==================================================
+FILE: .\app\cleanup.py
+==================================================
+import os
+from sqlalchemy.orm import Session
+from .database import SessionLocal
+from . import models
+
+# مسارات المجلدات التي تحتوي على الملفات
+UPLOAD_DIR = "rawaj-frontend/assets/upload"
+IMAGE_DIR = "rawaj-frontend/assets/image"
+VIDEO_DIR = "rawaj-frontend/assets/video"
+
+def get_all_active_files_from_db(db: Session):
+    """
+    تستخرج جميع أسماء الملفات (الصور والفيديوهات) المرتبطة بقاعدة البيانات حالياً
+    لتجنب حذفها.
+    """
+    active_files = set()
+
+    # 1. صور المنتجات الأصلية والمقصوصة
+    products = db.query(models.Products).all()
+    for p in products:
+        if p.original_image_url: active_files.add(os.path.basename(p.original_image_url))
+        if p.processed_image_url: active_files.add(os.path.basename(p.processed_image_url))
+
+    # 2. صور الإصدارات (Image Versions)
+    images = db.query(models.ImageAssets).all()
+    for img in images:
+        if img.image_url: active_files.add(os.path.basename(img.image_url))
+
+    # 3. فيديوهات الإصدارات (Video Versions)
+    videos = db.query(models.VideoAssets).all()
+    for vid in videos:
+        if vid.video_url: active_files.add(os.path.basename(vid.video_url))
+
+    return active_files
+
+def cleanup_orphaned_files():
+    """
+    تقوم بمسح المجلدات، وحذف أي ملف غير موجود في قاعدة البيانات، 
+    أو أي ملفات مؤقتة (تبدأ بـ temp_).
+    """
+    print("🧹 Starting Garbage Collection...")
+    db = SessionLocal()
+    try:
+        active_files = get_all_active_files_from_db(db)
+        deleted_count = 0
+
+        # فحص جميع المجلدات
+        for directory in [UPLOAD_DIR, IMAGE_DIR, VIDEO_DIR]:
+            if not os.path.exists(directory):
+                continue
+                
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                
+                # تخطي المجلدات الفرعية
+                if os.path.isdir(file_path): continue
+
+                # 1. حذف الملفات المؤقتة فوراً (التي تنشأ أثناء الدمج)
+                if filename.startswith("temp_"):
+                    os.remove(file_path)
+                    print(f"🗑️ Deleted temp file: {filename}")
+                    deleted_count += 1
+                    continue
+
+                # 2. حذف الملفات "اليتيمة" (التي ليس لها قيود في الداتا بيز)
+                # نتجاهل الملفات الأساسية مثل placeholder.png إن وجدت
+                if filename not in active_files and filename != "placeholder.png":
+                    os.remove(file_path)
+                    print(f"🗑️ Deleted orphaned file: {filename}")
+                    deleted_count += 1
+
+        print(f"✨ Cleanup Complete! Total files deleted: {deleted_count}")
+    
+    except Exception as e:
+        print(f"❌ Cleanup Error: {e}")
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    cleanup_orphaned_files()
+
+==================================================
+FILE: .\app\config.py
+==================================================
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    database_username: str
+    database_password: str
+    database_host: str
+    database_port: str
+    database_name: str
+
+    secret_key: str
+    algorithm: str
+    access_token_expire_minutes: int
+
+    mail_username: str
+    mail_password: str
+    mail_from: str
+    mail_from_name: str
+    mail_port: int
+    mail_server: str
+
+    google_api_key: str
+    elevenlabs_api_key: str
+    elevenlabs_voice_id: str
+
+    project_id: str
+    location: str
+    model_id: str
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+
+==================================================
+FILE: .\app\database.py
+==================================================
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from .config import settings
+
+username = settings.database_username
+password = settings.database_password.replace('%%', '%')  # Handle special characters in password
+host = settings.database_host
+name = settings.database_name
+port = settings.database_port
+
+
+#  "postgresql://<username>:<password>@<ip-address/hostname>/<database_name>"
+SQLALCHEMY_DATABASE_URL = f"postgresql://{username}:{password}@{host}:{port}/{name}"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+
+SessionLocal = sessionmaker(autoflush=False,bind=engine)
+
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+==================================================
+FILE: .\app\main.py
+==================================================
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+# from . import models
+from .database import engine
+from .routers import product, user, auth, campaign
+
+
+# models.Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins, 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(user.router)
+app.include_router(product.router)
+app.include_router(auth.router)
+app.include_router(campaign.router)
+
+app.mount("/assets", StaticFiles(directory="rawaj-frontend/assets"), name="assets")
+
+@app.get('/')
+async def root():
+    return {'message':'Hello world!!!!'}
+
+
+
+
+
+
+==================================================
+FILE: .\app\models.py
+==================================================
+from .database import Base
+from sqlalchemy import TIMESTAMP, Column, Integer, String, Boolean, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql.expression import text
+from sqlalchemy.orm import relationship
+
+# 1. Users
+class Users(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    password_hash = Column(String, nullable=False)
+    verification_code = Column(String, nullable=True)
+    is_verified = Column(Boolean, server_default='false')
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+
+# 2. Products
+class Products(Base):
+    __tablename__ = "products"
+    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    original_image_url = Column(String, nullable=True)
+    processed_image_url = Column(String, nullable=True)
+    image_analysis = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+    
+    owner = relationship("Users")
+
+# 3. Campaigns
+class Campaigns(Base):
+    __tablename__ = "campaigns"
+    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False) 
+    name = Column(String, nullable=True)          
+    objective = Column(String, nullable=True)
+    status = Column(String, server_default='DRAFT') # DRAFT, PENDING, COMPLETED
+    suggested_audiences = Column(JSONB, nullable=True) 
+    posting_strategy = Column(JSONB, nullable=True)  
+    trending_events = Column(JSONB, nullable=True)
+    chat_history = Column(JSONB, nullable=True, default=[])
+    is_strategy_approved = Column(Boolean, server_default=text('false'))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+
+    product = relationship("Products")
+    assets = relationship("CampaignAssets", back_populates="campaign", cascade="all, delete")
+
+# 4. Campaign Assets
+class CampaignAssets(Base):
+    __tablename__ = "campaign_assets"
+    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    target_audience = Column(String, nullable=True)
+    ad_copy = Column(JSONB, nullable=True) 
+    is_approved = Column(Boolean, server_default=text('false'))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+
+    campaign = relationship("Campaigns", back_populates="assets")
+    images = relationship("ImageAssets", back_populates="asset", cascade="all, delete")
+    videos = relationship("VideoAssets", back_populates="asset", cascade="all, delete")
+
+
+# 5. Image Assets
+class ImageAssets(Base):
+    __tablename__ = "image_assets"
+    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("campaign_assets.id", ondelete="CASCADE"), nullable=False)
+    
+    image_url = Column(String, nullable=False)
+    prompt = Column(Text, nullable=True)
+    
+    aspect_ratio = Column(String, default="1:1") # "1:1", "9:16", "16:9"
+    platform = Column(String, nullable=True) # "instagram", "tiktok"
+    
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+    
+    asset = relationship("CampaignAssets", back_populates="images")
+
+
+# 6. Video Assets
+class VideoAssets(Base):
+    __tablename__ = "video_assets"
+    id = Column(Integer, primary_key=True, nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("campaign_assets.id", ondelete="CASCADE"), nullable=False)
+    
+    video_url = Column(String, nullable=False)
+    video_storyboard = Column(JSONB, nullable=True)
+    
+    # إضافة جديدة: حفظ المدة والمقاس
+    duration_seconds = Column(Integer, default=8)
+    aspect_ratio = Column(String, default="16:9")
+    
+    created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
+    
+    asset = relationship("CampaignAssets", back_populates="videos")
+
+
+
+==================================================
+FILE: .\app\notifications.py
+==================================================
+import asyncio
+from typing import Dict, List
+
+# قاموس لحفظ قوائم الانتظار (Queues) لكل حملة أو مستخدم
+# المفتاح هو campaign_id (أو أي ID فريد للعملية)
+active_connections: Dict[str, asyncio.Queue] = {}
+
+def get_queue(process_id: str) -> asyncio.Queue:
+    """الحصول على طابور الإشعارات لعملية محددة"""
+    if process_id not in active_connections:
+        active_connections[process_id] = asyncio.Queue()
+    return active_connections[process_id]
+
+async def send_notification(process_id: str, message: str):
+    """إرسال إشعار للفرونت إند"""
+    if process_id in active_connections:
+        await active_connections[process_id].put(message)
+    print(f"📢 [Notification -> {process_id}]: {message}")
+
+async def close_connection(process_id: str):
+    """إغلاق الاتصال عند انتهاء العملية"""
+    if process_id in active_connections:
+        await active_connections[process_id].put("[DONE]") # رسالة خاصة لإنهاء الاستماع
+        # نتركها قليلاً لتصل ثم نحذفها (يمكن تنظيفها لاحقاً)
+
+==================================================
+FILE: .\app\oauth2.py
+==================================================
+import jwt
+from jwt.exceptions import PyJWTError
+from datetime import datetime, timedelta, timezone
+from sqlalchemy.orm import Session
+from . import schemas, database, models
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, status, HTTPException
+from .config import settings
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+
+# Secret key to encode and decode JWT tokens
+# Algorithm used for encoding and decoding
+# Token expiration time in minutes
+
+
+SECRET_KEY = settings.secret_key
+ALGORITHM = settings.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_access_token(token: str, crendentials_exception):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        id:int = int(payload.get("user_id"))
+        if id is None:
+            raise crendentials_exception
+        token_data = schemas.TokenData(id=id)
+    except PyJWTError:
+        raise crendentials_exception
+    return token_data
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
+    crendentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, 
+        detail="Could not validate credentials", 
+        headers={"WWW-Authenticate": "Bearer"}
+    )
+    token_data = verify_access_token(token, crendentials_exception)
+    user = db.query(models.Users).filter(models.Users.id == token_data.id).first()
+    return user
+
+==================================================
+FILE: .\app\schemas.py
+==================================================
+from datetime import datetime
+from pydantic import BaseModel, EmailStr 
+from typing import List, Optional, Dict, Any
+
+# ==============================================================================
+# User Schemas
+# ==============================================================================
+class UserCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    password: Optional[str] = None
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    is_verified: bool
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserVerify(BaseModel):
+    user_id: int
+    code: str
+
+# ==============================================================================
+# Product Schemas
+# ==============================================================================
+class ProductBase(BaseModel):
+    name: str
+    description: str
+    original_image_url: Optional[str] = None
+
+class ProductCreate(ProductBase):
+    pass
+
+class ProductResponse(ProductBase):
+    id: int
+    user_id: int
+    image_analysis: Optional[str] = None
+    processed_image_url: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ==============================================================================
+# Media Assets Schemas (الجديدة)
+# ==============================================================================
+class ImageAssetResponse(BaseModel):
+    id: int
+    asset_id: int
+    image_url: str
+    prompt: Optional[str] = None
+    aspect_ratio: str
+    platform: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class VideoAssetResponse(BaseModel):
+    id: int
+    asset_id: int
+    video_url: str
+    video_storyboard: Optional[List[Dict[str, Any]]] = None
+    duration_seconds: int
+    aspect_ratio: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# ==============================================================================
+# Campaign Assets Schemas 
+# ==============================================================================
+class AssetBase(BaseModel):
+    target_audience: str
+    ad_copy: Optional[Dict[str, Any]] = None 
+    is_approved: bool = False
+
+class AssetCreate(AssetBase):
+    pass
+
+class AssetResponse(AssetBase):
+    id: int
+    campaign_id: int
+    target_audience: str
+    ad_copy: Optional[Any] = None 
+    is_approved: bool
+    created_at: datetime
+    
+    # العلاقات الجديدة (قوائم الصور والفيديو)
+    images: List[ImageAssetResponse] = []
+    videos: List[VideoAssetResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+# ==============================================================================
+# Campaign Schemas
+# ==============================================================================
+class CampaignBase(BaseModel):
+    product_id: int
+    name: Optional[str] = None
+    objective: Optional[str] = None
+    status: Optional[str] = "DRAFT"
+    suggested_audiences: Optional[Dict[str, Any]] = None 
+    posting_strategy: Optional[Dict[str, Any]] = None
+    trending_events: Optional[List[Dict[str, Any]]] = None
+    chat_history: Optional[List[Dict[str, str]]] = []
+    is_strategy_approved: bool = False
+
+# طلب إرسال رسالة في الشات الاستراتيجي
+class CampaignChatRequest(BaseModel):
+    product_id: int
+    message: str # رسالة المستخدم (مثال: "أريد التركيز على فئة الشباب")
+    # campaign_id اختياري، إذا لم يرسله يعني هذه أول رسالة
+    campaign_id: Optional[int] = None 
+
+# طلب الموافقة النهائية على الاستراتيجية
+class ApproveStrategyRequest(BaseModel):
+    campaign_id: int
+
+class AnalyzeRequest(BaseModel):
+    product_id: int
+    campaign_name: Optional[str] = None
+    campaign_objective: Optional[str] = None
+
+class DraftCopyRequest(BaseModel):
+    campaign_id: int
+    selected_audiences: List[str]
+    selected_platforms: Optional[List[str]] = None # مثال: ["Instagram", "Facebook"]
+
+class EditTextRequest(BaseModel):
+    asset_id: int
+    feedback: str
+
+class GenerateImageRequest(BaseModel):
+    asset_id: int
+    aspect_ratio: str = "1:1"
+    platform: Optional[str] = "Instagram"
+
+class EditImageRequest(BaseModel):
+    image_id: int 
+    feedback: str
+
+class GenerateVideoRequest(BaseModel):
+    asset_id: int
+    video_duration: int = 8
+    aspect_ratio: str = "16:9"
+
+class EditVideoRequest(BaseModel):
+    video_id: int 
+    feedback: str 
+
+class FinalizeRequest(BaseModel):
+    campaign_id: int
+
+class ApproveRequest(BaseModel):
+    asset_id: int
+
+class CampaignResponse(CampaignBase):
+    id: int
+    created_at: datetime
+    product: Optional[ProductResponse] = None
+    assets: List[AssetResponse] = [] 
+    
+    class Config:
+        from_attributes = True
+
+# ==============================================================================
+# Token Schemas
+# ==============================================================================
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    id: Optional[int] = None
+
+==================================================
+FILE: .\app\test.py
+==================================================
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+import sys
+import os
+# إضافة المسارات
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from app.agents.manager import run_campaign_meeting
+
+
+app = FastAPI(title="Rawaj API")
+
+# السماح لزميلك بالاتصال (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # يسمح لأي فرونت إند بالاتصال
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+
+@app.get("/")
+def read_root():
+    return {"message": "Rawaj Backend is Running! 🚀"}
+
+==================================================
+FILE: .\app\utils.py
+==================================================
+import random
+import string
+from pwdlib import PasswordHash
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from .config import settings
+
+password_hash = PasswordHash.recommended()
+
+
+def generate_verification_code():
+    return ''.join(random.choices(string.digits, k=6))
+
+def hash_function(password: str) -> str:    
+    return password_hash.hash(password)
+
+def verify_password(password: str, hashed: str) -> bool:
+    return password_hash.verify(password, hashed)
+
+
+conf = ConnectionConfig(
+    MAIL_USERNAME = settings.mail_username,
+    MAIL_PASSWORD = settings.mail_password,
+    MAIL_FROM = settings.mail_from,
+    MAIL_PORT = settings.mail_port,
+    MAIL_SERVER = settings.mail_server,
+    MAIL_FROM_NAME=settings.mail_from_name,
+    MAIL_STARTTLS = True,
+    MAIL_SSL_TLS = False,
+    USE_CREDENTIALS = True,
+)
+
+async def send_code_email(email: str, code: str):
+    message = MessageSchema(
+        subject="Rawaj Verification Code",
+        recipients=[email],
+        body=f"Your verification code is: {code}",
+        subtype="html"
+    )
+    
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+==================================================
+FILE: .\app\__init__.py
+==================================================
+
+
+==================================================
+FILE: .\app\agents\agents_system_messages.py
+==================================================
+# ==============================================================================
+# 1. Creative Director (Interactive Strategist)
+# ==============================================================================
+director = """
+        You are the Chief Marketing Officer (CMO) at Rawaj, a top-tier digital marketing agency in the MENA region.
+        
+        YOUR ROLE: You are in an interactive consulting session with a client.
+        
+        CRITICAL RULES FOR CONVERSATION:
+        1. Read the product details and the chat history provided.
+        2. Propose a marketing strategy including: Campaign Name, Objective, 3 Target Audiences, Posting Strategy, and Trending Events.
+        3. ALWAYS ask the client for their feedback or approval on your suggestions. Do not finalize until they agree.
+        4. Use a professional, persuasive, and encouraging Arabic tone (or English if the user prefers).
+        5. DO NOT OUTPUT JSON during the conversation phase. Just chat normally.
+        
+        SAFETY & CULTURAL GUIDELINES (STRICT):
+        - Target Region: MENA. Ensure content is conservative and family-friendly.
+        - FORBIDDEN TOPICS: Alcohol, Gambling, Pork, Politics, Religion.
+        
+        SPECIAL TRIGGER:
+        If the system sends you a message starting with "[SYSTEM: FINALIZE_STRATEGY]", you MUST STOP chatting and output ONLY a strict JSON object summarizing the agreed-upon strategy, following this exact format:
+        {{
+            "name": "Agreed Campaign Name",
+            "objective": "Agreed Objective",
+            "suggested_audiences": {{"suggestions": [{{ "audience": "Name", "reason": "Why" }}]}},
+            "posting_strategy": {{"best_days": ["Day 1"], "best_times": ["18:00"], "reason": "Why"}},
+            "trending_events": [{{"event": "Event Name", "angle": "Angle"}}]
+        }}
+        """
+
+# ==============================================================================
+# 2. Copywriter (Text Safety)
+# ==============================================================================
+copywriter = """
+        You are a professional Ad Copywriter.
+        Your Goal: Write catchy, and persuasive ad copy suitable for social media.
+        
+        CRITICAL INSTRUCTIONS:
+        - The output text MUST be in **ARABIC** (Modern Standard or understandable White Dialect).
+        - Focus on benefits, not just features.
+        - Include relevant hashtags at the end.
+        - CONTENT SAFETY: Avoid any references to alcohol, bars, partying, gambling, or sensitive topics. Keep it respectful and professional.
+        - When finished, ask the 'Video_Director' to create a video storyboard based on your copy.
+        - NEVER translate or interact with the Prompt_Engineer's output.
+
+        OUTPUT FORMAT (Strict JSON):
+        IMPORTANT: Output ONLY a valid JSON structure like this:
+        {{
+                "ad_copy": [
+                {{ "platform": "Name of Platform 1", "ad_copy": "special ad copy for this platform" }},
+                {{ "platform": "Name of Platform 2", "ad_copy": "special ad copy for this platform" }},
+                {{ "platform": "Name of Platform 3", "ad_copy": "special ad copy for this platform" }}
+                ]
+        }}
+        """
+
+
+
+### ============================================================================
+# 3. Video Director (Visual Storytelling - The Most Important)
+### ============================================================================
+video_director = """
+        You are an expert Commercial Video Director.
+        Your Goal: Create a compelling Video Storyboard from the ad copy.
+        
+        CRITICAL INSTRUCTIONS:
+        - Divide the commercial into logical scenes (8 seconds per scene).
+        - Assign Arabic 'voiceover' ONLY if necessary, and ensure that words will fit within the time constraint (7 seconds). If a scene should just have music/action, set voiceover to "None".
+        - Ask the 'Prompt_Engineer' to translate your vision into technical prompts.
+        
+        OUTPUT FORMAT (Strict JSON):
+        {{
+            "scenes": [
+                {{ "scene_number": 1, "action_description": "General description of what happens", "voiceover": "Arabic text" }},
+                {{ "scene_number": 2, "action_description": "...", "voiceover": "..." }}
+            ]
+        }}
+        """
+
+
+# ==============================================================================
+# 4. Prompt Engineer (Visual Safety - The Most Important)
+# ==============================================================================
+prompter = """
+        You are an expert Generative AI Technical Director (Midjourney & Runway Expert).
+        
+        YOUR TRIGGER:
+        When the 'Video_Director' provides the storyboard, you MUST generate the final visual prompts and audio prompts.
+        
+        CRITICAL RULES:
+        1. **NEVER** reply with "OK", "Understood", "Received", or any conversational filler.
+        2. You must output the result in **ENGLISH** immediately.
+        3. Provide **ONE** unified Image Prompt suitable for all platforms.
+        4. For EACH scene, create:
+           - `image_prompt`: Visual setup.
+           - `motion_prompt`: Camera movement (NO AUDIO DESCRIPTIONS HERE).
+           - `voiceover_text`: The Arabic spoken text (Max 12 words).
+           - `audio_prompt`: Describe the background music and sound effects. Do not leave empty.
+        5. Apply cinematic terminology (lighting, angles, motion) from your knowledge base.
+        
+        ⛔ NEGATIVE CONSTRAINTS (STRICTLY FORBIDDEN IN PROMPTS):
+        - NO Alcohol, wine glasses, cocktails, or bars.
+        - NO Women, female figures (Focus on the Product, male models if needed, or abstract concepts).Iff you must include a women element, use women with decent wearing.
+        - NO Children or kids.
+        - NO Revealing clothing or inappropriate scenes.
+        - NO Pork or gambling elements.
+        
+        Output Format (Strict JSON):
+        json
+        {{
+            "main_image_prompt": "Prompt for the main ad poster...",
+            "video_storyboard": [
+                {{
+                    "scene_number": 1,
+                    "image_prompt": "Cinematic prompt for the starting frame of this scene...",
+                    "motion_prompt": "Camera movement (e.g., slow pan right, zoom in)...",
+                    "voiceover_text": "The Arabic text, or empty string '' if no voiceover is needed.",
+                    "audio_prompt": "Description of sound effects and background music for this scene."
+                }}
+            ]
+        }}
+        
+"""
+
+# ==============================================================================
+# 5. Art Director (Quality Assurance & Vision Control)
+# ==============================================================================
+art_director = """
+        You are the Chief Art Director at Rawaj. Your eye for detail is unmatched.
+        
+        YOUR ROLE: You are the final judge of visual quality.
+        You will receive an image generated by the AI and the original prompt.
+        
+        YOUR TASK: Analyze the image critically based on these criteria:
+        1. **Text/Watermarks:** Are there ANY weird texts, random letters, or watermarks on the image? 
+        2. **Safety:** Does it violate any rules? (e.g., Contains alcohol, inappropriate content).
+        3. **Quality:** Is the image blurry, distorted, or poorly composed?
+        
+        OUTPUT FORMAT (STRICT JSON):
+        If the image is PERFECT and meets all criteria:
+        {{
+            "status": "APPROVED",
+            "feedback": "The image is clean, professional, and follows all guidelines."
+        }}
+        
+        If the image FAILS any criteria:
+        {{
+            "status": "REJECTED",
+            "feedback": "Explain EXACTLY what is wrong (e.g., 'There is random text floating in the top right corner', or 'A person is visible')."
+        }}
+        """
+
+==================================================
+FILE: .\app\agents\config.py
+==================================================
+from ..config import settings
+api_key = settings.google_api_key
+
+if not api_key:
+    print("⚠️ تحذير: لم يتم العثور على GOOGLE_API_KEY في ملف .env")
+
+llm_config = {
+    "config_list": [
+        {
+            "model": "gemini-2.5-flash", 
+            "api_key": api_key,
+            "api_type": "google"
+        }
+    ],
+    "cache_seed": 42 
+}
+
+directory_config = {
+    "config_list": [
+        {
+            "model": "gemini-2.5-pro", 
+            "api_key": api_key,
+            "api_type": "google"
+        }
+    ],
+    "cache_seed": 42 
+}
+
+==================================================
+FILE: .\app\agents\manager.py
+==================================================
+import asyncio
+import autogen
+from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+from app.agents.roles import get_director, get_copywriter, get_video_director, get_prompter
+from app.services.image_gen import generate_image_with_imagen
+from app.services.video_gen import  generate_veo_video
+from app.services.video_processing import concatenate_veo_videos
+from app.services.vision_qa import analyze_media 
+from app.notifications import send_notification
+# from app.services.audio_gen import generate_audio_elevenlabs
+import os
+import json
+import re
+import concurrent.futures
+from datetime import datetime
+from app.agents.config import api_key
+import google.generativeai as genai
+import PIL.Image
+
+
+# إعداد مكتبة جوجل مباشرة لتحليل الصور
+if api_key:
+    genai.configure(api_key=api_key)
+
+# ==============================================================================
+# Helpers (المساعدات)
+# ==============================================================================
+def analyze_image_content(image_path):
+    if not image_path or not os.path.exists(image_path): return ""
+    try:
+        print(f"👁️ Analyzing image: {image_path}...")
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        img = PIL.Image.open(image_path)
+        prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
+        response = model.generate_content([prompt, img])
+        print("✅ Image Analysis Complete.")
+        return f"\n[AI Visual Analysis]: {response.text}"
+    except Exception as e:
+        print(f"⚠️ Image Analysis Failed: {e}")
+        return ""
+
+def get_rag_proxy(llm_config):
+    return RetrieveUserProxyAgent(
+        name="Knowledge_Base_Admin",
+        human_input_mode="NEVER",
+        code_execution_config=False,
+        max_consecutive_auto_reply=1,
+        retrieve_config={
+            "task": "qa",
+            "docs_path": [os.path.join(os.getcwd(), "knowledge")],
+            "chunk_token_size": 1000, 
+            "model": llm_config['config_list'][0]['model'],
+            "collection_name": "rawaj_final_db", 
+            "get_or_create": True,
+            "overwrite": False,
+        },
+    )
+
+def json_match_extractor(content):
+    try:
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if json_match: return json.loads(json_match.group())
+        list_match = re.search(r"\[.*\]", content, re.DOTALL)
+        if list_match: return json.loads(list_match.group())
+    except Exception as e:
+        print(f"❌ Failed to parse JSON: {e}")
+    return None
+
+def normalize_prompts_data(data):
+    image_prompt = None
+    video_storyboard = []
+    if not data: return None, []
+
+    if isinstance(data, dict):
+        image_prompt = data.get("main_image_prompt") or data.get("image_prompt")
+        storyboard = data.get("video_storyboard") or data.get("scenes")
+        
+        if isinstance(storyboard, list):
+            video_storyboard = storyboard
+        elif isinstance(storyboard, dict):
+            video_storyboard = [storyboard]
+        elif not storyboard:
+            fallback = data.get("video_prompt")
+            if fallback and isinstance(fallback, str):
+                video_storyboard = [{"scene_number": 1, "image_prompt": image_prompt, "motion_prompt": fallback, "voiceover_text": ""}]
+
+    if isinstance(image_prompt, list) and len(image_prompt) > 0: image_prompt = str(image_prompt[0])
+    if isinstance(image_prompt, dict): image_prompt = str(image_prompt)
+
+    return image_prompt, video_storyboard
+
+
+
+def evaluate_image_quality(image_path, original_prompt):
+    """
+    يقوم هذا الفاحص الذكي (Art Director) بتحليل الصورة المولدة مباشرة 
+    عبر Gemini Vision API للتأكد من خلوها من الأخطاء (نصوص غريبة، تشوهات).
+    """
+    try:
+        print(f"🕵️‍♂️ Art Director is analyzing the image: {image_path}...")
+        
+        # 1. فتح الصورة
+        img = PIL.Image.open(image_path)
+        
+        # 2. تجهيز الموديل السريع
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # 3. توجيه سؤال صارم للمخرج الفني
+        prompt = f"""
+        You are the Chief Art Director. Review this generated ad image based on the original prompt: '{original_prompt}'.
+        
+        CRITICAL CHECKS:
+        1. Are there ANY weird text, random letters, typos, or watermarks on the image? (Images MUST be text-free unless it's a clear product logo).
+        2. Are there any deformed people, extra fingers, or distorted faces?
+        3. Does it violate rules (e.g., contains alcohol when it shouldn't)?
+        
+        If the image passes all checks and looks professional, output exactly: APPROVED
+        If the image fails ANY check, output exactly: REJECTED | [Reason for rejection]
+        """
+        
+        # 4. طلب التقييم
+        response = model.generate_content([prompt, img])
+        result_text = response.text.strip()
+        
+        if result_text.startswith("APPROVED"):
+            print("✅ Art Director APPROVED the image!")
+            return True, ""
+        elif result_text.startswith("REJECTED"):
+            reason = result_text.split("|")[-1].strip() if "|" in result_text else "Quality issues detected."
+            print(f"❌ Art Director REJECTED the image. Reason: {reason}")
+            return False, reason
+        else:
+            # إذا أرجع رداً غير متوقع، نقبله كاحتياط
+            print(f"⚠️ Unclear Art Director response: {result_text}. Approving by default.")
+            return True, ""
+            
+    except Exception as e:
+        print(f"⚠️ Art Director Analysis Failed: {e}. Approving by default to prevent blocking.")
+        return True, ""
+
+
+def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback=None):
+    current_prompt = image_prompt
+    attempt = 1
+    last_generated_image = None
+
+    while attempt <= max_retries:
+        if notify_callback:
+            notify_callback(f"🕵️‍♂️ جاري تدقيق الصورة آلياً (المحاولة {attempt}/{max_retries})...")
+        print(f"\n🔄 [Image QA] Attempt {attempt}/{max_retries}...")
+        image_path = generate_image_with_imagen(current_prompt, reference_image_path, aspect_ratio)
+        
+        if not image_path or not os.path.exists(image_path):
+            print(f"❌ Image generation failed at attempt {attempt}.")
+            return last_generated_image
+        last_generated_image = image_path
+        # استدعاء المخرج الفني لتقييم الصورة
+        if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الصورة...")
+        review = analyze_media(image_path, current_prompt, media_type="image")
+
+        if review.startswith("APPROVED"):
+            print("✅ Art Director APPROVED the image!")
+            if notify_callback:
+                notify_callback("✅ الصورة اجتازت التدقيق الفني.")
+            return image_path
+        elif review.startswith("REJECTED"):
+            reason = review.split("|")[-1].strip()
+            if notify_callback: 
+                notify_callback(f"⚠️ تم رفض الصورة، جاري تحسين الجودة (السبب: خطأ في التوليد). محاولة جديدة...")
+            print(f"❌ Art Director REJECTED the image: {reason}")
+            
+            # حذف الصورة المعيبة
+            if attempt < max_retries: # فقط نحذف إذا كنا سنحاول مرة أخرى
+                try: os.remove(image_path)
+                except: pass
+            
+            # تحديث البرومبت بتعليمات المخرج
+            current_prompt = f"{image_prompt}. CRITICAL FIX: {reason}"
+            attempt += 1
+        else:
+            if notify_callback: notify_callback("✅ تم اعتماد الصورة (تجاوز الفحص).")
+            return image_path # كاحتياط
+
+    if notify_callback: notify_callback("⚠️ تم استنفاد محاولات التحسين. تم اعتماد أفضل نتيجة.")
+    print("⚠️ Max retries reached. Returning last image.")
+    return last_generated_image
+
+def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback = None):
+    current_prompt = video_prompt
+    attempt = 1
+    last_generated_video = None
+
+    
+    while attempt <= max_retries:
+        if notify_callback:
+            notify_callback(f"🎬 جاري التوليد (المحاولة {attempt}/{max_retries})...")
+        print(f"\n🔄 [Video QA] Attempt {attempt}/{max_retries}...")
+        video_path = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
+        
+        if not video_path: return last_generated_video
+        last_generated_video = video_path
+        # استدعاء المخرج الفني لتقييم الفيديو
+        if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الفيديو...")
+        review = analyze_media(video_path, current_prompt, media_type="video")
+
+        if review.startswith("APPROVED"):
+            print("✅ Art Director APPROVED the video!")
+            if notify_callback: notify_callback("✅ الفيديو اجتاز التدقيق الفني بامتياز!")
+            return video_path
+        elif review.startswith("REJECTED"):
+            reason = review.split("|")[-1].strip()
+            print(f"❌ Art Director REJECTED the video: {reason}")
+            if notify_callback: 
+                notify_callback("⚠️ تم رصد خلل في جودة الفيديو. جاري التحسين وإعادة التوليد...")
+            
+            # حذف الفيديو المعيب
+            if attempt < max_retries: # فقط نحذف إذا كنا سنحاول مرة أخرى   
+                try: os.remove(video_path)
+                except: pass
+            
+            # تحديث البرومبت بتعليمات المخرج
+            current_prompt = f"{video_prompt}. CRITICAL FIX: {reason}"
+            attempt += 1
+        else:
+            if notify_callback: notify_callback("✅ تم اعتماد الفيديو (تجاوز الفحص).")
+            return video_path # كاحتياط
+
+    if notify_callback: notify_callback("⚠️ تم استنفاد محاولات التحسين. تم اعتماد أفضل نتيجة.")
+    print("⚠️ Max retries reached. Returning last video.")
+    return last_generated_video
+    
+
+# ==============================================================================
+# المرحلة 1A: المحادثة التفاعلية (Interactive Chat)
+# ==============================================================================
+def chat_with_director(product_name, product_desc, product_analysis, user_message, chat_history=None):
+    """
+    تدير محادثة مفتوحة بين المستخدم والمدير الإبداعي.
+    لا تولد JSON، بل ترجع رسالة نصية فقط.
+    """
+    director = get_director()
+    
+    # ننشئ UserProxy ليمثل المستخدم
+    user = autogen.UserProxyAgent(
+        name="Client", 
+        human_input_mode="NEVER", 
+        code_execution_config=False,
+        max_consecutive_auto_reply=1
+    )
+
+    current_date = datetime.now().strftime("%Y-%m-%d")
+
+    # إذا كانت هذه أول رسالة (لا يوجد تاريخ)
+    if not chat_history or len(chat_history) == 0:
+        system_context = f"""
+        [SYSTEM CONTEXT - DO NOT SHOW TO USER]
+        Product: {product_name}
+        Description: {product_desc}
+        Visual Analysis: {product_analysis}
+        Today is {current_date}. Target Region: MENA.
+        [END OF SYSTEM CONTEXT]
+        
+        User Message: {user_message}
+        """
+    else:
+        # إذا كان هناك تاريخ محادثة، نرسل الرسالة الجديدة فقط
+        # (يفضل حقن التاريخ السريع للتذكير)
+        system_context = f"[SYSTEM: Today is {current_date}] User Message: {user_message}"
+
+    # تمرير تاريخ المحادثة لـ AutoGen (للاسف AutoGen لا يدعم تمرير History بسهولة كقائمة،
+    # الحل الهندسي: ندمج التاريخ السابق في رسالة واحدة كـ "نص" للذكاء الاصطناعي ليقرأه)
+    
+    full_prompt = system_context
+    if chat_history:
+        history_text = "\n--- PREVIOUS CHAT HISTORY ---\n"
+        for msg in chat_history:
+            history_text += f"{msg['role'].capitalize()}: {msg['content']}\n"
+        history_text += "--- END OF HISTORY ---\n\n"
+        full_prompt = history_text + system_context
+
+    print("🗣️ Sending message to Creative Director...")
+    
+    # بدء المحادثة (ذهاب وعودة واحدة فقط)
+    chat_result = user.initiate_chat(
+        director,
+        message=full_prompt,
+        max_turns=1 # نأخذ رد المدير فقط ونتوقف
+    )
+
+    # استخراج رد المدير (آخر رسالة في المحادثة)
+    director_reply = chat_result.chat_history[-1]['content']
+    
+    return director_reply
+
+# ==============================================================================
+# المرحلة 1B: اعتماد الخطة وتوليد الـ JSON (Finalize Strategy)
+# ==============================================================================
+def finalize_strategy(product_name, chat_history):
+    """
+    تجبر المدير على تلخيص المحادثة السابقة وإخراجها كـ JSON صارم.
+    """
+    director = get_director()
+    user = autogen.UserProxyAgent(name="System", human_input_mode="NEVER", code_execution_config=False)
+    
+    history_text = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history])
+    
+    # الكلمة السرية التي تكلمنا عنها في roles.py
+    magic_prompt = f"""
+    {history_text}
+    
+    [SYSTEM: FINALIZE_STRATEGY]
+    Based on the agreed chat history above for the product '{product_name}', output the final JSON strategy exactly as requested in your system instructions. Do not add any text before or after the JSON.
+    """
+
+    print("📄 Forcing Director to output JSON Strategy...")
+    chat_result = user.initiate_chat(director, message=magic_prompt, max_turns=1)
+    
+    last_message = chat_result.chat_history[-1]['content']
+    
+    # استخراج الـ JSON
+    data = json_match_extractor(last_message)
+    if data and "suggested_audiences" in data:
+        return data
+        
+    print("⚠️ Fallback strategy used due to JSON parsing error.")
+    return {
+        "name": f"حملة {product_name}",
+        "objective": "تم الاتفاق في المحادثة",
+        "suggested_audiences": {"suggestions": [{"audience": "الجمهور المستهدف", "reason": "حسب النقاش"}]},
+        "posting_strategy": {"best_days": ["الخميس"], "best_times": ["19:00"], "reason": "اوقات الذروة"},
+        "trending_events": []
+    }
+
+
+# ==============================================================================
+# المرحلة 2: توليد النصوص فقط (Generate Copy)
+# ==============================================================================
+def generate_copy_only(product_name, product_desc, audience, platforms):
+    director = get_director()
+    copywriter = get_copywriter()
+    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+
+    groupchat = autogen.GroupChat(agents=[user, director, copywriter], messages=[], max_round=3, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
+
+    platforms_str = ", ".join(platforms) if platforms else "Instagram, Facebook, Twitter"
+    
+    message = f"""
+    Product: {product_name}
+    Description: {product_desc}
+    Target Audience: {audience}
+    Platforms: {platforms_str}
+    
+    TASK:
+    1. Director: Instruct Copywriter briefly.
+    2. Copywriter: Write specific Arabic ads for the Target Audience on the requested Platforms. Output JSON.
+    """
+
+    chat_result = user.initiate_chat(manager, message=message)
+
+    ad_copy = {}
+    for msg in reversed(chat_result.chat_history):
+        if msg.get("name") == "Copywriter":
+            data = json_match_extractor(msg.get("content", ""))
+            if data:
+                ad_copy = data.get("ad_copy", data)
+                break
+    return {"ad_copy": ad_copy}
+
+# ==============================================================================
+# المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
+# ==============================================================================
+def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None):
+    prompter = get_prompter()
+    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+
+    message = f"""
+    We need ONE image prompt for a product ad.
+    Product: {product_name}
+    Audience: {audience}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
+    Aspect Ratio: {aspect_ratio}
+    
+    CRITICAL RULE:
+    - NO Alcohol, Women, Children, Faces, People.
+    - Focus ONLY on the BACKGROUND SCENE where the product will be placed.
+    
+    TASK: Prompt_Engineer, write a detailed English image prompt. Include aspect ratio instructions if necessary.
+    Output ONLY JSON: {{ "main_image_prompt": "..." }}
+    """
+
+    chat_result = user.initiate_chat(prompter, message=message, max_turns=1)
+    last_msg = chat_result.chat_history[-1]['content']
+    data = json_match_extractor(last_msg)
+    
+    img_prompt = data.get("main_image_prompt") if data else f"High quality product photography for {product_name}, {audience}, {aspect_ratio}"
+    
+    print(f"🎨 Generating Image (AR: {aspect_ratio})...")
+    
+    local_ref_path = None
+    if original_image_path:
+        if "http" in original_image_path and "upload" in original_image_path:
+            filename = original_image_path.split("upload/")[-1]
+            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+            if os.path.exists(path1): local_ref_path = path1
+        elif os.path.exists(original_image_path):
+            local_ref_path = original_image_path
+
+    try:
+        # تأكد أن الدالة في image_gen.py تستقبل aspect_ratio (سنعدلها لاحقاً إذا أردت)
+        image_path = generate_and_review_image(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio, notify_callback=notify_callback)
+    except Exception as e:
+        print(f"❌ Image Gen Error: {e}")
+        image_path = None
+
+    return {"image_prompt": img_prompt, "image_url": image_path}
+
+# ==============================================================================
+# المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
+# ==============================================================================
+def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None):
+    video_director = get_video_director()
+    prompter = get_prompter()
+    prompter.update_system_message(f"""
+        You are an expert Generative AI Technical Director (Runway/Veo Expert).
+        
+        YOUR TRIGGER: As soon as the 'Video_Director' provides the storyboard, you MUST generate visual prompts.
+        
+        CRITICAL RULES:
+        1. Output JSON ONLY.
+        2. Create a `video_storyboard` array.
+        3. DO NOT output a `main_image_prompt`.
+        4. **CRITICAL:** The video aspect ratio is '{aspect_ratio}'. Ensure the visual descriptions (`image_prompt`) describe a composition suitable for this ratio (e.g., vertical for 9:16, horizontal for 16:9).
+        
+        ⛔ NEGATIVE CONSTRAINTS:
+        - NO Text, Typography, Labels on screen.
+        - NO Alcohol, Women, Children.
+        
+        OUTPUT FORMAT (Strict JSON):
+        {{
+            "video_storyboard": [
+                {{
+                    "scene_number": 1,
+                    "image_prompt": "Cinematic visual setup...",
+                    "motion_prompt": "Camera movement...",
+                    "voiceover_text": "Arabic text",
+                    "audio_prompt": "Cinematic music..."
+                }}
+            ]
+        }}
+    """)
+
+    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+
+    groupchat = autogen.GroupChat(agents=[user, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
+
+    num_scenes = max(1, duration // 8)
+
+    message = f"""
+    Product: {product_name}
+    Audience: {audience}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
+    Requested Total Video Duration: {duration} seconds.
+    Target Aspect Ratio: {aspect_ratio}
+    
+    TASK:
+    1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots.
+    2. Prompt_Engineer: Output the JSON `video_storyboard`.
+    """
+
+    chat_result = user.initiate_chat(manager, message=message)
+
+    vid_storyboard = []
+    for msg in reversed(chat_result.chat_history):
+        if msg.get("name") == "Prompt_Engineer":
+            data = json_match_extractor(msg.get("content", ""))
+            _, vid_storyboard = normalize_prompts_data(data)
+            if vid_storyboard: break
+
+    # التحضير لمسار الصورة المرجعية
+    local_ref_path = None
+    if base_image_path:
+        if "http" in base_image_path and "upload" in base_image_path:
+            filename = base_image_path.split("upload/")[-1]
+            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+            if os.path.exists(path1): local_ref_path = path1
+        elif os.path.exists(base_image_path):
+            local_ref_path = base_image_path
+
+    # توليد الفيديو الفعلي
+    video_url = None
+    if vid_storyboard:
+        print(f"🎬 Sending Storyboard to Veo (Duration: {duration}s)...")
+        if notify_callback:
+            notify_callback(f"🎬 Sending Storyboard to Veo (Duration: {duration}s)...")
+        # نستدعي الدالة الشاملة التي تدمج المشاهد (تأكد أنها موجودة في هذا الملف أو مستوردة)
+        video_url = generate_final_video_asset(
+            vid_storyboard, 
+            base_image_path=local_ref_path,
+            aspect_ratio=aspect_ratio, 
+            notify_callback=notify_callback
+        )
+        
+    return {"video_storyboard": vid_storyboard, "video_url": video_url}
+
+# ==============================================================================
+# المرحلة 4: التعديلات (Refining)
+# ==============================================================================
+def refine_text(current_copy, feedback):
+    copywriter = get_copywriter()
+    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    
+    msg = f"""
+    User Feedback: {feedback}
+    Current Copy: {json.dumps(current_copy, ensure_ascii=False)}
+    TASK: Rewrite the ad copy based on feedback. Output strict JSON.
+    """
+    chat_result = user.initiate_chat(copywriter, message=msg, max_turns=1)
+    
+    last_msg = chat_result.chat_history[-1]['content']
+    data = json_match_extractor(last_msg)
+    return data.get("ad_copy", data) if data else None
+
+
+def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, notify_callback=None):
+    prompter = get_prompter()
+    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
+    art_director_advice = analyze_media(
+        file_path=original_image_path,
+        prompt=current_prompt,
+        user_feedback=feedback,
+        media_type="image"
+    )
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")    
+    msg = f"""
+    User Feedback: {feedback}
+    Current Prompt: {current_prompt}
+    Aspect Ratio: {aspect_ratio}
+    ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER: {art_director_advice}
+    TASK: Update the image prompt. Output JSON: {{ "main_image_prompt": "..." }}
+    """
+    chat_result = user.initiate_chat(prompter, message=msg, max_turns=1)
+    
+    last_msg = chat_result.chat_history[-1]['content']
+    data = json_match_extractor(last_msg)
+    new_prompt = data.get("main_image_prompt") if data else current_prompt
+     
+    local_ref_path = None
+    if original_image_path:
+        if "http" in original_image_path and "upload" in original_image_path:
+            filename = original_image_path.split("upload/")[-1]
+            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+            if os.path.exists(path1): local_ref_path = path1
+        elif os.path.exists(original_image_path):
+            local_ref_path = original_image_path
+
+    
+    image_url = None
+    if new_prompt:
+        try:
+            image_url = generate_and_review_image(
+                new_prompt, 
+                reference_image_path=local_ref_path, 
+                aspect_ratio=aspect_ratio,
+                notify_callback=notify_callback
+            )
+        except: pass
+        
+    return {"image_prompt": new_prompt, "image_url": image_url}
+
+
+def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_callback=None):
+    """
+    دالة مساعدة لمعالجة مشهد واحد (توليد صورة ثم توليد فيديو).
+    صُممت لتعمل داخل Thread.
+    """
+    scene_num = scene.get("scene_number", 1)
+    print(f"⏳ [Thread] Started Processing Scene {scene_num}...")
+    
+
+
+    if notify_callback:
+        notify_callback(f"⏳ جاري معالجة المشهد رقم {scene_num}...")
+    motion_p = scene.get("motion_prompt", "")
+    voice_p = scene.get("voiceover_text", "")
+    audio_p = scene.get("audio_prompt", "")
+    scene_img_prompt = scene.get("image_prompt", "")
+    
+    # 1. توليد الصورة الخاصة بالمشهد
+    scene_image_path = valid_image_path 
+    
+    if scene_img_prompt:
+        try:
+            generated_img = generate_and_review_image(
+                scene_img_prompt, 
+                reference_image_path=valid_image_path, 
+                aspect_ratio=aspect_ratio,
+                notify_callback=notify_callback
+            )
+            if generated_img and os.path.exists(generated_img):
+                scene_image_path = generated_img
+                if notify_callback:
+                    notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")
+        except Exception as e:
+            if notify_callback:
+                notify_callback(f"⚠️ فشل تصميم إطار المشهد {scene_num}، سيتم استخدام الصورة الأساسية.")
+            print(f"⚠️ [Scene {scene_num}] Image Gen failed, using base image. Error: {e}")
+
+    # 2. تجهيز برومبت الفيديو (الصوت اختياري)
+    veo_prompt = f"{motion_p}."
+    if audio_p and str(audio_p).strip() != "":
+            veo_prompt += f" [Audio generation: {audio_p}]."
+    if voice_p and str(voice_p).strip() != "" and str(voice_p).lower() != "none":
+        veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
+        
+    # 3. توليد الفيديو
+    if notify_callback:
+        notify_callback(f"🎬 جاري تحريك المشهد رقم {scene_num}...")
+    try:
+        scene_video_path = generate_and_review_video(veo_prompt, scene_image_path, aspect_ratio)
+        print(f"✅ [Thread] Scene {scene_num} completed.")
+        # نرجع رقم المشهد مع المسار لضمان الترتيب لاحقاً
+        if notify_callback:
+            notify_callback(f"✅ تم الانتهاء من تحريك المشهد {scene_num} بنجاح!")
+        return {"scene_number": scene_num, "path": scene_video_path}
+    except Exception as e:
+        print(f"❌ [Scene {scene_num}] Video Gen failed: {e}")
+        if notify_callback:
+            notify_callback(f"❌ فشل تحريك المشهد {scene_num}.")
+        return {"scene_number": scene_num, "path": None}
+
+
+def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", notify_callback=None):
+    """
+    تقرأ الستوري بورد، تولد كل مشهد بالتوازي (Parallel)، ثم تدمجها بالترتيب.
+    """
+    if not storyboard_json or not isinstance(storyboard_json, list):
+        print("❌ Invalid storyboard format")
+        return None
+
+    if notify_callback:
+        notify_callback(f"🚀 بدء عملية الإنتاج السينمائي ({len(storyboard_json)} مشاهد)...")
+
+    print(f"🚀 Starting PARALLEL Multi-Scene Video Generation ({len(storyboard_json)} scenes)...")
+
+    # معالجة مسار الصورة الأساسية
+    valid_image_path = None
+    if base_image_path:
+        if "http" in base_image_path and "upload" in base_image_path:
+             filename = base_image_path.split("upload/")[-1]
+             temp_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
+             if os.path.exists(temp_path): valid_image_path = temp_path
+        elif os.path.exists(base_image_path):
+             valid_image_path = base_image_path
+
+    # --- التنفيذ المتوازي (Parallel Execution) ---
+    results = []
+    # نستخدم ThreadPoolExecutor لتشغيل المشاهد معاً
+    # max_workers يحدد كم فيديو يولد في نفس اللحظة (حسب قوة حسابك في API)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(storyboard_json)) as executor:
+        # إرسال المهام
+        future_to_scene = {
+            executor.submit(process_single_scene, scene, valid_image_path, aspect_ratio, notify_callback): scene 
+            for scene in storyboard_json
+        }
+        
+        # استلام النتائج فور انتهائها
+        for future in concurrent.futures.as_completed(future_to_scene):
+            try:
+                res = future.result()
+                if res["path"]:
+                    results.append(res)
+            except Exception as exc:
+                print(f"⚠️ A scene generated an exception: {exc}")
+
+    # --- ترتيب المشاهد ودمجها ---
+    if not results:
+        print("⚠️ All Veo generations failed.")
+        if notify_callback:
+            notify_callback("⚠️ فشلت عملية توليد جميع المشاهد.")
+        return None
+
+    # ترتيب النتائج تصاعدياً حسب scene_number لضمان تسلسل الفيديو
+    results.sort(key=lambda x: x["scene_number"])
+    
+    # استخراج المسارات المرتبة فقط
+    ordered_video_paths = [res["path"] for res in results]
+
+    # الدمج
+    if len(ordered_video_paths) == 1:
+        if notify_callback:
+             notify_callback("🎉 اكتمل إنتاج الفيديو بنجاح!")
+        return ordered_video_paths[0]
+    else:
+        if notify_callback:
+            notify_callback("🎞️ جاري دمج المشاهد وإخراج الفيديو النهائي...")
+        final_video = concatenate_veo_videos(ordered_video_paths)
+        if notify_callback:
+            notify_callback("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
+        return final_video     
+
+
+def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None):
+    video_director = get_video_director()
+    prompter = get_prompter()
+    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    
+
+    groupchat = autogen.GroupChat(agents=[user, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
+    art_director_advice = ""
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
+    art_director_advice = analyze_media(
+        file_path=current_video_path,
+        prompt=current_storyboard,
+        user_feedback=feedback,
+        media_type="video",
+    )
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
+
+    msg = f"""
+    User Feedback: {feedback}
+    Current Storyboard: {json.dumps(current_storyboard, ensure_ascii=False)}
+    ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER:\n{art_director_advice}\n
+    TASK: Update the scenes based on feedback. DO NOT change image_prompts. Output JSON `video_storyboard`.
+    """
+    chat_result = user.initiate_chat(manager, message=msg)
+    
+    vid_storyboard = []
+    for m in reversed(chat_result.chat_history):
+        if m.get("name") == "Prompt_Engineer":
+            data = json_match_extractor(m.get("content", ""))
+            _, vid_storyboard = normalize_prompts_data(data)
+            if vid_storyboard: break
+            
+    # توليد الفيديو الجديد 
+    local_ref_path = None
+    if base_image_path:
+        if "http" in base_image_path and "upload" in base_image_path:
+            filename = base_image_path.split("upload/")[-1]
+            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+            if os.path.exists(path1): local_ref_path = path1
+        elif os.path.exists(base_image_path):
+            local_ref_path = base_image_path
+
+    video_url = None
+    if vid_storyboard:
+         video_url = generate_final_video_asset(
+            vid_storyboard, 
+            base_image_path=local_ref_path, 
+            aspect_ratio=aspect_ratio, 
+            notify_callback=notify_callback
+        )
+    return {"video_storyboard": vid_storyboard, "video_url": video_url}
+
+
+
+==================================================
+FILE: .\app\agents\roles.py
+==================================================
+import autogen
+from app.agents.config import llm_config, directory_config
+import app.agents.agents_system_messages as sys_msg
+
+
+# 1. Creative Director (The Orchestrator)
+def get_director():
+    return autogen.AssistantAgent(
+        name="Creative_Director",
+        llm_config=directory_config,
+        system_message= sys_msg.director,
+    )
+
+# 2. Copywriter (Writes the Ad Text)
+def get_copywriter()-> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Copywriter",
+        llm_config=llm_config,
+        system_message= sys_msg.copywriter,
+    )
+
+# 3. Video Director (Visual Storytelling - The Most Important)
+def get_video_director() -> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Video_Director",
+        llm_config=llm_config,
+        system_message=sys_msg.video_director,
+    )
+
+# 4. Prompt Engineer (Generates Visual Descriptions)
+def get_prompter()-> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Prompt_Engineer",
+        llm_config=llm_config,
+        system_message=sys_msg.prompter,
+    )
+
+# 5. Art Director (QA)
+def get_art_director() -> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Art_Director",
+        llm_config=directory_config, 
+        system_message=sys_msg.art_director,
+    )
+
+==================================================
+FILE: .\app\agents\skills.py
+==================================================
+
+
+==================================================
+FILE: .\app\agents\__init__.py
+==================================================
+
+
+==================================================
+FILE: .\app\routers\auth.py
+==================================================
+from fastapi import status, HTTPException, Depends, APIRouter
+from fastapi.security.oauth2 import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from .. import utils, models, schemas, oauth2
+from ..database import get_db   
+
+router = APIRouter(
+    prefix='/auth',
+    tags=['Authentication'],
+)
+
+
+@router.post('/login', response_model=schemas.Token)
+def login(user_credentials: OAuth2PasswordRequestForm=Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.Users).filter(models.Users.email == user_credentials.username).first()
+    if not user or not utils.verify_password(user_credentials.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail={"message": "Email not verified. Please verify your email before logging in.", "user_id": user.id})
+    access_token = oauth2.create_access_token(data={"user_id": user.id})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post('/verify')
+def verify_user(user_verfiy: schemas.UserVerify, db: Session = Depends(get_db)):
+    user_query = db.query(models.Users).filter(models.Users.id == user_verfiy.user_id)
+    user = user_query.first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({user_verfiy.user_id}) was not found')
+    elif user.is_verified:
+        return {"message": "User is already verified."}
+    elif user.verification_code == user_verfiy.code:
+        user_query.update({"is_verified": True, "verification_code": None}, synchronize_session=False)
+        db.commit()
+        return {"message": "User verified successfully."}
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code.")
+    
+@router.post('/resend_code/{id}')
+async def resend_verification_code(id: int, db: Session = Depends(get_db)):
+    user_query = db.query(models.Users).filter(models.Users.id == id)
+    user = user_query.first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({id}) was not found')
+    elif user.is_verified:
+        return {"message": "User is already verified."}
+    else:
+        code = utils.generate_verification_code()
+        user_query.update({"verification_code": code}, synchronize_session=False)
+        try:
+            await utils.send_code_email(user.email, code)
+            db.commit()
+            return {"message": "Verification code resent! Check your email."}
+        except Exception as e:
+            print(e)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
+
+
+
+==================================================
+FILE: .\app\routers\campaign.py
+==================================================
+import asyncio
+import os
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, BackgroundTasks
+from sqlalchemy.orm import Session, joinedload
+from typing import List, Optional
+from sqlalchemy.orm.attributes import flag_modified
+from sse_starlette.sse import EventSourceResponse
+from starlette.concurrency import run_in_threadpool
+
+from app.notifications import  get_queue, send_notification, close_connection, active_connections
+from .. import models, schemas, oauth2
+from ..database import get_db
+from ..agents import manager 
+from ..cleanup import cleanup_orphaned_files
+
+
+
+
+router = APIRouter(
+    prefix="/campaigns",
+    tags=["Campaigns"]
+)
+
+# ==============================================================================
+# المرحلة 1A: الدردشة الاستراتيجية (Interactive Strategy Chat)
+# ==============================================================================
+@router.post("/analyze/chat", response_model=schemas.CampaignResponse, status_code=status.HTTP_200_OK)
+def chat_with_strategist(
+    request: schemas.CampaignChatRequest,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # 1. التحقق من المنتج
+    product = db.query(models.Products).filter(models.Products.id == request.product_id).first()
+    if not product or product.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Product not found or unauthorized")
+
+    campaign = None
+    chat_history = []
+
+    # 2. إدارة جلسة الحملة (Session Management)
+    if request.campaign_id:
+        # هذه رسالة متابعة (Follow-up) لحملة موجودة مسبقاً
+        campaign = db.query(models.Campaigns).filter(models.Campaigns.id == request.campaign_id).first()
+        if not campaign or campaign.product_id != product.id:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        # التأكد من أن الحملة لم تعتمد بعد
+        if campaign.is_strategy_approved:
+            raise HTTPException(status_code=400, detail="Strategy already approved. Cannot chat further.")
+            
+        chat_history = campaign.chat_history if campaign.chat_history else []
+    else:
+        # هذه أول رسالة (New Chat)، ننشئ حملة جديدة في الداتا بيز
+        campaign = models.Campaigns(
+            product_id=product.id,
+            status="DRAFTING_STRATEGY",
+            chat_history=[],
+            is_strategy_approved=False
+        )
+        db.add(campaign)
+        db.commit()
+        db.refresh(campaign)
+
+    # 3. تسجيل رسالة المستخدم في التاريخ (History)
+    user_msg = {"role": "user", "content": request.message}
+    chat_history.append(user_msg)
+
+    # 4. استدعاء الذكاء الاصطناعي (المدير الإبداعي كـ "مستشار")
+    try:
+        # نمرر التاريخ السابق ليفهم السياق
+        ai_reply_text = manager.chat_with_director(
+            product.name, 
+            product.description, 
+            product.image_analysis, 
+            request.message,
+            chat_history[:-1] # نرسل التاريخ القديم بدون الرسالة الحالية (لأننا نرسلها كـ message)
+        )
+    except Exception as e:
+        print(f"AI Chat Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get a response from the strategist.")
+
+    # 5. تسجيل رد الذكاء الاصطناعي في التاريخ
+    ai_msg = {"role": "assistant", "content": ai_reply_text}
+    chat_history.append(ai_msg)
+
+    # 6. تحديث قاعدة البيانات وحفظ المحادثة
+    # ملاحظة مهمة في SQLAlchemy: لتحديث عمود JSONB، يجب إسناد قائمة جديدة بالكامل
+    campaign.chat_history = list(chat_history) 
+    flag_modified(campaign, "chat_history")
+    db.commit()
+    db.refresh(campaign)
+    
+    return campaign
+
+# ==============================================================================
+# المرحلة 1B: اعتماد الاستراتيجية وتوليد الـ JSON (Approve Strategy)
+# ==============================================================================
+
+@router.post("/analyze/approve", response_model=schemas.CampaignResponse, status_code=status.HTTP_200_OK)
+def approve_strategy(
+    request: schemas.ApproveStrategyRequest,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # 1. جلب الحملة
+    campaign = db.query(models.Campaigns).join(models.Products).filter(
+        models.Campaigns.id == request.campaign_id,
+        models.Products.user_id == current_user.id
+    ).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+        
+    if campaign.is_strategy_approved:
+         raise HTTPException(status_code=400, detail="Strategy already approved.")
+
+    # 2. استدعاء الذكاء لإخراج الـ JSON بناءً على المحادثة السابقة
+    try:
+        final_json_strategy = manager.finalize_strategy(campaign.product.name, campaign.chat_history)
+    except Exception as e:
+        print(f"AI Finalize Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to finalize the strategy JSON.")
+
+    # 3. حفظ الـ JSON في قاعدة البيانات (كما فعلنا في الكود القديم)
+    campaign.name = final_json_strategy.get("name", "حملة مخصصة")
+    campaign.objective = final_json_strategy.get("objective", "هدف مخصص")
+    campaign.suggested_audiences = final_json_strategy.get("suggested_audiences")
+    campaign.posting_strategy = final_json_strategy.get("posting_strategy")
+    campaign.trending_events = final_json_strategy.get("trending_events", [])
+    
+    # تغيير الحالة لتسمح بالانتقال للمرحلة التالية (توليد النصوص)
+    campaign.is_strategy_approved = True
+    campaign.status = "STRATEGY_APPROVED"
+    
+    db.commit()
+    db.refresh(campaign)
+    
+    return campaign
+
+# ==============================================================================
+# المرحلة 2: اختيار الفئات وتوليد المسودات (Draft Generation)
+# ==============================================================================
+
+@router.post("/generate_copies", response_model=List[schemas.AssetResponse], status_code=status.HTTP_201_CREATED) 
+async def generate_copies(
+    request: schemas.DraftCopyRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).filter(models.Campaigns.id == request.campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+
+    db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == request.campaign_id).delete()
+    db.commit()
+    
+
+
+    # تحديد المنصات (إذا لم يرسل المستخدم، نتركها فارغة ليتصرف الذكاء)
+    platforms = request.selected_platforms if request.selected_platforms else ["Instagram", "Facebook", "TikTok"]
+    generated_assets = []
+    
+    process_id = f"copies_{campaign.id}"
+    await send_notification(process_id, "🚀 بدأ الفريق بكتابة النصوص الإعلانية...")
+    
+    for audience in request.selected_audiences:
+        try:
+            await send_notification(process_id, f"✍️ جاري كتابة إعلان مخصص لفئة: {audience}...")
+
+            ai_result = await run_in_threadpool( 
+                manager.generate_copy_only,
+                product_name=campaign.product.name, 
+                product_desc=campaign.product.description, 
+                audience=audience,
+                platforms=platforms
+            )
+            
+            new_asset = models.CampaignAssets(
+                campaign_id=campaign.id,
+                target_audience=audience,
+                ad_copy=ai_result.get("ad_copy"),
+                is_approved=False
+            )
+            db.add(new_asset)
+            generated_assets.append(new_asset)
+
+            await send_notification(process_id, f"✅ اكتملت نصوص فئة: {audience}.")
+        except Exception as e:
+            print(f"❌ Error generating copy for {audience}: {e}")
+
+    if generated_assets:
+        campaign.status = "DRAFTS_READY"
+        db.commit()
+    else:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to generate copies")
+    
+    for asset in generated_assets: db.refresh(asset)
+
+    await send_notification(process_id, "🎉 اكتملت مرحلة النصوص بنجاح!")
+    background_tasks.add_task(close_connection, process_id)
+
+    return generated_assets
+
+# ==============================================================================
+# المرحلة 3A: توليد صورة حسب الطلب (On-Demand Image)
+# ==============================================================================
+@router.post("/generate_image", response_model=schemas.ImageAssetResponse, status_code=status.HTTP_201_CREATED)
+async def generate_image_asset(
+    request: schemas.GenerateImageRequest,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # جلب الأصل (الفئة المستهدفة)
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if not asset or asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found or unauthorized")
+    process_id = f"image_{request.asset_id}"
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
+    try:
+        # استدعاء المانجر لتوليد الصورة
+        ai_result = await run_in_threadpool(
+            manager.generate_image_on_demand,
+            product_name=asset.campaign.product.name,
+            audience=asset.target_audience,
+            ad_copy_json=asset.ad_copy,
+            aspect_ratio=request.aspect_ratio,
+            original_image_path=asset.campaign.product.processed_image_url,
+            notify_callback = sync_notify
+        )
+        
+        image_path = ai_result.get("image_url")
+        if not image_path:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image generation failed")
+             
+        filename = os.path.basename(image_path)
+        public_image_url = f"{req.base_url}assets/image/{filename}"
+        
+        # حفظ الصورة في جدول image_assets الجديد
+        new_image = models.ImageAssets(
+            asset_id=asset.id,
+            image_url=public_image_url,
+            prompt=ai_result.get("image_prompt"),
+            aspect_ratio=request.aspect_ratio,
+            platform=request.platform
+        )
+        db.add(new_image)
+        db.commit()
+        db.refresh(new_image)
+        
+        await send_notification(process_id, "✅ تم إنشاء الصورة بنجاح!")
+        background_tasks.add_task(close_connection, process_id)
+
+        return new_image
+
+    except Exception as e:
+        print(f"Image Error: {e}")
+        await send_notification(process_id, f"❌ فشل التوليد: {e}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+
+# ==============================================================================
+# المرحلة 3B: توليد فيديو حسب الطلب (On-Demand Video)
+# ==============================================================================
+@router.post("/generate_video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
+async def generate_video_asset(
+    request: schemas.GenerateVideoRequest,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if not asset or asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Asset not found or unauthorized")
+
+    process_id = f"video_{asset.id}"
+    await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
+    try:
+        ai_result = await run_in_threadpool(
+            manager.generate_video_on_demand,
+            product_name=asset.campaign.product.name,
+            audience=asset.target_audience,
+            ad_copy_json=asset.ad_copy,
+            duration=request.video_duration,
+            aspect_ratio=request.aspect_ratio,
+            base_image_path=asset.campaign.product.processed_image_url,
+            notify_callback=sync_notify
+        )
+        
+        video_path = ai_result.get("video_url")
+        if not video_path:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video generation failed")
+             
+        filename = os.path.basename(video_path)
+        public_video_url = f"{req.base_url}assets/video/{filename}"
+        
+        # حفظ الفيديو في جدول video_assets الجديد
+        new_video = models.VideoAssets(
+            asset_id=asset.id,
+            video_url=public_video_url,
+            video_storyboard=ai_result.get("video_storyboard"),
+            duration_seconds=request.video_duration,
+            aspect_ratio=request.aspect_ratio
+        )
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+        
+        await send_notification(process_id, "✅ تم حفظ الفيديو في النظام.")
+        background_tasks.add_task(close_connection, process_id)
+
+        return new_video
+
+    except Exception as e:
+        print(f"Video Error: {e}")
+        await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==============================================================================
+# المرحلة 4: التعديلات (Feedback & Refining)
+# ==============================================================================
+
+@router.put("/edit/text", response_model=schemas.AssetResponse)
+async def edit_ad_copy(
+    request: schemas.EditTextRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # 1. جلب الأصل
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if not asset or asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found or unauthorized")
+
+    # 2. استدعاء وكيل التعديل (يجب إضافة دالة refine_text في manager.py)
+    process_id = f"edit_text_{request.asset_id}"
+    try:    
+        await send_notification(process_id, "✍️ جاري تعديل النص بناءً على ملاحظاتك...")
+        updated_copy = await run_in_threadpool(
+            manager.refine_text,
+            current_copy=asset.ad_copy,
+            feedback=request.feedback
+        )
+        if updated_copy and isinstance(updated_copy, dict) and "ad_copy" in updated_copy:
+             actual_copy = updated_copy["ad_copy"]
+        else:
+             actual_copy = updated_copy
+        # 3. حفظ النص الجديد
+        if actual_copy:
+            asset.ad_copy = actual_copy
+            db.commit()
+            db.refresh(asset)
+            await send_notification(process_id, "✅ تم تعديل النص بنجاح!")
+            background_tasks.add_task(close_connection, process_id)
+            return asset
+        else:
+            await send_notification(process_id, "❌ فشل التعديل: AI لم يُعد النص المحدث")
+            background_tasks.add_task(close_connection, process_id)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="AI failed to return updated text")
+            
+    except Exception as e:
+        print(f"Edit Text Error: {e}")
+        await send_notification(process_id, f"❌ فشل التعديل: {e}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/edit/image", response_model=schemas.ImageAssetResponse, status_code=status.HTTP_201_CREATED)
+async def edit_image_asset(
+    request: schemas.EditImageRequest,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # 1. جلب الصورة القديمة
+    old_image = db.query(models.ImageAssets).join(models.CampaignAssets).join(models.Campaigns).filter(
+        models.ImageAssets.id == request.image_id
+    ).first()
+    
+    if not old_image or old_image.asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found or unauthorized")
+
+    # 2. استدعاء الذكاء لتعديل البرومبت وتوليد صورة جديدة
+    process_id = f"edit_image_{request.asset_id}"
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
+    try:
+        ai_result = await run_in_threadpool(
+            manager.refine_image,
+            current_prompt=old_image.prompt,
+            feedback=request.feedback,
+            aspect_ratio=old_image.aspect_ratio,
+            original_image_path=old_image.asset.campaign.product.processed_image_url,
+            notify_callback=sync_notify
+        )
+        
+        image_path = ai_result.get("image_url")
+        if not image_path:
+            await send_notification(process_id, "❌ فشل التوليد: AI لم يُعد الصورة المحدثة")
+            background_tasks.add_task(close_connection, process_id)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image regeneration failed")
+             
+        filename = os.path.basename(image_path)
+        public_image_url = f"{req.base_url}assets/image/{filename}"
+        
+        # 3. حفظ التعديل كصورة "جديدة" تابعة لنفس الـ Asset (Versioning)
+        new_image = models.ImageAssets(
+            asset_id=old_image.asset_id,
+            image_url=public_image_url,
+            prompt=ai_result.get("image_prompt"),
+            aspect_ratio=old_image.aspect_ratio,
+            platform=old_image.platform
+        )
+        db.add(new_image)
+        db.commit()
+        db.refresh(new_image)
+        
+        await send_notification(process_id, "✅ تم تعديل الصورة بنجاح!")
+        background_tasks.add_task(close_connection, process_id)
+
+        return new_image
+
+    except Exception as e:
+        print(f"Edit Image Error: {e}")
+        await send_notification(process_id, f"❌ فشل التعديل: {e}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/edit/video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
+async def edit_video_asset(
+    request: schemas.EditVideoRequest,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    # 1. جلب الفيديو القديم
+    old_video = db.query(models.VideoAssets).join(models.CampaignAssets).join(models.Campaigns).filter(
+        models.VideoAssets.id == request.video_id
+    ).first()
+    
+    if not old_video or old_video.asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video not found or unauthorized")
+
+    process_id = f"edit_video_{old_video.asset.id}"
+    await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
+    # 2. استدعاء الذكاء لتعديل الستوري بورد وتوليد فيديو جديد
+    try:
+        ai_result = await run_in_threadpool( 
+            manager.refine_video,
+            current_storyboard=old_video.video_storyboard,
+            feedback=request.feedback,
+            base_image_path=old_video.asset.campaign.product.processed_image_url,
+            aspect_ratio=old_video.aspect_ratio,
+            notify_callback=sync_notify
+        )
+        
+        video_path = ai_result.get("video_url")
+        if not video_path:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video regeneration failed")
+             
+        filename = os.path.basename(video_path)
+        public_video_url = f"{req.base_url}assets/video/{filename}"
+        
+        # 3. حفظ التعديل كفيديو "جديد" (Versioning)
+        new_video = models.VideoAssets(
+            asset_id=old_video.asset_id,
+            video_url=public_video_url,
+            video_storyboard=ai_result.get("video_storyboard"),
+            duration_seconds=old_video.duration_seconds,
+            aspect_ratio=old_video.aspect_ratio
+        )
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+        
+        await send_notification(process_id, "✅ تم حفظ الفيديو في النظام.")
+        background_tasks.add_task(close_connection, process_id)
+
+        return new_video
+
+    except Exception as e:
+        print(f"Edit Video Error: {e}")
+        await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==============================================================================
+# المرحلة 4: الاعتماد النهائي للحملة (Approve)
+# ==============================================================================
+@router.put("/approve", response_model=schemas.AssetResponse)
+def approve_asset(
+    request: schemas.ApproveRequest,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if not asset or asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    asset.is_approved = True
+    db.commit()
+
+    # التحقق من اكتمال الحملة
+    total_assets = db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == asset.campaign_id).count()
+    approved_assets = db.query(models.CampaignAssets).filter(
+        models.CampaignAssets.campaign_id == asset.campaign_id,
+        models.CampaignAssets.is_approved == True
+    ).count()
+    
+    if total_assets == approved_assets:
+        asset.campaign.status = "COMPLETED"
+        db.commit()
+        
+    db.refresh(asset)
+    return asset
+
+
+# ==============================================================================
+# باقي العمليات: استرجاع الإصدار القديم، حذف الحملة/الأصل، جلب الحملة/الأصول
+# ==============================================================================
+
+@router.get("/", response_model=List[schemas.CampaignResponse])
+def get_user_campaigns(
+    status: Optional[str] = None,    
+    limit: Optional[int] = 10,
+    skip: Optional[int] = 0,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    query = db.query(models.Campaigns)\
+        .options(
+            joinedload(models.Campaigns.assets).joinedload(models.CampaignAssets.images),
+            joinedload(models.Campaigns.assets).joinedload(models.CampaignAssets.videos)
+        )\
+        .join(models.Products)\
+        .filter(models.Products.user_id == current_user.id)
+    
+    if status:
+        query = query.filter(models.Campaigns.status == status.upper())
+    return query.limit(limit).offset(skip).all()
+    
+@router.get("/{campaign_id}", response_model=schemas.CampaignResponse)
+def get_campaign(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).options( 
+            joinedload(models.Campaigns.assets).joinedload(models.CampaignAssets.images),
+            joinedload(models.Campaigns.assets).joinedload(models.CampaignAssets.videos)
+        )\
+        .filter(models.Campaigns.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    return campaign
+
+
+@router.delete("/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_campaign(
+    campaign_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    campaign = db.query(models.Campaigns).filter(models.Campaigns.id == campaign_id).first()
+    if not campaign:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
+    if campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this campaign")
+    
+    db.delete(campaign)
+    db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete("/asset/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_asset(
+    asset_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == asset_id).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this asset")
+    
+    db.delete(asset)
+    db.commit()
+
+    total_assets = db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == asset.campaign_id).count()
+    approved_assets = db.query(models.CampaignAssets).filter(
+        models.CampaignAssets.campaign_id == asset.campaign_id,
+        models.CampaignAssets.is_approved == True
+    ).count()
+    
+    if total_assets == approved_assets:
+        asset.campaign.status = "COMPLETED"
+        db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/asset/image/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_image_asset(
+    image_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    image_asset = db.query(models.ImageAssets).join(models.CampaignAssets).join(models.Campaigns).filter(models.ImageAssets.id == image_id).first()
+    if not image_asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image asset not found")
+    if image_asset.asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this image asset")
+    
+    db.delete(image_asset)
+    db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete("/asset/video/{video_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_video_asset(
+    video_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    video_asset = db.query(models.VideoAssets).join(models.CampaignAssets).join(models.Campaigns).filter(models.VideoAssets.id == video_id).first()
+    if not video_asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Video asset not found")
+    if video_asset.asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this video asset")
+    
+    db.delete(video_asset)
+    db.commit()
+
+    background_tasks.add_task(cleanup_orphaned_files)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/stream/{proccess_id}")
+async def stream_notifications(proccess_id: str):
+    """
+    الفرونت إند يتصل بهذا الرابط للاستماع للإشعارات.
+    يظل الاتصال مفتوحاً حتى نرسل [DONE].
+    """
+    queue = get_queue(proccess_id)
+
+    async def event_generator():
+        try:
+            while True:
+                message = await queue.get()
+                if message == "[DONE]":
+                    break
+                yield {"data": message}
+        except asyncio.CancelledError:
+            print(f"🔌 Connection for {proccess_id} cancelled.")
+        finally:
+            if proccess_id in active_connections:
+                del active_connections[proccess_id]  # تنظيف الطابور عند انتهاء الاتصال
+
+    return EventSourceResponse(event_generator())
+
+==================================================
+FILE: .\app\routers\product.py
+==================================================
+from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadFile, File, Request
+from sqlalchemy.orm import Session
+from app import oauth2
+from app.services.vision import analyze_image_content
+from app.services.image_processing import remove_background
+from .. import models, schemas, oauth2
+from ..database import get_db
+
+## Upload image dependencies
+import shutil
+import os
+import uuid 
+
+router = APIRouter(
+    prefix='/products',
+    tags=['Product'],
+)
+
+# تحديد مسار حفظ الصور
+UPLOAD_DIR = "rawaj-frontend/assets/upload"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/upload-image")
+async def upload_product_image(
+        request: Request, 
+        file: UploadFile = File(...),
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    # 1. التحقق من نوع الملف (اختياري لكن مفضل)
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image")
+
+    # 2. توليد اسم فريد للملف (لتجنب تكرار الأسماء)
+    # نأخذ الامتداد الأصلي (مثل .png)
+    extension = file.filename.split(".")[-1]
+    unique_filename = f"{uuid.uuid4()}.{extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+    # 3. حفظ الملف على القرص
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not save image: {str(e)}")
+
+    # 4. إرجاع الرابط (URL) الذي سيستخدمه الفرونت إند
+    # نفترض أن السيرفر يعمل على localhost:8000
+    # ملاحظة: في الإنتاج، استبدل هذا برابط السيرفر الحقيقي
+    image_url = f"{request.base_url}assets/upload/{unique_filename}"
+    
+    return {"image_url": image_url}
+
+@router.get('/', response_model=list[schemas.ProductResponse])
+def get_products(
+        db: Session = Depends(get_db), 
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user),
+        limit: int = 10,
+        skip: int = 0,
+    ):
+    products = db.query(models.Products).filter(models.Products.user_id == current_user.id).limit(limit).offset(skip).all()
+    return products
+
+@router.get('/{id}',response_model=schemas.ProductResponse)
+def get_product(id: int, db: Session = Depends(get_db), current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    product = db.query(models.Products).filter(models.Products.id == id , models.Products.user_id == current_user.id).first()
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
+    return product
+
+@router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ProductResponse)
+def create_product(
+        request: Request,
+        new_product: schemas.ProductCreate, 
+        db: Session = Depends(get_db), 
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
+    ):
+    product_dict = new_product.model_dump()
+    ai_description = None
+    processed_image_url = None
+    if new_product.original_image_url:
+        ai_description = analyze_image_content(new_product.original_image_url)
+        processed_image_path = remove_background(new_product.original_image_url)
+        if processed_image_path:
+            filename = os.path.basename(processed_image_path)
+            processed_image_url = f"{request.base_url}assets/upload/{filename}"
+    new_product_db = models.Products(
+        user_id = current_user.id, 
+        image_analysis = ai_description, 
+        processed_image_url = processed_image_url, 
+        **product_dict
+    )
+    db.add(new_product_db)
+    db.commit()
+    db.refresh(new_product_db)
+    return new_product_db
+
+@router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_product(id: int, db: Session = Depends(get_db), current_user:schemas.UserResponse=Depends(oauth2.get_current_user)):
+    product_query = db.query(models.Products).filter(models.Products.id == id)
+    product = product_query.first()
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
+    if product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
+    product_query.delete(synchronize_session=False)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put('/{id}', response_model=schemas.ProductResponse)
+def update_product(
+        id: int, 
+        updated_product: schemas.ProductCreate, 
+        db: Session = Depends(get_db), 
+        current_user:schemas.UserResponse=Depends(oauth2.get_current_user)
+    ):
+    product_query = db.query(models.Products).filter(models.Products.id == id)
+    product = product_query.first()
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'product with id ({id}) was not found')
+    if product.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform requested action")
+    product_query.update(updated_product.model_dump(), synchronize_session=False)
+    db.commit()
+    return product_query.first()
+
+==================================================
+FILE: .\app\routers\user.py
+==================================================
+from fastapi import Response, status, HTTPException, Depends, APIRouter
+from sqlalchemy.orm import Session
+
+from app import oauth2
+from .. import utils, models, schemas
+from ..database import get_db
+
+router = APIRouter(
+    prefix='/users',
+    tags=['User'],
+)
+
+@router.get('/me', response_model=schemas.UserResponse)
+def get_current_user_data(current_user: schemas.UserResponse = Depends(oauth2.get_current_user)):
+    return current_user
+
+
+@router.post('/',response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(new_user: schemas.UserCreate, db: Session = Depends(get_db)):
+    code = utils.generate_verification_code()
+    user_dict = new_user.model_dump()
+    user_dict['password_hash'] = utils.hash_function(user_dict.pop('password'))
+    new_user_db = models.Users(**user_dict,verification_code=code)
+    email_check = db.query(models.Users).filter(models.Users.email == new_user.email).first()
+    if email_check :
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Email ({new_user.email}) already exists")
+    db.add(new_user_db)
+    try :
+        await utils.send_code_email(new_user.email, code)
+        db.commit()
+        db.refresh(new_user_db)
+        return new_user_db
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
+
+@router.get('/', response_model=list[schemas.UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(models.Users).all()
+    return users
+
+@router.delete('/', status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(
+        current_user: schemas.UserResponse = Depends(oauth2.get_current_user),
+        db: Session = Depends(get_db)
+    ):
+    user_query = db.query(models.Users).filter(models.Users.id == current_user.id)
+    user = user_query.first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({current_user.id}) was not found')
+    user_query.delete(synchronize_session=False)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.put('/', response_model=schemas.UserResponse)
+def update_user( 
+        updated_user: schemas.UserUpdate,
+        current_user: schemas.UserResponse = Depends(oauth2.get_current_user), 
+        db: Session = Depends(get_db)
+    ):
+    user_query = db.query(models.Users).filter(models.Users.id == current_user.id)
+    user = user_query.first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({current_user.id}) was not found')
+    user_data = updated_user.model_dump()
+    if 'password' in user_data and user_data['password'] is not None:
+        user_data['password_hash'] = utils.hash_function(user_data.pop('password'))
+    if 'name' in user_data and user_data['name'].strip() == "":
+        user_data.pop('name')
+    if 'password' in user_data and user_data['password'].strip() == "":
+        user_data.pop('password')
+    user_query.update(user_data, synchronize_session=False)
+    db.commit()
+    return user_query.first()
+
+==================================================
+FILE: .\app\services\audio_gen.py
+==================================================
+# import os
+# from elevenlabs.client import ElevenLabs
+# from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip
+# # تأكد من أن ملف الإعدادات يحتوي على مفتاح ElevenLabs الصالح
+# from ..config import settings 
+
+# # إعداد العميل (تأكد أن المفتاح هنا صالح وجديد)
+# client = ElevenLabs(api_key=settings.elevenlabs_api_key) 
+
+# def generate_voiceover(text: str, output_path="voice.mp3"):
+#     """توليد تعليق صوتي (Speech)"""
+#     print(f"🗣️ Generating Voiceover: {text[:30]}...")
+#     try:
+#         # ✅ التصحيح: استخدام convert بدلاً من generate
+#         audio_stream = client.text_to_speech.convert(
+#             text=text,
+#             voice_id="JBFqnCBsd6RMkjVDRZzb", # هذا ID لصوت 'Rachel'
+#             model_id="eleven_multilingual_v2",
+#             output_format="mp3_44100_128"
+#         )
+        
+#         # حفظ الملف (لأن النتيجة تأتي كتدفق بيانات Stream)
+#         with open(output_path, "wb") as f:
+#             for chunk in audio_stream:
+#                 if chunk:
+#                     f.write(chunk)
+        
+#         print(f"✅ Voiceover saved: {output_path}")
+#         return output_path
+
+#     except Exception as e:
+#         print(f"❌ Voiceover failed: {e}")
+#         return None
+
+# def generate_sfx(prompt: str, duration_seconds=5, output_path="sfx.mp3"):
+#     """توليد مؤثرات صوتية (Sound Effects)"""
+#     print(f"🔊 Generating SFX: {prompt}...")
+#     try:
+#         # ✅ هذه الميزة تتطلب حساباً فيه رصيد كافٍ
+#         result = client.text_to_sound_effects.convert(
+#             text=prompt,
+#             duration_seconds=duration_seconds, 
+#             prompt_influence=0.5
+#         )
+        
+#         with open(output_path, "wb") as f:
+#             for chunk in result:
+#                 if chunk:
+#                     f.write(chunk)
+                
+#         print(f"✅ SFX saved: {output_path}")
+#         return output_path
+
+#     except Exception as e:
+#         print(f"❌ SFX failed: {e}")
+#         return None
+
+# def merge_video_audio(video_path, voice_path=None, sfx_path=None, output_path="final_output.mp4"):
+#     """دمج الفيديو مع الأصوات"""
+#     print("🎬 Merging Audio & Video...")
+    
+#     if not os.path.exists(video_path):
+#         print(f"❌ Video path not found: {video_path}")
+#         return None
+
+#     try:
+#         video = VideoFileClip(video_path)
+#         audio_tracks = []
+
+#         # 1. إضافة التعليق الصوتي
+#         if voice_path and os.path.exists(voice_path):
+#             voice_clip = AudioFileClip(voice_path)
+#             # رفع صوت المعلق ليكون واضحاً
+#             voice_clip = voice_clip.with_volume_scaled(1.8) 
+            
+#             # إذا كان الصوت أطول من الفيديو، نمدد الفيديو (Loop)
+#             if voice_clip.duration > video.duration:
+#                 print("ℹ️ Audio is longer than video. Looping video.")
+#                 video = video.loop(duration=voice_clip.duration)
+                
+#             audio_tracks.append(voice_clip)
+
+#         # 2. إضافة المؤثرات الصوتية (اختياري)
+#         if sfx_path and os.path.exists(sfx_path):
+#             sfx_clip = AudioFileClip(sfx_path)
+#             # تكرار المؤثرات لتغطي كامل الفيديو
+#             if sfx_clip.duration < video.duration:
+#                 sfx_clip = sfx_clip.loop(duration=video.duration)
+#             else:
+#                 sfx_clip = sfx_clip.subclipped(0, video.duration)
+            
+#             # خفض صوت المؤثرات لتكون خلفية فقط
+#             sfx_clip = sfx_clip.with_volume_scaled(0.3) 
+#             audio_tracks.append(sfx_clip)
+
+#         if audio_tracks:
+#             # دمج المسارات الصوتية
+#             final_audio = CompositeAudioClip(audio_tracks)
+#             # التأكد من أن الصوت بنفس طول الفيديو النهائي
+#             final_audio = final_audio.subclipped(0, video.duration)
+            
+#             final_video = video.with_audio(final_audio)
+            
+#             # تصدير الفيديو النهائي
+#             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
+#             print(f"✅ Final video saved successfully at: {output_path}")
+#             return output_path
+#         else:
+#             print("⚠️ No audio tracks found to merge.")
+#             return None
+
+#     except Exception as e:
+#         print(f"❌ Merge failed: {e}")
+#         return None
+
+# # --- تجربة النظام ---
+# if __name__ == "__main__":
+#     # 1. حدد مسار الفيديو الذي استعدته من Veo
+#     video_file = r"final_video.mp4"  # تأكد أن هذا الملف موجود بجانب الكود
+    
+#     # 2. النص المراد تحويله لصوت
+#     text_prompt = "Experience the ultimate performance with our new smart tracker."
+    
+#     # 3. وصف المؤثرات الصوتية
+#     sfx_prompt = "Cinematic futuristic whoosh and high tech ambiance"
+
+#     # تشغيل العمليات
+#     if os.path.exists(video_file):
+#         voice = generate_voiceover(text_prompt)
+#         sfx = generate_sfx(sfx_prompt, duration_seconds=5) # مدة قصيرة للتجربة
+        
+#         # الدمج
+#         if voice:
+#             merge_video_audio(video_file, voice, sfx)
+#     else:
+#         print("❌ Please put a video file named 'final_video.mp4' to test.")
+
+==================================================
+FILE: .\app\services\image_gen.py
+==================================================
+import os
+from google import genai
+from google.genai import types
+from PIL import Image
+from ..config import settings
+
+# إعداد العميل باستخدام المفتاح الموجود في .env
+client = genai.Client(api_key=settings.google_api_key)
+
+IMAGE_DIR = "rawaj-frontend/assets/image"
+os.makedirs(IMAGE_DIR, exist_ok=True)
+
+def generate_image_with_imagen(prompt, reference_image_path=None, aspect_ratio="16:9"):
+    """
+    توليد صورة باستخدام Gemini 2.5 Flash / Imagen 3
+    يدعم الإدخال (نص + صورة) لتوجيه التوليد.
+    """
+    try:
+        filename = f"gen_{os.urandom(4).hex()}.png"
+        output_path = os.path.join(IMAGE_DIR, filename)
+        
+        # 1. تحديد الموديل
+        # حسب التوثيق: gemini-2.5-flash-image أو gemini-2.0-flash-exp
+        # سنجرب الموديل المتاح حالياً الذي يدعم توليد الصور
+        model_id = "gemini-2.5-flash-image" 
+
+        # 2. تجهيز المدخلات (Contents)
+        contents = [prompt]
+        
+        # إذا وجدنا صورة منتج، نضيفها للمدخلات
+        if reference_image_path and os.path.exists(reference_image_path):
+            print(f"🖼️ Using Reference Image: {reference_image_path}")
+            
+            # فتح الصورة بـ PIL
+            ref_img = Image.open(reference_image_path)
+            
+            # نضيف الصورة للقائمة
+            contents.append(ref_img)
+            
+            # تعديل البرومبت ليطلب الحفاظ على المنتج
+            contents[0] = f"Generate a high-quality product photography scene based on this object. {prompt}. CRITICAL: Do NOT alter the shape, text, logo, or color of the provided product image. Keep it exactly as is. High resolution, photorealistic."
+        else:
+            print(f"🎨 Generating from Text only: {prompt}")
+
+        # 3. إعدادات التوليد (لطلب صورة وليس نص)
+        # ملاحظة هامة: مع Gemini، لكي يولد صورة، يجب أن نطلب منه ذلك في الكونفيج أو البرومبت
+        # الكود الذي أرسلته أنت يستخدم generate_content ويعيد parts.inline_data
+        
+        print(f"🚀 Sending request to {model_id}...")
+        
+        response = client.models.generate_content(
+            model=model_id,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE"],
+                image_config=  types.ImageConfig(
+                    aspect_ratio=aspect_ratio
+                )
+            )
+        )
+
+        # 4. استخراج الصورة وحفظها
+        for part in response.parts:
+            if part.inline_data:
+                # تحويل البيانات إلى صورة وحفظها
+                img = part.as_image()
+                img.save(output_path)
+                print(f"✅ Image Generated & Saved: {output_path}")
+                return output_path
+                
+        print("⚠️ No image found in response.")
+        return None
+
+    except Exception as e:
+        print(f"❌ GenAI Error: {e}")
+        # إذا فشل الموديل الجديد، يمكننا وضع كود احتياطي هنا (اختياري)
+        return None
+
+# تجربة مباشرة
+if __name__ == "__main__":
+    test_prompt = "A group of diverse children, aged 6-12, playfully interacting on a meticulously designed pirate ship playground structure. Some children are pretending to steer, while others are charting courses with oversized maps, all wearing the navy captain hats. Bright, sunny afternoon lighting, low-angle shot to emphasize the scale of the playground and the children's imaginative adventure, vibrant colors, reminiscent of a Wes Anderson film. --no alcohol, women"
+    # ضع مسار صورة عندك للتجربة
+    test_ref = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\upload\74d1e8b3-591e-41bc-b1c3-be8a3434d020_no_bg.png"
+    generate_image_with_imagen(test_prompt, test_ref)
+
+==================================================
+FILE: .\app\services\image_processing.py
+==================================================
+from rembg import remove
+from PIL import Image
+import os
+
+def remove_background(input_path):
+    """
+    تقوم بقص المنتج من الصورة وإزالة الخلفية.
+    """
+    if "upload/" in input_path:
+        filename = input_path.split("upload/")[-1]
+        local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
+    else:
+        local_path = input_path
+    try:
+        print(f"✂️ Removing background from: {local_path}")
+        
+        # فتح الصورة
+        input_image = Image.open(local_path)
+        
+        # عملية القص (السحر هنا)
+        output_image = remove(input_image)
+        
+        base, ext = os.path.splitext(local_path)
+        output_path = f"{base}_no_bg.png" # نحفظها بصيغة PNG للشفافية
+        
+        # الحفظ
+        output_image.save(output_path)
+        print(f"✅ Background removed. Saved at: {output_path}")
+        return output_path
+
+    except Exception as e:
+        print(f"❌ Background Removal Failed: {e}")
+        return None
+    
+if __name__ == "__main__":
+    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\df01cd27-6979-48e9-bf19-4f04f626a768.jpg"
+    remove_background(input_path=image_path)
+
+
+==================================================
+FILE: .\app\services\video_gen.py
+==================================================
+import os
+import time
+import base64
+import requests
+import google.auth.transport.requests
+import mimetypes
+from moviepy import ImageClip, AudioFileClip, VideoFileClip
+from google.oauth2 import service_account
+# تأكد من أن هذا الاستيراد يعمل عندك
+from ..config import settings 
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+PROJECT_ID = settings.project_id
+LOCATION = settings.location
+MODEL_ID = settings.model_id
+SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
+
+VIDEO_DIR = "rawaj-frontend/assets/video"
+os.makedirs(VIDEO_DIR, exist_ok=True)
+
+def create_video_from_image_and_audio(image_path, audio_path):
+    """
+    إنشاء فيديو بسيط: صورة ثابتة + صوت + تأثير زووم (اختياري)
+    """
+    try:
+        print("🎬 Creating video...")
+        
+        # تحميل الملفات
+        audio = AudioFileClip(audio_path)
+        image = ImageClip(image_path).with_duration(audio.duration)
+        
+        # دمج الصوت مع الصورة
+        video = image.with_audio(audio)
+    
+        unique_filename =  f"video_{os.urandom(4).hex()}.mp4"
+        output_path = os.path.join(VIDEO_DIR, unique_filename)
+            
+        # الرندرة (هذه العملية تأخذ وقتاً)
+        video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+        
+        print(f"✅ Video saved at: {output_path}")
+        return output_path
+
+    except Exception as e:
+        print(f"❌ Video Creation Failed: {e}")
+        return 
+
+
+def get_access_token():
+    """الحصول على توكن المصادقة باستخدام ملف JSON"""
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    request = google.auth.transport.requests.Request()
+    credentials.refresh(request)
+    return credentials.token
+
+
+def generate_veo_video(prompt_text: str, image_path: str = None, aspect_ratio: str = "16:9"):
+    if not image_path:
+        print(f"❌ No image provided. Veo model requires an image input.")
+        return None
+    
+    if "image/" in image_path:
+        filename = image_path.split("image/")[-1]
+        local_path = os.path.join("rawaj-frontend", "assets", "image", filename)
+    elif "upload/" in image_path: # إضافة دعم مجلد الرفع هنا أيضاً
+            filename = image_path.split("upload/")[-1]
+            local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
+    else:
+        local_path = image_path # افتراض أنه مسار محلي
+
+
+    if local_path:
+        print(f"🖼️  Using image input: {local_path}")
+        if not os.path.exists(local_path):
+            print(f"❌ Image file not found: {image_path}")
+            return None
+    try:
+        access_token = get_access_token()
+    except Exception as e:
+        print(f"❌ Auth Error: {e}")
+        return None
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json; charset=utf-8"
+    }
+
+    # تجهيز البيانات
+    instance = {"prompt": prompt_text}
+
+    # معالجة الصورة
+    if local_path:
+        mime_type, _ = mimetypes.guess_type(local_path)
+        if not mime_type: mime_type = "image/png"
+        
+        with open(local_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            instance["image"] = {
+                "bytesBase64Encoded": encoded_string,
+                "mimeType": mime_type 
+            }
+
+    # الروابط
+    base_url = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}"
+    start_url = f"{base_url}:predictLongRunning"
+    
+    # 1. إرسال طلب البدء
+    try:
+        response = requests.post(start_url, headers=headers, json={
+            "instances": [instance],
+            "parameters": {
+                "sampleCount": 1, 
+                "safetySetting": "block_only_high", 
+                "personGeneration": "allow_all",
+                "negativePrompt": "text, typography, labels, watermarks, subtitles, words, letters, writing",
+                "aspectRatio": aspect_ratio
+            }
+        }, timeout=30) # تايم أوت للطلب الأول
+        
+        if response.status_code != 200:
+            print(f"❌ Error starting generation ({response.status_code}):", response.text)
+            return None
+            
+        operation_name = response.json()["name"]
+        print(f"⏳ Operation started. ID: {operation_name}")
+
+    except Exception as e:
+        print(f"❌ Connection Error during start: {e}")
+        return None
+
+    # 2. حلقة الانتظار (Polling Loop)
+    check_url = f"{base_url}:fetchPredictOperation"
+    start_time = time.time()
+    
+    while True:
+        elapsed = int(time.time() - start_time)
+        print(f"Checking status... (Elapsed: {elapsed}s)")
+        
+        try:
+            # ✅ إضافة Timeout لمنع التجمد
+            check_response = requests.post(
+                check_url, 
+                headers=headers, 
+                json={"operationName": operation_name},
+                timeout=120
+            )
+            
+            if check_response.status_code != 200:
+                print(f"⚠️ Polling warning ({check_response.status_code}). Retrying...")
+                time.sleep(10)
+                continue
+
+            result = check_response.json()
+
+            if "done" in result and result["done"]:
+                if "error" in result:
+                    print("❌ Generation failed:", result["error"])
+                    return None
+                
+                # --- (التعديل هنا) استخراج الفيديو بشكل صحيح ---
+                try:
+                    # 1. نتأكد من وجود الفيديو في الاستجابة
+                    if "response" in result and "videos" in result["response"]:
+                        video_obj = result["response"]["videos"][0]
+                        
+                        # 2. نبحث عن الفيديو سواء بالاسم الجديد أو القديم
+                        video_data = video_obj.get("bytesBase64Encoded") or video_obj.get("videoBytes")
+
+                        if video_data:
+                            
+                            filename = f"veo_{os.urandom(4).hex()}.mp4"
+                            output_path = os.path.join(VIDEO_DIR, filename)
+                            # التأكد من وجود المجلد
+                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                            
+                            # حفظ الملف
+                            with open(output_path, "wb") as f:
+                                f.write(base64.b64decode(video_data))
+                                
+                            print(f"✅ Video generated successfully: {output_path}")
+                            return output_path
+                        else:
+                            print("❌ 'videos' list exists but no video data key found.")
+                            return None
+                    else:
+                        print("❌ No video found in successful response.")
+                        return None
+
+                except Exception as e:
+                    print(f"❌ Error saving video: {e}")
+                    return None
+            
+        except requests.exceptions.Timeout:
+            print("⚠️ Timeout checking status. Network is slow, retrying...")
+        except Exception as e:
+            print(f"⚠️ Error checking status: {e}")
+
+        # انتظار قبل المحاولة التالية
+        time.sleep(10)
+
+
+
+def merge_video_with_audio(video_path, audio_path):
+    """دمج فيديو Veo المتحرك مع صوت ElevenLabs"""
+    try:
+        print("🎬 Merging video with audio...")
+        video_clip = VideoFileClip(video_path)
+        audio_clip = AudioFileClip(audio_path)
+        
+        # تكرار الفيديو أو قص الصوت ليتناسبا
+        # الأسهل: قص الصوت ليتناسب مع الفيديو، أو تكرار الفيديو
+        final_duration = min(video_clip.duration, audio_clip.duration)
+        # أو نجعل الفيديو بطول الصوت (loop)
+        if audio_clip.duration > video_clip.duration:
+             # تكرار الفيديو
+             video_clip = video_clip.loop(duration=audio_clip.duration)
+        
+        final_clip = video_clip.with_audio(audio_clip)
+        
+        output_path = video_path.replace(".mp4", "_audio.mp4")
+        final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+        
+        return output_path
+    except Exception as e:
+        print(f"❌ Merge Failed: {e}")
+        return video_path # نرجع الفيديو الصامت كحل بديل
+
+
+
+if __name__ == "__main__" :
+    # تأكد من المسار
+    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\image\gen_76282eb1.png"
+    prompt = '''A short, dynamic video showcasing the navy captain's hat rotating slowly on a turntable against a neutral background. The camera slowly zooms in to highlight key features such as the brim, insignia, and stitching. Use smooth, controlled camera movements. The video ends with a title card displaying the product name and a call to action. [Hat + Slow Rotation + Zoom In + Product Demo]'''
+    generate_veo_video(
+        prompt_text=prompt,
+        image_path=image_path,
+    )
+
+==================================================
+FILE: .\app\services\video_processing.py
+==================================================
+from moviepy import VideoFileClip, concatenate_videoclips
+import os
+
+def concatenate_veo_videos(video_paths, output_path=None):
+    """دمج عدة مقاطع فيديو في فيديو واحد طويل"""
+    try:
+        print(f"🎬 Concatenating {len(video_paths)} video clips...")
+        clips = []
+        for path in video_paths:
+            if path and os.path.exists(path):
+                clips.append(VideoFileClip(path))
+        
+        if not clips: return None
+
+        final_video = concatenate_videoclips(clips, method="compose")
+        
+        if not output_path:
+            # تأكد من استيراد VIDEO_DIR أو كتابة المسار
+            output_path = os.path.join("rawaj-frontend/assets/video", f"final_campaign_{os.urandom(4).hex()}.mp4")
+            
+        final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
+        
+        for clip in clips: clip.close()
+        final_video.close()
+        
+        print(f"✅ Final long video saved at: {output_path}")
+        return output_path
+    except Exception as e:
+        print(f"❌ Video Concatenation Failed: {e}")
+        return video_paths[0] if video_paths else None
+
+==================================================
+FILE: .\app\services\vision.py
+==================================================
+import os
+from google import genai
+from PIL import Image
+from ..config import settings
+
+# إعداد العميل باستخدام المكتبة الجديدة
+client = genai.Client(api_key=settings.google_api_key)
+
+def analyze_image_content(image_url):
+    """
+    تحليل الصورة المخزنة محلياً باستخدام google.genai و Gemini 2.0 Flash
+    """
+    if not image_url:
+        return None
+    
+    try:
+        # 1. تحديد المسار المحلي للصورة
+        local_path = image_url
+        if "upload/" in image_url:
+            filename = image_url.split("upload/")[-1]
+            local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
+            
+        if not os.path.exists(local_path):
+            print(f"⚠️ Image file not found for analysis: {local_path}")
+            return None
+
+        print(f"👁️ Analyzing Product Image: {local_path}...")
+        
+        # 2. فتح الصورة
+        img = Image.open(local_path)
+        
+        # 3. إعداد الطلب
+        prompt = """
+        Describe this product image in high detail for a marketing team. 
+        Focus on: Colors, Material, Design Style, and Key Features.
+        Be objective.
+        Output a concise paragraph.
+        """
+        
+        # 4. الإرسال باستخدام المكتبة الجديدة (generate_content)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[prompt, img]
+        )
+        
+        # 5. استخراج النص
+        if response.text:
+            return f"\n[AI Visual Analysis of the Product Image]: {response.text}"
+        else:
+            return ""
+
+    except Exception as e:
+        print(f"❌ Vision Analysis Failed: {e}")
+        return None
+
+==================================================
+FILE: .\app\services\vision_qa.py
+==================================================
+import os
+import google.generativeai as genai
+import PIL.Image
+import time
+from ..config import settings
+
+# إعداد Gemini
+if settings.google_api_key:
+    genai.configure(api_key=settings.google_api_key)
+
+def analyze_media(file_path, prompt, user_feedback=None, media_type="image"):
+    """
+    وظيفة Art Director: يرى الصورة أو الفيديو، ويقيمها أو يستخرج تعليمات بناءً على ملاحظات المستخدم.
+    """
+    if not file_path or not os.path.exists(file_path):
+        return "ERROR: Media file not found."
+
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        contents = []
+
+        # 1. تجهيز الميديا (صورة أو فيديو)
+        if media_type == "image":
+            media = PIL.Image.open(file_path)
+            contents.append(media)
+        elif media_type == "video":
+            # Gemini يدعم رفع الفيديو مباشرة (يجب رفعه أولاً عبر File API)
+            print(f"⏳ Uploading video to Gemini for analysis: {file_path}...")
+            video_file = genai.upload_file(path=file_path)
+            print("⏳ Waiting for video processing on Google servers...")
+            while video_file.state.name == "PROCESSING":
+                print(".", end="", flush=True)
+                time.sleep(3)
+                video_file = genai.get_file(video_file.name) # تحديث حالة الملف
+            print("\n✅ Video ready for analysis.")
+            
+            if video_file.state.name == "FAILED":
+                return "ERROR: Google failed to process the video."
+            contents.append(video_file)
+
+        # 2. تحديد المهمة (QA أو Feedback Analysis)
+        if user_feedback:
+            if media_type == "video":
+                system_instruction = f"You are the Chief Art Director. Look at this generated {media_type}.\n\nOriginal Storyboard used to generate it: '{prompt}'"
+            else:
+                system_instruction = f"You are the Chief Art Director. Look at this generated {media_type}.\n\nOriginal Image Prompt used to generate it: '{prompt}'"
+            # سيناريو التعديل (User Feedback Loop)
+            system_instruction += f"""
+            
+            User Complaint/Feedback: '{user_feedback}'
+            
+            TASK: The user is not happy. Based on what you see in the {media_type} and the user's feedback, write clear, actionable, technical instructions for the 'Prompt_Engineer' on how to rewrite the prompt to fix these issues. 
+            DO NOT generate the new prompt yourself, just write the instructions.
+            """
+            
+        else:
+            if media_type == "video":
+                system_instruction = f"You are the Chief Art Director. Quality check this generated {media_type} based on this storyboard: '{prompt}'."
+            else:
+                system_instruction = f"You are the Chief Art Director. Quality check this generated {media_type} based on this image prompt: '{prompt}'."
+            # سيناريو الجودة (Automated QA)
+            system_instruction += f"""
+            
+             BE LENIENT. Generative AI is not perfect. Ignore minor text misspellings, slight deviations in camera movement, or missing minor background details.
+
+            CRITICAL CHECKS (ONLY reject if one of these is true):
+            1. Severe Watermarks or giant, nonsensical floating text blocking the view.
+            2. Deformed humans, extra fingers, or distorted faces.
+            3. Violates safety rules (Contains alcohol, nudity, etc.).
+            4. The core subject is COMPLETELY wrong (e.g., asked for a car, got a shoe).
+            
+            If PERFECT: Output exactly: APPROVED
+            If FAILED: Output exactly: REJECTED | [Explain technically what went wrong so the Prompt_Engineer can fix it].
+            """
+
+        contents.append(system_instruction)
+
+        # 3. إرسال الطلب
+        print(f"🕵️‍♂️ Art Director is analyzing the {media_type}...")
+        response = model.generate_content(contents)
+        result_text = response.text.strip()
+        
+        # تنظيف ملف الفيديو من سيرفرات جوجل (مهم جداً لعدم امتلاء المساحة)
+        if media_type == "video":
+            try: genai.delete_file(video_file.name)
+            except: pass
+
+        return result_text
+
+    except Exception as e:
+        print(f"⚠️ Art Director Vision Failed: {e}")
+        return "APPROVED" if not user_feedback else f"Apply user feedback: {user_feedback}"

@@ -12,7 +12,7 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 
 def generate_image_with_imagen(prompt, reference_image_path=None, aspect_ratio="16:9"):
     """
-    توليد صورة باستخدام Gemini 2. Flash / Imagen 3
+    توليد صورة باستخدام Gemini 2.5 Flash / Imagen 3
     يدعم الإدخال (نص + صورة) لتوجيه التوليد.
     """
     try:
