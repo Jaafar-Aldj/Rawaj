@@ -2,16 +2,23 @@ import autogen
 from app.agents.config import llm_config, directory_config
 import app.agents.agents_system_messages as sys_msg
 
+# 1. Marketing Strategist (The Planner)
+def get_marketing_strategist() -> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Marketing_Strategist",
+        llm_config=directory_config,
+        system_message=sys_msg.strategist,
+    )
 
-# 1. Creative Director (The Orchestrator)
-def get_director():
+# 2. Creative Director (The Orchestrator)
+def get_director() -> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Creative_Director",
         llm_config=directory_config,
         system_message= sys_msg.director,
     )
 
-# 2. Copywriter (Writes the Ad Text)
+# 3. Copywriter (Writes the Ad Text)
 def get_copywriter()-> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Copywriter",
@@ -19,7 +26,7 @@ def get_copywriter()-> autogen.AssistantAgent:
         system_message= sys_msg.copywriter,
     )
 
-# 3. Video Director (Visual Storytelling - The Most Important)
+# 4. Video Director (Visual Storytelling - The Most Important)
 def get_video_director() -> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Video_Director",
@@ -27,7 +34,7 @@ def get_video_director() -> autogen.AssistantAgent:
         system_message=sys_msg.video_director,
     )
 
-# 4. Prompt Engineer (Generates Visual Descriptions)
+# 5. Prompt Engineer (Generates Visual Descriptions)
 def get_prompter()-> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Prompt_Engineer",
@@ -35,10 +42,10 @@ def get_prompter()-> autogen.AssistantAgent:
         system_message=sys_msg.prompter,
     )
 
-# 5. Art Director (QA)
+# 6. Art Director (QA)
 def get_art_director() -> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Art_Director",
         llm_config=directory_config, 
         system_message=sys_msg.art_director,
-    )
+    ) 

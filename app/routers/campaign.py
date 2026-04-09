@@ -700,7 +700,7 @@ def delete_video_asset(
 
 
 @router.get("/stream/{proccess_id}")
-async def stream_notifications(proccess_id: str):
+async def stream_notifications(proccess_id: str, request: Request):
     """
     الفرونت إند يتصل بهذا الرابط للاستماع للإشعارات.
     يظل الاتصال مفتوحاً حتى نرسل [DONE].
@@ -710,10 +710,16 @@ async def stream_notifications(proccess_id: str):
     async def event_generator():
         try:
             while True:
-                message = await queue.get()
-                if message == "[DONE]":
+                if await request.is_disconnected():
+                    print(f"🔌 Client disconnected for process {proccess_id}.")
                     break
-                yield {"data": message}
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=2.0)
+                    if message == "[DONE]":
+                        break
+                    yield {"data": message}
+                except asyncio.TimeoutError:
+                    continue
         except asyncio.CancelledError:
             print(f"🔌 Connection for {proccess_id} cancelled.")
         finally:

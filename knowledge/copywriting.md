@@ -7,7 +7,7 @@ Core Psychology Extraction
 
 Whitman's approach is based on tapping into fundamental, hardwired human desires.
 
-The Life Force 8 (LF8): These are the eight primal, biological desires that drive the majority of human behavior.[1][2][3][4]
+The Life Force 8 (LF8): These are the eight primal, biological desires that drive the majority of human behavior.
 
 Survival, enjoyment of life, life extension.
 
@@ -66,19 +66,19 @@ Core Psychology Extraction
 
 Sugarman's methodology focuses on creating an irresistible reading experience that pulls the reader through the copy.
 
-The Slippery Slide: The core concept that every element of the copy, from the headline to the first sentence to the last, must be so compelling that the reader cannot stop reading. The goal is to create "reading gravity."[5][6]
+The Slippery Slide: The core concept that every element of the copy, from the headline to the first sentence to the last, must be so compelling that the reader cannot stop reading. The goal is to create "reading gravity."
 
 Psychological Triggers: Sugarman identifies numerous triggers to embed in copy to influence the reader. Key triggers include:
 
-Curiosity: Plant "seeds of curiosity" to keep the reader engaged and wanting to find out what happens next.[7][8]
+Curiosity: Plant "seeds of curiosity" to keep the reader engaged and wanting to find out what happens next.
 
-Honesty & Credibility: Be disarmingly honest to build trust. Specificity enhances credibility.[5][6]
+Honesty & Credibility: Be disarmingly honest to build trust. Specificity enhances credibility.
 
-Emotion: People buy on emotion and justify with logic. The copy must first create an emotional response.[6]
+Emotion: People buy on emotion and justify with logic. The copy must first create an emotional response.
 
-Storytelling: Use compelling narratives and anecdotes to draw the reader in and make the message relatable.[5]
+Storytelling: Use compelling narratives and anecdotes to draw the reader in and make the message relatable.
 
-Satisfaction Conviction: Show such supreme confidence in your product (e.g., strong guarantees) that the reader feels convinced of its value.[6]
+Satisfaction Conviction: Show such supreme confidence in your product (e.g., strong guarantees) that the reader feels convinced of its value.
 
 "If... Then..." Logic Rules for Copywriting
 
@@ -95,19 +95,19 @@ IF the copy needs to build trust, THEN use ultra-specific details (e.g., "It inc
 3. "Influence: The Psychology of Persuasion" by Robert Cialdini
 Core Psychology Extraction
 
-Cialdini identified six universal principles of persuasion that guide human decision-making.[9][10][11][12]
+Cialdini identified six universal principles of persuasion that guide human decision-making.
 
-Reciprocity: People feel obligated to give back to others who have first given to them.[9][10][11]
+Reciprocity: People feel obligated to give back to others who have first given to them.
 
-Scarcity: People want more of things they can have less of. Perceived scarcity generates demand.[10][11]
+Scarcity: People want more of things they can have less of. Perceived scarcity generates demand.
 
-Authority: People follow the lead of credible, knowledgeable experts.[11][12]
+Authority: People follow the lead of credible, knowledgeable expert.
 
-Consistency: People like to be consistent with things they have previously said or done. Activated by small initial commitments.[10][13]
+Consistency: People like to be consistent with things they have previously said or done. Activated by small initial commitments.
 
-Liking: People prefer to say yes to those they know and like. Attractiveness, similarity, and praise are key factors.[11][13]
+Liking: People prefer to say yes to those they know and like. Attractiveness, similarity, and praise are key factors.
 
-Social Proof (Consensus): When uncertain, people look to the actions and behaviors of others to determine their own.[12][13]
+Social Proof (Consensus): When uncertain, people look to the actions and behaviors of others to determine their own.
 
 "If... Then..." Logic Rules for Copywriting
 
@@ -126,19 +126,19 @@ IF writing an "About Us" page or a personal brand's social media caption, THEN a
 4. "Made to Stick" by Chip Heath & Dan Heath
 Core Psychology Extraction
 
-The SUCCESs framework outlines six principles to make ideas memorable and effective ("sticky").[14][15][16]
+The SUCCESs framework outlines six principles to make ideas memorable and effective ("sticky").
 
-Simple: Find the core essence of the idea. Strip it down to its most critical component.[14][16]
+Simple: Find the core essence of the idea. Strip it down to its most critical component.
 
-Unexpected: Grab attention with surprise. Break a pattern. Use curiosity gaps.[15][17]
+Unexpected: Grab attention with surprise. Break a pattern. Use curiosity gaps.
 
-Concrete: Explain ideas in terms of human actions and sensory information. Use tangible examples.[14][18]
+Concrete: Explain ideas in terms of human actions and sensory information. Use tangible examples.
 
-Credible: Give the idea believability. Use statistics, authoritative sources, or a "testable credential" the audience can verify themselves.[14][15]
+Credible: Give the idea believability. Use statistics, authoritative sources, or a "testable credential" the audience can verify themselves.
 
-Emotional: Make people feel something. Connect to their self-interest or identity.[14][15]
+Emotional: Make people feel something. Connect to their self-interest or identity.
 
-Stories: Use narratives as mental flight simulators, preparing the audience to act.[14][15][18]
+Stories: Use narratives as mental flight simulators, preparing the audience to act.
 
 "If... Then..." Logic Rules for Copywriting
 
@@ -198,29 +198,3 @@ Tone & Style Guide
 Platform	Style	Guiding Principles & Justification
 B2B (LinkedIn, Technical Blogs, White Papers)	Authoritative & Credible	Principles: Authority (Cialdini), Credibility (Heath), Secondary Wants: 'To be informed,' 'Efficiency,' 'Dependability/Quality' (Whitman). Justification: The B2B audience prioritizes ROI, risk reduction, and efficiency. Copy must be factual, data-driven, and demonstrate clear expertise. Use industry-specific language, provide concrete data, and build trust through credible evidence.
 B2C (TikTok, Instagram, Facebook)	Emotional & Social	Principles: Emotion & Stories (Heath), Social Proof & Liking (Cialdini), The Slippery Slide (Sugarman), Life Force 8 (Whitman). Justification: The B2C audience on social media is driven by entertainment, community, and emotion. Copy must be immediately engaging (Slippery Slide), tap into primal desires (LF8), create a feeling of inclusion (Social Proof), and be relatable (Liking, Stories).
-Sources
-help
-wordpress.com
-marketium.club
-bagerbach.com
-phoneburner.com
-bookey.app
-review-space.shop
-wiley.com
-goodreads.com
-influenceatwork.com
-duncanstevens.com
-conceptually.org
-people-shift.com
-bigjump.com.au
-adaptconsultingcompany.com
-readingraphics.com
-aidanhelfant.com
-growthsummary.com
-thetechbag.com
-Google Search Suggestions
-Display of Search Suggestions is required when using Grounding with Google Search. Learn more
-Cashvertising Life Force 8 and 9 Learned Secondary Wants
-Adweek Copywriting Handbook Slippery Slide and Psychological Triggers
-Influence by Cialdini 6 principles of persuasion
-Made to Stick SUCCESs framework explained

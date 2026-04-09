@@ -1,7 +1,6 @@
-import asyncio
 import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
-from app.agents.roles import get_director, get_copywriter, get_video_director, get_prompter
+from app.agents.roles import get_director, get_copywriter, get_marketing_strategist, get_video_director, get_prompter
 from app.services.image_gen import generate_image_with_imagen
 from app.services.video_gen import  generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
@@ -238,14 +237,23 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     تدير محادثة مفتوحة بين المستخدم والمدير الإبداعي.
     لا تولد JSON، بل ترجع رسالة نصية فقط.
     """
-    director = get_director()
+    strategist = get_marketing_strategist()
     
-    # ننشئ UserProxy ليمثل المستخدم
-    user = autogen.UserProxyAgent(
-        name="Client", 
-        human_input_mode="NEVER", 
+    rag_proxy = RetrieveUserProxyAgent(
+        name="Knowledge_Base_Admin",
+        human_input_mode="NEVER",
         code_execution_config=False,
-        max_consecutive_auto_reply=1
+        max_consecutive_auto_reply=1,
+        retrieve_config={
+            "task": "qa",
+            "docs_path": [os.path.join(os.getcwd(), "knowledge")], # مجلد ملفات التسويق
+            "chunk_token_size": 1000, 
+            "model": strategist.llm_config['config_list'][0]['model'],
+            "collection_name": "rawaj_marketing_db", # اسم قاعدة البيانات المحلية (ChromaDB)
+            "get_or_create": True,
+            "overwrite": False,
+            "custom_text_type" : ["md","txt"] ,
+        },
     )
 
     current_date = datetime.now().strftime("%Y-%m-%d")
@@ -278,19 +286,20 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         history_text += "--- END OF HISTORY ---\n\n"
         full_prompt = history_text + system_context
 
-    print("🗣️ Sending message to Creative Director...")
+    print("🧠 Searching Knowledge Base and consulting Strategist...")
     
     # بدء المحادثة (ذهاب وعودة واحدة فقط)
-    chat_result = user.initiate_chat(
-        director,
-        message=full_prompt,
-        max_turns=1 # نأخذ رد المدير فقط ونتوقف
+    chat_result = rag_proxy.initiate_chat(
+        strategist,
+        message=rag_proxy.message_generator,
+        max_turns=1,
+        problem = full_prompt
     )
 
     # استخراج رد المدير (آخر رسالة في المحادثة)
-    director_reply = chat_result.chat_history[-1]['content']
+    strategist_reply = chat_result.chat_history[-1]['content']
     
-    return director_reply
+    return strategist_reply
 
 # ==============================================================================
 # المرحلة 1B: اعتماد الخطة وتوليد الـ JSON (Finalize Strategy)

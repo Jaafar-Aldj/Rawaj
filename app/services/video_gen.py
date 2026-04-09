@@ -223,6 +223,10 @@ def merge_video_with_audio(video_path, audio_path):
         
         output_path = video_path.replace(".mp4", "_audio.mp4")
         final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+
+        video_clip.close()
+        audio_clip.close()
+        final_clip.close()
         
         return output_path
     except Exception as e:
