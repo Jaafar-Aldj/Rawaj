@@ -25,6 +25,7 @@ def get_copywriter()-> autogen.AssistantAgent:
         llm_config=llm_config,
         system_message= sys_msg.copywriter,
     )
+  
 
 # 4. Video Director (Visual Storytelling - The Most Important)
 def get_video_director() -> autogen.AssistantAgent:
@@ -49,3 +50,4 @@ def get_art_director() -> autogen.AssistantAgent:
         llm_config=directory_config, 
         system_message=sys_msg.art_director,
     ) 
+

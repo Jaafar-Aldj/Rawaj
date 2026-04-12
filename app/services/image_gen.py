@@ -10,7 +10,7 @@ client = genai.Client(api_key=settings.google_api_key)
 IMAGE_DIR = "rawaj-frontend/assets/image"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
-def generate_image_with_imagen(prompt, reference_image_path=None, aspect_ratio="16:9"):
+def generate_image(prompt, reference_image_path=None, aspect_ratio="16:9"):
     """
     توليد صورة باستخدام Gemini 2.5 Flash / Imagen 3
     يدعم الإدخال (نص + صورة) لتوجيه التوليد.
@@ -81,4 +81,4 @@ if __name__ == "__main__":
     test_prompt = "A group of diverse children, aged 6-12, playfully interacting on a meticulously designed pirate ship playground structure. Some children are pretending to steer, while others are charting courses with oversized maps, all wearing the navy captain hats. Bright, sunny afternoon lighting, low-angle shot to emphasize the scale of the playground and the children's imaginative adventure, vibrant colors, reminiscent of a Wes Anderson film. --no alcohol, women"
     # ضع مسار صورة عندك للتجربة
     test_ref = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\upload\74d1e8b3-591e-41bc-b1c3-be8a3434d020_no_bg.png"
-    generate_image_with_imagen(test_prompt, test_ref)
+    generate_image(test_prompt, test_ref)
