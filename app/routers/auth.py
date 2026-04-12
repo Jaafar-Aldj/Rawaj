@@ -56,3 +56,47 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
             print(e)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
 
+
+@router.post('/forgot-password', status_code=status.HTTP_200_OK)
+async def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    # 1. البحث عن المستخدم
+    user = db.query(models.Users).filter(models.Users.email == request.email).first()
+    
+    if not user:
+        return {"message": "If the email is registered, a reset code will be sent."}
+    
+    # 2. توليد كود جديد وحفظه
+    code = utils.generate_verification_code()
+    user.verification_code = code
+    db.commit()
+    
+    # 3. إرسال الإيميل
+    try:
+        await utils.send_reset_password_email(user.email, code)
+        return {"message": "If the email is registered, a reset code will be sent."}
+    except Exception as e:
+        print(f"Failed to send reset email: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send password reset email.")
+
+@router.post('/reset-password', status_code=status.HTTP_200_OK)
+def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    # 1. البحث عن المستخدم
+    user_query = db.query(models.Users).filter(models.Users.email == request.email)
+    user = user_query.first()
+    
+    # 2. التحقق من الكود
+    if not user or user.verification_code != request.code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or reset code.")
+    
+    # 3. تشفير كلمة المرور الجديدة وتحديثها
+    hashed_password = utils.hash_function(request.new_password)
+    
+    # 4. تحديث القاعدة وتصفير الكود
+    user_query.update({
+        "password_hash": hashed_password,
+        "verification_code": None # مسح الكود حتى لا يستخدم مرة أخرى
+    }, synchronize_session=False)
+    
+    db.commit()
+    
+    return {"message": "Password has been reset successfully."}

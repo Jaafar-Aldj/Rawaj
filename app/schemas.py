@@ -32,6 +32,14 @@ class UserVerify(BaseModel):
     user_id: int
     code: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
 # ==============================================================================
 # Product Schemas
 # ==============================================================================

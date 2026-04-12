@@ -336,6 +336,7 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
     TASK:
     1. Director: Instruct Copywriter briefly.
     2. Copywriter: Write specific Arabic ads for the Target Audience on the requested Platforms. Output JSON.
+    🛑 CRITICAL RULE: The Copywriter MUST generate EXACTLY ONE ad text per platform listed above. If only 1 platform is provided, the JSON list MUST contain only 1 item.
     """
 
     chat_result = copy_rag.initiate_chat(

@@ -410,8 +410,8 @@ async def edit_image_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found or unauthorized")
 
     # 2. استدعاء الذكاء لتعديل البرومبت وتوليد صورة جديدة
-    process_id = f"edit_image_{request.asset_id}"
-    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
+    process_id = f"edit_image_{old_image.asset.id}"
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {old_image.platform}...")
 
     main_loop = asyncio.get_running_loop()
     def sync_notify(message: str):
