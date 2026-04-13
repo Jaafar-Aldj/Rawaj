@@ -57,17 +57,24 @@ def cleanup_orphaned_files():
 
                 # 1. حذف الملفات المؤقتة فوراً (التي تنشأ أثناء الدمج)
                 if filename.startswith("temp_"):
-                    os.remove(file_path)
-                    print(f"🗑️ Deleted temp file: {filename}")
-                    deleted_count += 1
+                    try:
+                        os.remove(file_path)
+                        print(f"🗑️ Deleted temp file: {filename}")
+                        deleted_count += 1
+                    
+                    except Exception as e:
+                        print(f"❌ Error deleting temp file {filename}: {e}")
                     continue
 
                 # 2. حذف الملفات "اليتيمة" (التي ليس لها قيود في الداتا بيز)
                 # نتجاهل الملفات الأساسية مثل placeholder.png إن وجدت
                 if filename not in active_files and filename != "placeholder.png":
-                    os.remove(file_path)
-                    print(f"🗑️ Deleted orphaned file: {filename}")
-                    deleted_count += 1
+                    try:
+                        os.remove(file_path)
+                        print(f"🗑️ Deleted orphaned file: {filename}")
+                        deleted_count += 1
+                    except Exception as e:
+                        print(f"❌ Error deleting orphaned file {filename}: {e}")
 
         print(f"✨ Cleanup Complete! Total files deleted: {deleted_count}")
     

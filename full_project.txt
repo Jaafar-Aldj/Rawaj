@@ -823,17 +823,24 @@ def cleanup_orphaned_files():
 
                 # 1. حذف الملفات المؤقتة فوراً (التي تنشأ أثناء الدمج)
                 if filename.startswith("temp_"):
-                    os.remove(file_path)
-                    print(f"🗑️ Deleted temp file: {filename}")
-                    deleted_count += 1
+                    try:
+                        os.remove(file_path)
+                        print(f"🗑️ Deleted temp file: {filename}")
+                        deleted_count += 1
+                    
+                    except Exception as e:
+                        print(f"❌ Error deleting temp file {filename}: {e}")
                     continue
 
                 # 2. حذف الملفات "اليتيمة" (التي ليس لها قيود في الداتا بيز)
                 # نتجاهل الملفات الأساسية مثل placeholder.png إن وجدت
                 if filename not in active_files and filename != "placeholder.png":
-                    os.remove(file_path)
-                    print(f"🗑️ Deleted orphaned file: {filename}")
-                    deleted_count += 1
+                    try:
+                        os.remove(file_path)
+                        print(f"🗑️ Deleted orphaned file: {filename}")
+                        deleted_count += 1
+                    except Exception as e:
+                        print(f"❌ Error deleting orphaned file {filename}: {e}")
 
         print(f"✨ Cleanup Complete! Total files deleted: {deleted_count}")
     
@@ -1171,6 +1178,14 @@ class UserVerify(BaseModel):
     user_id: int
     code: str
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
 # ==============================================================================
 # Product Schemas
 # ==============================================================================
@@ -1360,6 +1375,7 @@ def read_root():
 ==================================================
 FILE: .\app\utils.py
 ==================================================
+from datetime import datetime
 import random
 import string
 from pwdlib import PasswordHash
@@ -1392,10 +1408,78 @@ conf = ConnectionConfig(
 )
 
 async def send_code_email(email: str, code: str):
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden;">
+        <!-- Header -->
+        <div style="background-color: #2c3e50; padding: 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0;">منصة رواج | Rawaj</h1>
+        </div>
+        
+        <!-- Content -->
+        <div style="padding: 30px; background-color: #ffffff; text-align: center;">
+            <h2 style="color: #333333; margin-bottom: 20px;">مرحباً بك في رواج!</h2>
+            <p style="color: #555555; font-size: 16px; line-height: 1.5;">
+                شكراً لتسجيلك معنا. لإكمال عملية تفعيل حسابك، يرجى استخدام رمز التحقق أدناه:
+            </p>
+            
+            <!-- Code Box -->
+            <div style="margin: 30px 0; padding: 15px; background-color: #f8f9fa; border: 2px dashed #007bff; border-radius: 5px; display: inline-block;">
+                <span style="font-size: 32px; font-weight: bold; color: #007bff; letter-spacing: 5px;">{code}</span>
+            </div>
+            
+            <p style="color: #777777; font-size: 14px;">
+                إذا لم تقم بإنشاء حساب في منصتنا، يرجى تجاهل هذه الرسالة.
+            </p>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background-color: #f1f1f1; padding: 15px; text-align: center; border-top: 1px solid #e0e0e0;">
+            <p style="color: #999999; font-size: 12px; margin: 0;">
+                © {datetime.now().year} Rawaj Platform. All rights reserved.
+            </p>
+        </div>
+    </div>
+    """
     message = MessageSchema(
-        subject="Rawaj Verification Code",
+        subject="تأكيد حسابك في منصة رواج | Rawaj Verification Code",
         recipients=[email],
-        body=f"Your verification code is: {code}",
+        body=html_body,
+        subtype="html"
+    )
+    
+    fm = FastMail(conf)
+    await fm.send_message(message)
+
+async def send_reset_password_email(email: str, code: str):
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden;">
+        <div style="background-color: #2c3e50; padding: 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0;">منصة رواج | Rawaj</h1>
+        </div>
+        <div style="padding: 30px; background-color: #ffffff; text-align: center;">
+            <h2 style="color: #333333; margin-bottom: 20px;">استعادة كلمة المرور</h2>
+            <p style="color: #555555; font-size: 16px; line-height: 1.5;">
+                لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك. استخدم الرمز التالي لإكمال العملية:
+            </p>
+            <div style="margin: 30px 0; padding: 15px; background-color: #f8f9fa; border: 2px dashed #e74c3c; border-radius: 5px; display: inline-block;">
+                <span style="font-size: 32px; font-weight: bold; color: #e74c3c; letter-spacing: 5px;">{code}</span>
+            </div>
+            <p style="color: #777777; font-size: 14px;">
+                إذا لم تقم بطلب إعادة تعيين كلمة المرور، يرجى تجاهل هذه الرسالة فوراً لحماية حسابك.
+            </p>
+        </div>
+        <div style="background-color: #f1f1f1; padding: 15px; text-align: center; border-top: 1px solid #e0e0e0;">
+            <p style="color: #999999; font-size: 12px; margin: 0;">
+                © {datetime.now().year} Rawaj Platform. All rights reserved.
+            </p>
+        </div>
+    </div>
+    """
+
+    message = MessageSchema(
+        subject="إعادة تعيين كلمة المرور | Password Reset - Rawaj",
+        recipients=[email],
+        body=html_body,
         subtype="html"
     )
     
@@ -1411,37 +1495,58 @@ FILE: .\app\__init__.py
 FILE: .\app\agents\agents_system_messages.py
 ==================================================
 # ==============================================================================
-# 1. Creative Director (Interactive Strategist)
+# 1. Marketing Strategist 
+# ==============================================================================
+strategist = """
+You are the Lead Marketing Strategist at Rawaj, an elite digital marketing agency in the MENA region.
+
+YOUR ROLE: 
+You are consulting with a client to build a marketing strategy. You have access to a Knowledge Base containing top-tier marketing books (e.g., StoryBrand, Contagious). 
+
+CRITICAL RULES FOR CONVERSATION:
+1. ALWAYS base your advice on the marketing principles provided to you from the Knowledge Base (Context).
+2. Propose a marketing strategy including: Campaign Name, Objective, 3 Target Audiences, Posting Strategy, and Trending Events.
+3. ALWAYS ask the client for their feedback or approval. Do not finalize until they agree.
+4. Use a professional, persuasive, and encouraging Arabic tone (or English if the user prefers).
+5. DO NOT OUTPUT JSON during the conversation phase. Just chat normally.
+6. Never answer or respond to any questions not about the marketing strategy. If the user asks something unrelated, politely steer them back to the strategy discussion.
+
+SAFETY & CULTURAL GUIDELINES (STRICT):
+- Target Region: MENA. Ensure content is conservative and family-friendly.
+- FORBIDDEN TOPICS: Alcohol, Gambling, Pork, Politics, Religion.
+
+SPECIAL TRIGGER:
+If you receive a message starting with "[SYSTEM: FINALIZE_STRATEGY]", output ONLY a strict JSON object summarizing the strategy:
+{
+    "name": "Campaign Name",
+    "objective": "Objective",
+    "suggested_audiences": {"suggestions": [{ "audience": "Name", "reason": "Why" }]},
+    "posting_strategy": {"best_days": ["Day 1"], "best_times": ["18:00"], "reason": "Why"},
+    "trending_events": [{"event": "Event Name", "angle": "Angle"}]
+}
+"""
+
+# ==============================================================================
+# 2. Creative Director (Interactive Strategist)
 # ==============================================================================
 director = """
-        You are the Chief Marketing Officer (CMO) at Rawaj, a top-tier digital marketing agency in the MENA region.
+        You are the Creative Director at Rawaj Agency.
         
-        YOUR ROLE: You are in an interactive consulting session with a client.
+        YOUR ROLE: You are the internal team leader. You DO NOT talk to clients. You ONLY talk to your team (Copywriter, Video_Director, Prompt_Engineer).
         
-        CRITICAL RULES FOR CONVERSATION:
-        1. Read the product details and the chat history provided.
-        2. Propose a marketing strategy including: Campaign Name, Objective, 3 Target Audiences, Posting Strategy, and Trending Events.
-        3. ALWAYS ask the client for their feedback or approval on your suggestions. Do not finalize until they agree.
-        4. Use a professional, persuasive, and encouraging Arabic tone (or English if the user prefers).
-        5. DO NOT OUTPUT JSON during the conversation phase. Just chat normally.
-        
+        CRITICAL RULES:
+        1. Read the task and the product details.
+        2. Give ONE SHORT, punchy sentence of creative direction (e.g., "Make the tone energetic," or "Focus on the visual contrast").
+        3. ALWAYS write your instructions in ENGLISH.
+        4. DO NOT write the final ad, do not write code, and NEVER output JSON. Your only job is to guide the workers.
+
         SAFETY & CULTURAL GUIDELINES (STRICT):
         - Target Region: MENA. Ensure content is conservative and family-friendly.
         - FORBIDDEN TOPICS: Alcohol, Gambling, Pork, Politics, Religion.
-        
-        SPECIAL TRIGGER:
-        If the system sends you a message starting with "[SYSTEM: FINALIZE_STRATEGY]", you MUST STOP chatting and output ONLY a strict JSON object summarizing the agreed-upon strategy, following this exact format:
-        {{
-            "name": "Agreed Campaign Name",
-            "objective": "Agreed Objective",
-            "suggested_audiences": {{"suggestions": [{{ "audience": "Name", "reason": "Why" }}]}},
-            "posting_strategy": {{"best_days": ["Day 1"], "best_times": ["18:00"], "reason": "Why"}},
-            "trending_events": [{{"event": "Event Name", "angle": "Angle"}}]
-        }}
-        """
+"""
 
 # ==============================================================================
-# 2. Copywriter (Text Safety)
+# 3. Copywriter (Text Safety)
 # ==============================================================================
 copywriter = """
         You are a professional Ad Copywriter.
@@ -1456,20 +1561,18 @@ copywriter = """
         - NEVER translate or interact with the Prompt_Engineer's output.
 
         OUTPUT FORMAT (Strict JSON):
-        IMPORTANT: Output ONLY a valid JSON structure like this:
+        IMPORTANT: Output ONLY a valid JSON structure. You MUST generate EXACTLY ONE dictionary inside the list for EACH platform requested. Do not duplicate platforms.
         {{
-                "ad_copy": [
-                {{ "platform": "Name of Platform 1", "ad_copy": "special ad copy for this platform" }},
-                {{ "platform": "Name of Platform 2", "ad_copy": "special ad copy for this platform" }},
-                {{ "platform": "Name of Platform 3", "ad_copy": "special ad copy for this platform" }}
-                ]
+            "ad_copy": [
+                {{ "platform": "Requested Platform", "ad_copy": "special ad copy for this platform" }}
+            ]
         }}
         """
 
 
 
 ### ============================================================================
-# 3. Video Director (Visual Storytelling - The Most Important)
+# 4. Video Director (Visual Storytelling - The Most Important)
 ### ============================================================================
 video_director = """
         You are an expert Commercial Video Director.
@@ -1491,7 +1594,7 @@ video_director = """
 
 
 # ==============================================================================
-# 4. Prompt Engineer (Visual Safety - The Most Important)
+# 5. Prompt Engineer (Visual Safety - The Most Important)
 # ==============================================================================
 prompter = """
         You are an expert Generative AI Technical Director (Midjourney & Runway Expert).
@@ -1535,7 +1638,7 @@ prompter = """
 """
 
 # ==============================================================================
-# 5. Art Director (Quality Assurance & Vision Control)
+# 6. Art Director (Quality Assurance & Vision Control)
 # ==============================================================================
 art_director = """
         You are the Chief Art Director at Rawaj. Your eye for detail is unmatched.
@@ -1561,6 +1664,38 @@ art_director = """
             "feedback": "Explain EXACTLY what is wrong (e.g., 'There is random text floating in the top right corner', or 'A person is visible')."
         }}
         """
+
+
+def get_prompter_updated_message(aspect_ratio: str) -> str:
+    updated_message = f"""
+        You are an expert Generative AI Technical Director (Runway/Veo Expert).
+        
+        YOUR TRIGGER: As soon as the 'Video_Director' provides the storyboard, you MUST generate visual prompts.
+        
+        CRITICAL RULES:
+        1. Output JSON ONLY.
+        2. Create a `video_storyboard` array.
+        3. DO NOT output a `main_image_prompt`.
+        4. **CRITICAL:** The video aspect ratio is '{aspect_ratio}'. Ensure the visual descriptions (`image_prompt`) describe a composition suitable for this ratio (e.g., vertical for 9:16, horizontal for 16:9).
+        
+        ⛔ NEGATIVE CONSTRAINTS:
+        - NO Text, Typography, Labels on screen.
+        - NO Alcohol, Women, Children.
+        
+        OUTPUT FORMAT (Strict JSON):
+        {{
+            "video_storyboard": [
+                {{
+                    "scene_number": 1,
+                    "image_prompt": "Cinematic visual setup...",
+                    "motion_prompt": "Camera movement...",
+                    "voiceover_text": "Arabic text",
+                    "audio_prompt": "Cinematic music..."
+                }}
+            ]
+        }}
+    """
+    return updated_message
 
 ==================================================
 FILE: .\app\agents\config.py
@@ -1596,24 +1731,25 @@ directory_config = {
 ==================================================
 FILE: .\app\agents\manager.py
 ==================================================
-import asyncio
-import autogen
-from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
-from app.agents.roles import get_director, get_copywriter, get_video_director, get_prompter
-from app.services.image_gen import generate_image_with_imagen
-from app.services.video_gen import  generate_veo_video
-from app.services.video_processing import concatenate_veo_videos
-from app.services.vision_qa import analyze_media 
-from app.notifications import send_notification
-# from app.services.audio_gen import generate_audio_elevenlabs
 import os
 import json
 import re
 import concurrent.futures
 from datetime import datetime
-from app.agents.config import api_key
 import google.generativeai as genai
 import PIL.Image
+
+import autogen
+from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
+
+from app.agents.agents_system_messages import get_prompter_updated_message
+from app.agents.roles import get_director, get_copywriter, get_marketing_strategist, get_video_director, get_prompter
+from app.services.image_gen import generate_image
+from app.services.video_gen import  generate_veo_video
+from app.services.video_processing import concatenate_veo_videos
+from app.services.vision_qa import analyze_media 
+from app.agents import prompt_templates
+from app.agents.config import api_key
 
 
 # إعداد مكتبة جوجل مباشرة لتحليل الصور
@@ -1623,36 +1759,46 @@ if api_key:
 # ==============================================================================
 # Helpers (المساعدات)
 # ==============================================================================
-def analyze_image_content(image_path):
-    if not image_path or not os.path.exists(image_path): return ""
-    try:
-        print(f"👁️ Analyzing image: {image_path}...")
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        img = PIL.Image.open(image_path)
-        prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
-        response = model.generate_content([prompt, img])
-        print("✅ Image Analysis Complete.")
-        return f"\n[AI Visual Analysis]: {response.text}"
-    except Exception as e:
-        print(f"⚠️ Image Analysis Failed: {e}")
-        return ""
-
-def get_rag_proxy(llm_config):
+def create_rag_proxy(name: str, folder: str, collection: str, llm_model: str, overwrite: bool = False):
+    """Helper to create a RetrieveUserProxyAgent with consistent settings."""
+    docs_path = os.path.join(os.getcwd(), "knowledge", folder)
+    os.makedirs(docs_path, exist_ok=True)
     return RetrieveUserProxyAgent(
-        name="Knowledge_Base_Admin",
+        name= name,
         human_input_mode="NEVER",
         code_execution_config=False,
         max_consecutive_auto_reply=1,
         retrieve_config={
             "task": "qa",
-            "docs_path": [os.path.join(os.getcwd(), "knowledge")],
+            "docs_path": [docs_path],
             "chunk_token_size": 1000, 
-            "model": llm_config['config_list'][0]['model'],
-            "collection_name": "rawaj_final_db", 
+            "model": llm_model,
+            "collection_name": collection, 
             "get_or_create": True,
-            "overwrite": False,
+            "overwrite": overwrite,
+            "custom_text_types": ["md", "txt", "pdf"],
         },
     )
+
+def get_local_media_path(file_path: str):
+    """دالة مساعدة لاستخراج المسار المحلي من الرابط أو المسار المطلق"""
+    if not file_path: return None
+    if "http" in file_path and "upload" in file_path:
+        filename = file_path.split("upload/")[-1]
+        path = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+        if os.path.exists(path): return path
+    elif os.path.exists(file_path):
+        return file_path
+    return None
+
+def extract_agent_json(chat_history, target_agent_name, json_key=None):
+    """دالة مساعدة للبحث العكسي في المحادثة واستخراج الـ JSON من وكيل محدد"""
+    for msg in reversed(chat_history):
+        if msg.get("name") == target_agent_name:
+            data = json_match_extractor(msg.get("content", ""))
+            if data:
+                return data.get(json_key, data) if json_key else data
+    return None
 
 def json_match_extractor(content):
     try:
@@ -1687,55 +1833,22 @@ def normalize_prompts_data(data):
 
     return image_prompt, video_storyboard
 
-
-
-def evaluate_image_quality(image_path, original_prompt):
-    """
-    يقوم هذا الفاحص الذكي (Art Director) بتحليل الصورة المولدة مباشرة 
-    عبر Gemini Vision API للتأكد من خلوها من الأخطاء (نصوص غريبة، تشوهات).
-    """
+#===============================================================================
+#  Vision QA
+#===============================================================================
+def analyze_image_content(image_path):
+    local_path = get_local_media_path(image_path)
+    if not local_path: return ""
     try:
-        print(f"🕵️‍♂️ Art Director is analyzing the image: {image_path}...")
-        
-        # 1. فتح الصورة
-        img = PIL.Image.open(image_path)
-        
-        # 2. تجهيز الموديل السريع
+        print(f"👁️ Analyzing image: {local_path}...")
         model = genai.GenerativeModel('gemini-2.5-flash')
-        
-        # 3. توجيه سؤال صارم للمخرج الفني
-        prompt = f"""
-        You are the Chief Art Director. Review this generated ad image based on the original prompt: '{original_prompt}'.
-        
-        CRITICAL CHECKS:
-        1. Are there ANY weird text, random letters, typos, or watermarks on the image? (Images MUST be text-free unless it's a clear product logo).
-        2. Are there any deformed people, extra fingers, or distorted faces?
-        3. Does it violate rules (e.g., contains alcohol when it shouldn't)?
-        
-        If the image passes all checks and looks professional, output exactly: APPROVED
-        If the image fails ANY check, output exactly: REJECTED | [Reason for rejection]
-        """
-        
-        # 4. طلب التقييم
+        img = PIL.Image.open(local_path)
+        prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
         response = model.generate_content([prompt, img])
-        result_text = response.text.strip()
-        
-        if result_text.startswith("APPROVED"):
-            print("✅ Art Director APPROVED the image!")
-            return True, ""
-        elif result_text.startswith("REJECTED"):
-            reason = result_text.split("|")[-1].strip() if "|" in result_text else "Quality issues detected."
-            print(f"❌ Art Director REJECTED the image. Reason: {reason}")
-            return False, reason
-        else:
-            # إذا أرجع رداً غير متوقع، نقبله كاحتياط
-            print(f"⚠️ Unclear Art Director response: {result_text}. Approving by default.")
-            return True, ""
-            
+        return f"\n[AI Visual Analysis]: {response.text}"
     except Exception as e:
-        print(f"⚠️ Art Director Analysis Failed: {e}. Approving by default to prevent blocking.")
-        return True, ""
-
+        print(f"⚠️ Image Analysis Failed: {e}")
+        return ""
 
 def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback=None):
     current_prompt = image_prompt
@@ -1743,13 +1856,14 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
     last_generated_image = None
 
     while attempt <= max_retries:
-        if notify_callback:
-            notify_callback(f"🕵️‍♂️ جاري تدقيق الصورة آلياً (المحاولة {attempt}/{max_retries})...")
+        if notify_callback: notify_callback(f"🕵️‍♂️ جاري تدقيق الصورة آلياً (المحاولة {attempt}/{max_retries})...")
         print(f"\n🔄 [Image QA] Attempt {attempt}/{max_retries}...")
-        image_path = generate_image_with_imagen(current_prompt, reference_image_path, aspect_ratio)
+        image_path = generate_image(current_prompt, reference_image_path, aspect_ratio)
         
         if not image_path or not os.path.exists(image_path):
             print(f"❌ Image generation failed at attempt {attempt}.")
+            if notify_callback:
+                notify_callback("⚠️ فشل توليد الصورة. محاولة جديدة...")
             return last_generated_image
         last_generated_image = image_path
         # استدعاء المخرج الفني لتقييم الصورة
@@ -1787,7 +1901,6 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
     current_prompt = video_prompt
     attempt = 1
     last_generated_video = None
-
     
     while attempt <= max_retries:
         if notify_callback:
@@ -1797,7 +1910,7 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
         
         if not video_path: return last_generated_video
         last_generated_video = video_path
-        # استدعاء المخرج الفني لتقييم الفيديو
+
         if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الفيديو...")
         review = analyze_media(video_path, current_prompt, media_type="video")
 
@@ -1811,282 +1924,172 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
             if notify_callback: 
                 notify_callback("⚠️ تم رصد خلل في جودة الفيديو. جاري التحسين وإعادة التوليد...")
             
-            # حذف الفيديو المعيب
-            if attempt < max_retries: # فقط نحذف إذا كنا سنحاول مرة أخرى   
+            if attempt < max_retries: 
                 try: os.remove(video_path)
                 except: pass
             
-            # تحديث البرومبت بتعليمات المخرج
             current_prompt = f"{video_prompt}. CRITICAL FIX: {reason}"
             attempt += 1
         else:
             if notify_callback: notify_callback("✅ تم اعتماد الفيديو (تجاوز الفحص).")
-            return video_path # كاحتياط
+            return video_path 
 
     if notify_callback: notify_callback("⚠️ تم استنفاد محاولات التحسين. تم اعتماد أفضل نتيجة.")
     print("⚠️ Max retries reached. Returning last video.")
     return last_generated_video
     
-
 # ==============================================================================
-# المرحلة 1A: المحادثة التفاعلية (Interactive Chat)
+# المرحلة 1: الدردشة الاستراتيجية واعتمادها
 # ==============================================================================
 def chat_with_director(product_name, product_desc, product_analysis, user_message, chat_history=None):
     """
     تدير محادثة مفتوحة بين المستخدم والمدير الإبداعي.
     لا تولد JSON، بل ترجع رسالة نصية فقط.
     """
-    director = get_director()
-    
-    # ننشئ UserProxy ليمثل المستخدم
-    user = autogen.UserProxyAgent(
-        name="Client", 
-        human_input_mode="NEVER", 
-        code_execution_config=False,
-        max_consecutive_auto_reply=1
-    )
+    strategist = get_marketing_strategist()
+    model_name = strategist.llm_config['config_list'][0]['model']
+    strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
 
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    # إذا كانت هذه أول رسالة (لا يوجد تاريخ)
-    if not chat_history or len(chat_history) == 0:
-        system_context = f"""
-        [SYSTEM CONTEXT - DO NOT SHOW TO USER]
-        Product: {product_name}
-        Description: {product_desc}
-        Visual Analysis: {product_analysis}
-        Today is {current_date}. Target Region: MENA.
-        [END OF SYSTEM CONTEXT]
-        
-        User Message: {user_message}
-        """
-    else:
-        # إذا كان هناك تاريخ محادثة، نرسل الرسالة الجديدة فقط
-        # (يفضل حقن التاريخ السريع للتذكير)
-        system_context = f"[SYSTEM: Today is {current_date}] User Message: {user_message}"
-
-    # تمرير تاريخ المحادثة لـ AutoGen (للاسف AutoGen لا يدعم تمرير History بسهولة كقائمة،
-    # الحل الهندسي: ندمج التاريخ السابق في رسالة واحدة كـ "نص" للذكاء الاصطناعي ليقرأه)
-    
-    full_prompt = system_context
+    history_text = ""
     if chat_history:
         history_text = "\n--- PREVIOUS CHAT HISTORY ---\n"
-        for msg in chat_history:
-            history_text += f"{msg['role'].capitalize()}: {msg['content']}\n"
-        history_text += "--- END OF HISTORY ---\n\n"
-        full_prompt = history_text + system_context
+        history_text += "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in chat_history])
+        history_text += "\n--- END OF HISTORY ---\n"
 
-    print("🗣️ Sending message to Creative Director...")
-    
-    # بدء المحادثة (ذهاب وعودة واحدة فقط)
-    chat_result = user.initiate_chat(
-        director,
-        message=full_prompt,
-        max_turns=1 # نأخذ رد المدير فقط ونتوقف
+    full_prompt = prompt_templates.get_strategy_chat_context(
+        product_name, 
+        product_desc, 
+        product_analysis, 
+        current_date, 
+        user_message, 
+        history_text
     )
 
-    # استخراج رد المدير (آخر رسالة في المحادثة)
-    director_reply = chat_result.chat_history[-1]['content']
+    print("🧠 Searching Knowledge Base and consulting Strategist...")
     
-    return director_reply
+    chat_result = strategy_rag.initiate_chat(
+        strategist, 
+        message=strategy_rag.message_generator,
+        problem = full_prompt, 
+        n_results=2
+    )
 
-# ==============================================================================
-# المرحلة 1B: اعتماد الخطة وتوليد الـ JSON (Finalize Strategy)
-# ==============================================================================
+    valid_replies = [msg['content'] for msg in chat_result.chat_history if msg.get('content') and msg.get('content').strip() != "" and msg.get('name') == 'Marketing_Strategist']
+    
+    replay = valid_replies[-1] if valid_replies else "عذراً، حدث خطأ في توليد الاستراتيجية."
+    
+    return replay.strip()
+
 def finalize_strategy(product_name, chat_history):
     """
     تجبر المدير على تلخيص المحادثة السابقة وإخراجها كـ JSON صارم.
     """
-    director = get_director()
-    user = autogen.UserProxyAgent(name="System", human_input_mode="NEVER", code_execution_config=False)
-    
+    strategist = get_marketing_strategist()
+    user_proxy = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+
     history_text = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history])
     
-    # الكلمة السرية التي تكلمنا عنها في roles.py
-    magic_prompt = f"""
-    {history_text}
-    
-    [SYSTEM: FINALIZE_STRATEGY]
-    Based on the agreed chat history above for the product '{product_name}', output the final JSON strategy exactly as requested in your system instructions. Do not add any text before or after the JSON.
-    """
+    magic_prompt = prompt_templates.get_finalize_strategy_prompt(product_name, history_text)
 
     print("📄 Forcing Director to output JSON Strategy...")
-    chat_result = user.initiate_chat(director, message=magic_prompt, max_turns=1)
+    chat_result = user_proxy.initiate_chat(strategist, message=magic_prompt, max_turns=1)
     
     last_message = chat_result.chat_history[-1]['content']
     
     # استخراج الـ JSON
     data = json_match_extractor(last_message)
-    if data and "suggested_audiences" in data:
-        return data
+    if data and "suggested_audiences" in data: return data
         
     print("⚠️ Fallback strategy used due to JSON parsing error.")
-    return {
-        "name": f"حملة {product_name}",
-        "objective": "تم الاتفاق في المحادثة",
-        "suggested_audiences": {"suggestions": [{"audience": "الجمهور المستهدف", "reason": "حسب النقاش"}]},
-        "posting_strategy": {"best_days": ["الخميس"], "best_times": ["19:00"], "reason": "اوقات الذروة"},
-        "trending_events": []
-    }
-
-
+    raise ValueError("Failed to extract JSON strategy from Director's response.")
 # ==============================================================================
 # المرحلة 2: توليد النصوص فقط (Generate Copy)
 # ==============================================================================
 def generate_copy_only(product_name, product_desc, audience, platforms):
     director = get_director()
     copywriter = get_copywriter()
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    model_name = copywriter.llm_config['config_list'][0]['model']
+    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
 
-    groupchat = autogen.GroupChat(agents=[user, director, copywriter], messages=[], max_round=3, speaker_selection_method="round_robin")
+    groupchat = autogen.GroupChat(agents=[copy_rag, director, copywriter], messages=[], max_round=4, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
 
-    platforms_str = ", ".join(platforms) if platforms else "Instagram, Facebook, Twitter"
+    platforms_str = ", ".join(platforms) if platforms else "Instagram, Facebook, Twitter(X)"
     
-    message = f"""
-    Product: {product_name}
-    Description: {product_desc}
-    Target Audience: {audience}
-    Platforms: {platforms_str}
-    
-    TASK:
-    1. Director: Instruct Copywriter briefly.
-    2. Copywriter: Write specific Arabic ads for the Target Audience on the requested Platforms. Output JSON.
-    """
+    message = prompt_templates.get_copy_generation_prompt(product_name, product_desc, audience, platforms_str)
 
-    chat_result = user.initiate_chat(manager, message=message)
+    chat_result = copy_rag.initiate_chat(
+        manager, 
+        message=copy_rag.message_generator,
+        problem = message,
+        n_results=2
+    )
 
-    ad_copy = {}
-    for msg in reversed(chat_result.chat_history):
-        if msg.get("name") == "Copywriter":
-            data = json_match_extractor(msg.get("content", ""))
-            if data:
-                ad_copy = data.get("ad_copy", data)
-                break
+    ad_copy = extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
     return {"ad_copy": ad_copy}
-
 # ==============================================================================
 # المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
 # ==============================================================================
 def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None):
     prompter = get_prompter()
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    
+    message = prompt_templates.get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio)
 
-    message = f"""
-    We need ONE image prompt for a product ad.
-    Product: {product_name}
-    Audience: {audience}
-    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
-    Aspect Ratio: {aspect_ratio}
-    
-    CRITICAL RULE:
-    - NO Alcohol, Women, Children, Faces, People.
-    - Focus ONLY on the BACKGROUND SCENE where the product will be placed.
-    
-    TASK: Prompt_Engineer, write a detailed English image prompt. Include aspect ratio instructions if necessary.
-    Output ONLY JSON: {{ "main_image_prompt": "..." }}
-    """
+    chat_result = prompts_rag.initiate_chat(
+        prompter, 
+        message=prompts_rag.message_generator, 
+        problem=message,
+        n_results=2
+    )
+    img_prompt = extract_agent_json(chat_result.chat_history, "Prompt_Engineer", "main_image_prompt")
 
-    chat_result = user.initiate_chat(prompter, message=message, max_turns=1)
-    last_msg = chat_result.chat_history[-1]['content']
-    data = json_match_extractor(last_msg)
-    
-    img_prompt = data.get("main_image_prompt") if data else f"High quality product photography for {product_name}, {audience}, {aspect_ratio}"
-    
     print(f"🎨 Generating Image (AR: {aspect_ratio})...")
     
-    local_ref_path = None
-    if original_image_path:
-        if "http" in original_image_path and "upload" in original_image_path:
-            filename = original_image_path.split("upload/")[-1]
-            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
-            if os.path.exists(path1): local_ref_path = path1
-        elif os.path.exists(original_image_path):
-            local_ref_path = original_image_path
+    local_ref_path = get_local_media_path(original_image_path)
 
     try:
-        # تأكد أن الدالة في image_gen.py تستقبل aspect_ratio (سنعدلها لاحقاً إذا أردت)
         image_path = generate_and_review_image(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio, notify_callback=notify_callback)
     except Exception as e:
         print(f"❌ Image Gen Error: {e}")
         image_path = None
 
     return {"image_prompt": img_prompt, "image_url": image_path}
-
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
 def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None):
     video_director = get_video_director()
     prompter = get_prompter()
-    prompter.update_system_message(f"""
-        You are an expert Generative AI Technical Director (Runway/Veo Expert).
-        
-        YOUR TRIGGER: As soon as the 'Video_Director' provides the storyboard, you MUST generate visual prompts.
-        
-        CRITICAL RULES:
-        1. Output JSON ONLY.
-        2. Create a `video_storyboard` array.
-        3. DO NOT output a `main_image_prompt`.
-        4. **CRITICAL:** The video aspect ratio is '{aspect_ratio}'. Ensure the visual descriptions (`image_prompt`) describe a composition suitable for this ratio (e.g., vertical for 9:16, horizontal for 16:9).
-        
-        ⛔ NEGATIVE CONSTRAINTS:
-        - NO Text, Typography, Labels on screen.
-        - NO Alcohol, Women, Children.
-        
-        OUTPUT FORMAT (Strict JSON):
-        {{
-            "video_storyboard": [
-                {{
-                    "scene_number": 1,
-                    "image_prompt": "Cinematic visual setup...",
-                    "motion_prompt": "Camera movement...",
-                    "voiceover_text": "Arabic text",
-                    "audio_prompt": "Cinematic music..."
-                }}
-            ]
-        }}
-    """)
 
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    prompter.update_system_message(get_prompter_updated_message(aspect_ratio))
 
-    groupchat = autogen.GroupChat(agents=[user, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    
+    
+    groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
 
     num_scenes = max(1, duration // 8)
 
-    message = f"""
-    Product: {product_name}
-    Audience: {audience}
-    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
-    Requested Total Video Duration: {duration} seconds.
-    Target Aspect Ratio: {aspect_ratio}
-    
-    TASK:
-    1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots.
-    2. Prompt_Engineer: Output the JSON `video_storyboard`.
-    """
+    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio)
 
-    chat_result = user.initiate_chat(manager, message=message)
+    chat_result = prompts_rag.initiate_chat(
+        manager, 
+        message=prompts_rag.message_generator,
+        problem=message,
+        n_results=2
+    )
 
-    vid_storyboard = []
-    for msg in reversed(chat_result.chat_history):
-        if msg.get("name") == "Prompt_Engineer":
-            data = json_match_extractor(msg.get("content", ""))
-            _, vid_storyboard = normalize_prompts_data(data)
-            if vid_storyboard: break
+    data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
+    _, vid_storyboard = normalize_prompts_data(data)
 
-    # التحضير لمسار الصورة المرجعية
-    local_ref_path = None
-    if base_image_path:
-        if "http" in base_image_path and "upload" in base_image_path:
-            filename = base_image_path.split("upload/")[-1]
-            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
-            if os.path.exists(path1): local_ref_path = path1
-        elif os.path.exists(base_image_path):
-            local_ref_path = base_image_path
+    local_ref_path = get_local_media_path(base_image_path)    
 
-    # توليد الفيديو الفعلي
     video_url = None
     if vid_storyboard:
         print(f"🎬 Sending Storyboard to Veo (Duration: {duration}s)...")
@@ -2101,29 +2104,32 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
         )
         
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
-
 # ==============================================================================
 # المرحلة 4: التعديلات (Refining)
 # ==============================================================================
 def refine_text(current_copy, feedback):
     copywriter = get_copywriter()
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    model_name = copywriter.llm_config['config_list'][0]['model']
+    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
     
-    msg = f"""
-    User Feedback: {feedback}
-    Current Copy: {json.dumps(current_copy, ensure_ascii=False)}
-    TASK: Rewrite the ad copy based on feedback. Output strict JSON.
-    """
-    chat_result = user.initiate_chat(copywriter, message=msg, max_turns=1)
+    msg = prompt_templates.get_refine_text_prompt(feedback, current_copy)
+    chat_result = copy_rag.initiate_chat(
+        copywriter,
+        message=copy_rag.message_generator,
+        problem=msg, 
+        n_results=2
+    )
+
     
-    last_msg = chat_result.chat_history[-1]['content']
-    data = json_match_extractor(last_msg)
-    return data.get("ad_copy", data) if data else None
+    return extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
 
 
 def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, notify_callback=None):
     prompter = get_prompter()
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompt_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    
+
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
     art_director_advice = analyze_media(
         file_path=original_image_path,
@@ -2132,28 +2138,17 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         media_type="image"
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")    
-    msg = f"""
-    User Feedback: {feedback}
-    Current Prompt: {current_prompt}
-    Aspect Ratio: {aspect_ratio}
-    ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER: {art_director_advice}
-    TASK: Update the image prompt. Output JSON: {{ "main_image_prompt": "..." }}
-    """
-    chat_result = user.initiate_chat(prompter, message=msg, max_turns=1)
+    msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director_advice)
+    chat_result = prompt_rag.initiate_chat(
+        prompter, 
+        message=prompt_rag.message_generator, 
+        problem=msg, 
+        n_results=2
+    )
     
-    last_msg = chat_result.chat_history[-1]['content']
-    data = json_match_extractor(last_msg)
-    new_prompt = data.get("main_image_prompt") if data else current_prompt
+    new_prompt = extract_agent_json(chat_result.chat_history, "Prompt_Engineer", "main_image_prompt") 
      
-    local_ref_path = None
-    if original_image_path:
-        if "http" in original_image_path and "upload" in original_image_path:
-            filename = original_image_path.split("upload/")[-1]
-            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
-            if os.path.exists(path1): local_ref_path = path1
-        elif os.path.exists(original_image_path):
-            local_ref_path = original_image_path
-
+    local_ref_path = get_local_media_path(original_image_path)
     
     image_url = None
     if new_prompt:
@@ -2167,6 +2162,51 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         except: pass
         
     return {"image_prompt": new_prompt, "image_url": image_url}
+
+def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None):
+    video_director = get_video_director()
+    prompter = get_prompter()
+    
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    
+
+    groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
+    art_director_advice = ""
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
+    art_director_advice = analyze_media(
+        file_path=current_video_path,
+        prompt=current_storyboard,
+        user_feedback=feedback,
+        media_type="video",
+    )
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
+
+    msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, art_director_advice)
+    chat_result = prompts_rag.initiate_chat(
+        manager, 
+        message=prompts_rag.message_generator,
+        problem=msg,
+        n_results=2
+    )
+    
+    data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
+    _, vid_storyboard = normalize_prompts_data(data)
+            
+    # توليد الفيديو الجديد 
+    local_ref_path = get_local_media_path(base_image_path)
+
+    video_url = None
+    if vid_storyboard:
+         video_url = generate_final_video_asset(
+            vid_storyboard, 
+            base_image_path=local_ref_path, 
+            aspect_ratio=aspect_ratio, 
+            notify_callback=notify_callback
+        )
+    return {"video_storyboard": vid_storyboard, "video_url": video_url}
+
 
 
 def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_callback=None):
@@ -2244,14 +2284,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     print(f"🚀 Starting PARALLEL Multi-Scene Video Generation ({len(storyboard_json)} scenes)...")
 
     # معالجة مسار الصورة الأساسية
-    valid_image_path = None
-    if base_image_path:
-        if "http" in base_image_path and "upload" in base_image_path:
-             filename = base_image_path.split("upload/")[-1]
-             temp_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
-             if os.path.exists(temp_path): valid_image_path = temp_path
-        elif os.path.exists(base_image_path):
-             valid_image_path = base_image_path
+    valid_image_path = get_local_media_path(base_image_path)
 
     # --- التنفيذ المتوازي (Parallel Execution) ---
     results = []
@@ -2300,60 +2333,115 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
         return final_video     
 
 
-def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None):
-    video_director = get_video_director()
-    prompter = get_prompter()
-    user = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
+==================================================
+FILE: .\app\agents\prompt_templates.py
+==================================================
+import json
+
+# ==============================================================================
+# 1. Strategy Prompts (مرحلة الاستراتيجية)
+# ==============================================================================
+def get_strategy_chat_context(product_name, product_desc, product_analysis, current_date, user_message, history_text=""):
+    context = f"""
+    [SYSTEM CONTEXT - DO NOT SHOW TO USER]
+    Product: {product_name}
+    Description: {product_desc}
+    Visual Analysis: {product_analysis}
+    Today is {current_date}. Target Region: MENA.
+    [END OF SYSTEM CONTEXT]
+    """
     
+    if history_text:
+        return f"{context}\n\n{history_text}\n\nUser Message: {user_message}"
+    
+    return f"{context}\n\nUser Message: {user_message}"
 
-    groupchat = autogen.GroupChat(agents=[user, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")
-    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
-    art_director_advice = ""
-    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
-    art_director_advice = analyze_media(
-        file_path=current_video_path,
-        prompt=current_storyboard,
-        user_feedback=feedback,
-        media_type="video",
-    )
-    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
 
-    msg = f"""
+def get_finalize_strategy_prompt(product_name, history_text):
+    return f"""
+    {history_text}
+    
+    [SYSTEM: FINALIZE_STRATEGY]
+    Based on the agreed chat history above for the product '{product_name}', output the final JSON strategy exactly as requested in your system instructions. Do not add any text before or after the JSON.
+    """
+
+# ==============================================================================
+# 2. Copywriting Prompts (مرحلة النصوص)
+# ==============================================================================
+def get_copy_generation_prompt(product_name, product_desc, audience, platforms_str):
+    return f"""
+    Product: {product_name}
+    Description: {product_desc}
+    Target Audience: {audience}
+    Platforms: {platforms_str}
+    
+    TASK:
+    1. Director: Instruct Copywriter briefly.
+    2. Copywriter: Write specific Arabic ads for the Target Audience on the requested Platforms. Output JSON.
+    🛑 CRITICAL RULE: The Copywriter MUST generate EXACTLY ONE ad text per platform listed above. If only 1 platform is provided, the JSON list MUST contain only 1 item.
+    """
+
+# ==============================================================================
+# 3. Media Generation Prompts (مرحلة الوسائط)
+# ==============================================================================
+def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio):
+    return f"""
+    We need ONE image prompt for a product ad.
+    Product: {product_name}
+    Audience: {audience}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
+    Aspect Ratio: {aspect_ratio}
+    
+    CRITICAL RULE:
+    - NO Alcohol, Women, Children, Faces, People.
+    - Focus ONLY on the BACKGROUND SCENE where the product will be placed.
+    
+    TASK: Prompt_Engineer, write a detailed English image prompt. Include aspect ratio instructions if necessary.
+    Output ONLY JSON: {{ "main_image_prompt": "..." }}
+    """
+
+def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio):
+    return f"""
+    Product: {product_name}
+    Audience: {audience}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
+    Requested Total Video Duration: {duration} seconds.
+    Target Aspect Ratio: {aspect_ratio}
+    
+    TASK:
+    1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots.
+    2. Prompt_Engineer: Output the JSON `video_storyboard`.
+    """
+
+# ==============================================================================
+# 4. Refining & Feedback Prompts (مرحلة التعديلات)
+# ==============================================================================
+def get_refine_text_prompt(feedback, current_copy):
+    return f"""
+    User Feedback: {feedback}
+    Current Copy: {json.dumps(current_copy, ensure_ascii=False)}
+    
+    TASK: Rewrite the ad copy based on feedback. Output strict JSON.
+    """
+
+def get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director_advice):
+    return f"""
+    User Feedback: {feedback}
+    Current Prompt: {current_prompt}
+    Aspect Ratio: {aspect_ratio}
+    ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER: {art_director_advice}
+    
+    TASK: Update the image prompt. Output JSON: {{ "main_image_prompt": "..." }}
+    """
+
+def get_refine_video_prompt(feedback, current_storyboard, art_director_advice):
+    return f"""
     User Feedback: {feedback}
     Current Storyboard: {json.dumps(current_storyboard, ensure_ascii=False)}
     ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER:\n{art_director_advice}\n
+    
     TASK: Update the scenes based on feedback. DO NOT change image_prompts. Output JSON `video_storyboard`.
     """
-    chat_result = user.initiate_chat(manager, message=msg)
-    
-    vid_storyboard = []
-    for m in reversed(chat_result.chat_history):
-        if m.get("name") == "Prompt_Engineer":
-            data = json_match_extractor(m.get("content", ""))
-            _, vid_storyboard = normalize_prompts_data(data)
-            if vid_storyboard: break
-            
-    # توليد الفيديو الجديد 
-    local_ref_path = None
-    if base_image_path:
-        if "http" in base_image_path and "upload" in base_image_path:
-            filename = base_image_path.split("upload/")[-1]
-            path1 = os.path.join("rawaj-frontend", "assets", "upload", filename) 
-            if os.path.exists(path1): local_ref_path = path1
-        elif os.path.exists(base_image_path):
-            local_ref_path = base_image_path
-
-    video_url = None
-    if vid_storyboard:
-         video_url = generate_final_video_asset(
-            vid_storyboard, 
-            base_image_path=local_ref_path, 
-            aspect_ratio=aspect_ratio, 
-            notify_callback=notify_callback
-        )
-    return {"video_storyboard": vid_storyboard, "video_url": video_url}
-
-
 
 ==================================================
 FILE: .\app\agents\roles.py
@@ -2362,24 +2450,32 @@ import autogen
 from app.agents.config import llm_config, directory_config
 import app.agents.agents_system_messages as sys_msg
 
+# 1. Marketing Strategist (The Planner)
+def get_marketing_strategist() -> autogen.AssistantAgent:
+    return autogen.AssistantAgent(
+        name="Marketing_Strategist",
+        llm_config=directory_config,
+        system_message=sys_msg.strategist,
+    )
 
-# 1. Creative Director (The Orchestrator)
-def get_director():
+# 2. Creative Director (The Orchestrator)
+def get_director() -> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Creative_Director",
         llm_config=directory_config,
         system_message= sys_msg.director,
     )
 
-# 2. Copywriter (Writes the Ad Text)
+# 3. Copywriter (Writes the Ad Text)
 def get_copywriter()-> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Copywriter",
         llm_config=llm_config,
         system_message= sys_msg.copywriter,
     )
+  
 
-# 3. Video Director (Visual Storytelling - The Most Important)
+# 4. Video Director (Visual Storytelling - The Most Important)
 def get_video_director() -> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Video_Director",
@@ -2387,7 +2483,7 @@ def get_video_director() -> autogen.AssistantAgent:
         system_message=sys_msg.video_director,
     )
 
-# 4. Prompt Engineer (Generates Visual Descriptions)
+# 5. Prompt Engineer (Generates Visual Descriptions)
 def get_prompter()-> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Prompt_Engineer",
@@ -2395,17 +2491,14 @@ def get_prompter()-> autogen.AssistantAgent:
         system_message=sys_msg.prompter,
     )
 
-# 5. Art Director (QA)
+# 6. Art Director (QA)
 def get_art_director() -> autogen.AssistantAgent:
     return autogen.AssistantAgent(
         name="Art_Director",
         llm_config=directory_config, 
         system_message=sys_msg.art_director,
-    )
+    ) 
 
-==================================================
-FILE: .\app\agents\skills.py
-==================================================
 
 
 ==================================================
@@ -2475,6 +2568,49 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
 
 
+@router.post('/forgot-password', status_code=status.HTTP_200_OK)
+async def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    # 1. البحث عن المستخدم
+    user = db.query(models.Users).filter(models.Users.email == request.email).first()
+    
+    if not user:
+        return {"message": "If the email is registered, a reset code will be sent."}
+    
+    # 2. توليد كود جديد وحفظه
+    code = utils.generate_verification_code()
+    user.verification_code = code
+    db.commit()
+    
+    # 3. إرسال الإيميل
+    try:
+        await utils.send_reset_password_email(user.email, code)
+        return {"message": "If the email is registered, a reset code will be sent."}
+    except Exception as e:
+        print(f"Failed to send reset email: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send password reset email.")
+
+@router.post('/reset-password', status_code=status.HTTP_200_OK)
+def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    # 1. البحث عن المستخدم
+    user_query = db.query(models.Users).filter(models.Users.email == request.email)
+    user = user_query.first()
+    
+    # 2. التحقق من الكود
+    if not user or user.verification_code != request.code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or reset code.")
+    
+    # 3. تشفير كلمة المرور الجديدة وتحديثها
+    hashed_password = utils.hash_function(request.new_password)
+    
+    # 4. تحديث القاعدة وتصفير الكود
+    user_query.update({
+        "password_hash": hashed_password,
+        "verification_code": None # مسح الكود حتى لا يستخدم مرة أخرى
+    }, synchronize_session=False)
+    
+    db.commit()
+    
+    return {"message": "Password has been reset successfully."}
 
 ==================================================
 FILE: .\app\routers\campaign.py
@@ -2891,8 +3027,8 @@ async def edit_image_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found or unauthorized")
 
     # 2. استدعاء الذكاء لتعديل البرومبت وتوليد صورة جديدة
-    process_id = f"edit_image_{request.asset_id}"
-    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
+    process_id = f"edit_image_{old_image.asset.id}"
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {old_image.platform}...")
 
     main_loop = asyncio.get_running_loop()
     def sync_notify(message: str):
@@ -3181,7 +3317,7 @@ def delete_video_asset(
 
 
 @router.get("/stream/{proccess_id}")
-async def stream_notifications(proccess_id: str):
+async def stream_notifications(proccess_id: str, request: Request):
     """
     الفرونت إند يتصل بهذا الرابط للاستماع للإشعارات.
     يظل الاتصال مفتوحاً حتى نرسل [DONE].
@@ -3191,10 +3327,16 @@ async def stream_notifications(proccess_id: str):
     async def event_generator():
         try:
             while True:
-                message = await queue.get()
-                if message == "[DONE]":
+                if await request.is_disconnected():
+                    print(f"🔌 Client disconnected for process {proccess_id}.")
                     break
-                yield {"data": message}
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=2.0)
+                    if message == "[DONE]":
+                        break
+                    yield {"data": message}
+                except asyncio.TimeoutError:
+                    continue
         except asyncio.CancelledError:
             print(f"🔌 Connection for {proccess_id} cancelled.")
         finally:
@@ -3208,6 +3350,7 @@ FILE: .\app\routers\product.py
 ==================================================
 from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadFile, File, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from app import oauth2
 from app.services.vision import analyze_image_content
 from app.services.image_processing import remove_background
@@ -3275,7 +3418,7 @@ def get_product(id: int, db: Session = Depends(get_db), current_user:schemas.Use
     return product
 
 @router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ProductResponse)
-def create_product(
+async def create_product(
         request: Request,
         new_product: schemas.ProductCreate, 
         db: Session = Depends(get_db), 
@@ -3285,8 +3428,8 @@ def create_product(
     ai_description = None
     processed_image_url = None
     if new_product.original_image_url:
-        ai_description = analyze_image_content(new_product.original_image_url)
-        processed_image_path = remove_background(new_product.original_image_url)
+        ai_description = await run_in_threadpool(analyze_image_content, new_product.original_image_url)
+        processed_image_path = await run_in_threadpool(remove_background, new_product.original_image_url)
         if processed_image_path:
             filename = os.path.basename(processed_image_path)
             processed_image_url = f"{request.base_url}assets/upload/{filename}"
@@ -3564,7 +3707,7 @@ client = genai.Client(api_key=settings.google_api_key)
 IMAGE_DIR = "rawaj-frontend/assets/image"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
-def generate_image_with_imagen(prompt, reference_image_path=None, aspect_ratio="16:9"):
+def generate_image(prompt, reference_image_path=None, aspect_ratio="16:9"):
     """
     توليد صورة باستخدام Gemini 2.5 Flash / Imagen 3
     يدعم الإدخال (نص + صورة) لتوجيه التوليد.
@@ -3635,7 +3778,7 @@ if __name__ == "__main__":
     test_prompt = "A group of diverse children, aged 6-12, playfully interacting on a meticulously designed pirate ship playground structure. Some children are pretending to steer, while others are charting courses with oversized maps, all wearing the navy captain hats. Bright, sunny afternoon lighting, low-angle shot to emphasize the scale of the playground and the children's imaginative adventure, vibrant colors, reminiscent of a Wes Anderson film. --no alcohol, women"
     # ضع مسار صورة عندك للتجربة
     test_ref = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\upload\74d1e8b3-591e-41bc-b1c3-be8a3434d020_no_bg.png"
-    generate_image_with_imagen(test_prompt, test_ref)
+    generate_image(test_prompt, test_ref)
 
 ==================================================
 FILE: .\app\services\image_processing.py
@@ -3907,6 +4050,10 @@ def merge_video_with_audio(video_path, audio_path):
         
         output_path = video_path.replace(".mp4", "_audio.mp4")
         final_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+
+        video_clip.close()
+        audio_clip.close()
+        final_clip.close()
         
         return output_path
     except Exception as e:

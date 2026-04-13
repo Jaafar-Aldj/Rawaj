@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadFile, File, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from app import oauth2
 from app.services.vision import analyze_image_content
 from app.services.image_processing import remove_background
@@ -67,7 +68,7 @@ def get_product(id: int, db: Session = Depends(get_db), current_user:schemas.Use
     return product
 
 @router.post('/', status_code=status.HTTP_201_CREATED, response_model=schemas.ProductResponse)
-def create_product(
+async def create_product(
         request: Request,
         new_product: schemas.ProductCreate, 
         db: Session = Depends(get_db), 
@@ -77,8 +78,8 @@ def create_product(
     ai_description = None
     processed_image_url = None
     if new_product.original_image_url:
-        ai_description = analyze_image_content(new_product.original_image_url)
-        processed_image_path = remove_background(new_product.original_image_url)
+        ai_description = await run_in_threadpool(analyze_image_content, new_product.original_image_url)
+        processed_image_path = await run_in_threadpool(remove_background, new_product.original_image_url)
         if processed_image_path:
             filename = os.path.basename(processed_image_path)
             processed_image_url = f"{request.base_url}assets/upload/{filename}"

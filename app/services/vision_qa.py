@@ -1,21 +1,37 @@
 import os
+import time
+import json
+import re
 import google.generativeai as genai
 import PIL.Image
-import time
 from ..config import settings
 
 # إعداد Gemini
 if settings.google_api_key:
     genai.configure(api_key=settings.google_api_key)
 
+def extract_json_from_text(text):
+    """دالة مساعدة لاستخراج JSON من رد المخرج الفني"""
+    try:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+    except Exception as e:
+        print(f"❌ Art Director JSON Parse Error: {e}")
+    return None
+
 def analyze_media(file_path, prompt, user_feedback=None, media_type="image"):
     """
-    وظيفة Art Director: يرى الصورة أو الفيديو، ويقيمها أو يستخرج تعليمات بناءً على ملاحظات المستخدم.
+    وظيفة Art Director المحدثة: 
+    يقيم الميديا ويرجع استجابة بصيغة JSON تحتوي على الحالة، السبب، والبرومبت المعدل (إذا لزم الأمر).
     """
     if not file_path or not os.path.exists(file_path):
-        return "ERROR: Media file not found."
+        return {"status": "ERROR", "feedback": "Media file not found.", "improved_prompt": prompt}
 
+    video_file = None # مرجع لملف الفيديو من أجل الحذف لاحقاً
+    
     try:
+        # استخدام موديل الفلاش لأنه سريع وممتاز للرؤية
         model = genai.GenerativeModel('gemini-2.5-flash')
         contents = []
 
@@ -23,70 +39,85 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image"):
         if media_type == "image":
             media = PIL.Image.open(file_path)
             contents.append(media)
+            
         elif media_type == "video":
-            # Gemini يدعم رفع الفيديو مباشرة (يجب رفعه أولاً عبر File API)
-            print(f"⏳ Uploading video to Gemini for analysis: {file_path}...")
+            print(f"⏳ Uploading video to Gemini for QA: {file_path}...")
             video_file = genai.upload_file(path=file_path)
+            
             print("⏳ Waiting for video processing on Google servers...")
             while video_file.state.name == "PROCESSING":
                 print(".", end="", flush=True)
                 time.sleep(3)
-                video_file = genai.get_file(video_file.name) # تحديث حالة الملف
-            print("\n✅ Video ready for analysis.")
-            
+                video_file = genai.get_file(video_file.name) 
+                
+            print("\n✅ Video ready for QA.")
             if video_file.state.name == "FAILED":
-                return "ERROR: Google failed to process the video."
+                return {"status": "ERROR", "feedback": "Google failed to process the video.", "improved_prompt": prompt}
+            
             contents.append(video_file)
 
-        # 2. تحديد المهمة (QA أو Feedback Analysis)
+        # 2. تحديد المهمة والتعليمات (Prompt Engineering)
+        system_instruction = f"""
+        You are the Chief Art Director at Rawaj Agency.
+        Review this generated {media_type}.
+        Original generation prompt was: '{prompt}'
+        """
+
         if user_feedback:
-            if media_type == "video":
-                system_instruction = f"You are the Chief Art Director. Look at this generated {media_type}.\n\nOriginal Storyboard used to generate it: '{prompt}'"
-            else:
-                system_instruction = f"You are the Chief Art Director. Look at this generated {media_type}.\n\nOriginal Image Prompt used to generate it: '{prompt}'"
-            # سيناريو التعديل (User Feedback Loop)
+            # --- سيناريو: تعديل بناءً على طلب المستخدم ---
             system_instruction += f"""
-            
-            User Complaint/Feedback: '{user_feedback}'
-            
-            TASK: The user is not happy. Based on what you see in the {media_type} and the user's feedback, write clear, actionable, technical instructions for the 'Prompt_Engineer' on how to rewrite the prompt to fix these issues. 
-            DO NOT generate the new prompt yourself, just write the instructions.
+            User Complaint: '{user_feedback}'
+            TASK: The user is unhappy. Analyze the {media_type} and the complaint. 
+            Provide actionable feedback and REWRITE the original prompt to fix the issue.
             """
-            
         else:
-            if media_type == "video":
-                system_instruction = f"You are the Chief Art Director. Quality check this generated {media_type} based on this storyboard: '{prompt}'."
-            else:
-                system_instruction = f"You are the Chief Art Director. Quality check this generated {media_type} based on this image prompt: '{prompt}'."
-            # سيناريو الجودة (Automated QA)
+            # --- سيناريو: فحص الجودة الآلي (QA) ---
             system_instruction += f"""
-            
-             BE LENIENT. Generative AI is not perfect. Ignore minor text misspellings, slight deviations in camera movement, or missing minor background details.
-
-            CRITICAL CHECKS (ONLY reject if one of these is true):
-            1. Severe Watermarks or giant, nonsensical floating text blocking the view.
-            2. Deformed humans, extra fingers, or distorted faces.
+            TASK: Quality check this {media_type}.
+            CRITICAL CHECKS (Reject ONLY if one of these is true):
+            1. Severe Watermarks, floating text, or gibberish letters.
+            2. Deformed humans, extra fingers, or highly distorted faces.
             3. Violates safety rules (Contains alcohol, nudity, etc.).
-            4. The core subject is COMPLETELY wrong (e.g., asked for a car, got a shoe).
+            4. Completely ignores the core subject.
             
-            If PERFECT: Output exactly: APPROVED
-            If FAILED: Output exactly: REJECTED | [Explain technically what went wrong so the Prompt_Engineer can fix it].
+            BE LENIENT. Generative AI is not perfect. Ignore minor background details.
+            If REJECTED, you MUST provide an 'improved_prompt' that tells the AI exactly how to avoid this error.
             """
 
+        # 3. إجبار الموديل على إخراج JSON صارم
+        system_instruction += """
+        OUTPUT FORMAT:
+        You MUST respond ONLY with a valid JSON object. No markdown, no conversational text.
+        {
+            "status": "APPROVED or REJECTED",
+            "feedback": "Explain why it is approved or what is wrong.",
+            "improved_prompt": "Provide a fixed version of the prompt if rejected or user asked for edits. If approved, return the original prompt."
+        }
+        """
         contents.append(system_instruction)
 
-        # 3. إرسال الطلب
+        # 4. إرسال الطلب لجوجل
         print(f"🕵️‍♂️ Art Director is analyzing the {media_type}...")
         response = model.generate_content(contents)
-        result_text = response.text.strip()
         
-        # تنظيف ملف الفيديو من سيرفرات جوجل (مهم جداً لعدم امتلاء المساحة)
-        if media_type == "video":
-            try: genai.delete_file(video_file.name)
-            except: pass
-
-        return result_text
+        # 5. استخراج الـ JSON
+        result_json = extract_json_from_text(response.text)
+        
+        if result_json and "status" in result_json:
+            return result_json
+        else:
+            # Fallback في حال فشل الذكاء الاصطناعي في إرجاع JSON
+            return {"status": "APPROVED", "feedback": "Auto-approved due to parsing error.", "improved_prompt": prompt}
 
     except Exception as e:
         print(f"⚠️ Art Director Vision Failed: {e}")
-        return "APPROVED" if not user_feedback else f"Apply user feedback: {user_feedback}"
+        return {"status": "APPROVED", "feedback": "Auto-approved due to API error.", "improved_prompt": prompt}
+        
+    finally:
+        # 🧹 تنظيف خوادم جوجل دائماً حتى لو حدث خطأ (مهم جداً!)
+        if media_type == "video" and video_file:
+            try:
+                genai.delete_file(video_file.name)
+                print(f"🧹 Cleaned up video from Google servers.")
+            except Exception as e:
+                print(f"⚠️ Failed to delete video from Google servers: {e}")
