@@ -30,11 +30,11 @@ def create_rag_proxy(name: str, folder: str, collection: str, llm_model: str, ov
     docs_path = os.path.join(os.getcwd(), "knowledge", folder)
     os.makedirs(docs_path, exist_ok=True)
     
-    rag_proxy = RetrieveUserProxyAgent(
+    return RetrieveUserProxyAgent(
         name=name,
         human_input_mode="NEVER",
         code_execution_config=False,
-        max_consecutive_auto_reply=1,
+        max_consecutive_auto_reply=1, 
         retrieve_config={
             "task": "qa",
             "docs_path": [docs_path],
@@ -45,27 +45,8 @@ def create_rag_proxy(name: str, folder: str, collection: str, llm_model: str, ov
             "overwrite": overwrite,
             "custom_text_types": ["md", "txt", "pdf"],
             "embedding_model": "models/text-embedding-004", 
-            "customized_prompt": "{content}", 
-            "customized_answer_prefix": "",
         },
     )
-    
-    rag_proxy._is_termination_msg = lambda x: False
-    
-    def custom_message_generator(sender, recipient, context):
-        try:
-            msg = rag_proxy._generate_message(sender, recipient, context)
-            if not msg or msg.strip() == "TERMINATE":
-                print("⚠️ RAG generated TERMINATE, overriding with fallback prompt...")
-                return context.get("problem", "Please process this request.")
-            return msg
-        except Exception as e:
-            print(f"⚠️ RAG Generator Exception: {e}")
-            return context.get("problem", "Please process this request.")
-
-    rag_proxy.message_generator = custom_message_generator
-    
-    return rag_proxy
 
 def get_local_media_path(file_path: str):
     """دالة مساعدة لاستخراج المسار المحلي من الرابط أو المسار المطلق"""
@@ -155,7 +136,7 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
         last_generated_image = image_path
         # استدعاء المخرج الفني لتقييم الصورة
         if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الصورة...")
-        review_data = analyze_media(image_path, current_prompt, media_type="image")
+        review_data = analyze_media(image_path, current_prompt, media_type="image", reference_image_path=reference_image_path)
 
         if review_data["status"] == "APPROVED":
             print("✅ Art Director APPROVED the image!")
@@ -200,7 +181,7 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
         last_generated_video = video_path
 
         if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الفيديو...")
-        review_data = analyze_media(video_path, current_prompt, media_type="video")
+        review_data = analyze_media(video_path, current_prompt, media_type="video", reference_image_path=base_image_path)
     
         if review_data["status"] == "APPROVED":
             print("✅ Art Director APPROVED the video!")
@@ -261,7 +242,8 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         strategist, 
         message=strategy_rag.message_generator,
         problem = full_prompt, 
-        n_results=2
+        n_results=2,
+        max_turns=1,  # نريد رد واحد فقط من المدير في هذه المرحلة
     )
 
     valid_replies = [msg['content'] for msg in chat_result.chat_history if msg.get('content') and msg.get('content').strip() != "" and msg.get('name') == 'Marketing_Strategist']
@@ -299,7 +281,7 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
     director = get_director()
     copywriter = get_copywriter()
     model_name = copywriter.llm_config['config_list'][0]['model']
-    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
+    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name, overwrite=True)
 
     groupchat = autogen.GroupChat(agents=[copy_rag, director, copywriter], messages=[], max_round=4, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
@@ -323,7 +305,7 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
 def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True)
     
     message = prompt_templates.get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio)
 
@@ -356,7 +338,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
     prompter.update_system_message(get_prompter_updated_message(aspect_ratio))
 
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True)
     
     
     groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
@@ -398,7 +380,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 def refine_text(current_copy, feedback):
     copywriter = get_copywriter()
     model_name = copywriter.llm_config['config_list'][0]['model']
-    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
+    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name, overwrite=True)
     
     msg = prompt_templates.get_refine_text_prompt(feedback, current_copy)
     chat_result = copy_rag.initiate_chat(
@@ -456,7 +438,7 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
     prompter = get_prompter()
     
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True)
     
 
     groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")

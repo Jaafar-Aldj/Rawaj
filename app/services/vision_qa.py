@@ -20,7 +20,7 @@ def extract_json_from_text(text):
         print(f"❌ Art Director JSON Parse Error: {e}")
     return None
 
-def analyze_media(file_path, prompt, user_feedback=None, media_type="image"):
+def analyze_media(file_path, prompt, user_feedback=None, media_type="image", reference_image_path=None):
     """
     وظيفة Art Director المحدثة: 
     يقيم الميديا ويرجع استجابة بصيغة JSON تحتوي على الحالة، السبب، والبرومبت المعدل (إذا لزم الأمر).
@@ -30,10 +30,19 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image"):
 
     video_file = None # مرجع لملف الفيديو من أجل الحذف لاحقاً
     
+    
     try:
         # استخدام موديل الفلاش لأنه سريع وممتاز للرؤية
         model = genai.GenerativeModel('gemini-2.5-flash')
         contents = []
+
+        if reference_image_path and os.path.exists(reference_image_path):
+            print(f"📌 Using reference image for comparison: {reference_image_path}")
+            ref_media = PIL.Image.open(reference_image_path)
+            contents.append("This is the ORIGINAL product image (The Ground Truth). The product in the generated media MUST look exactly like this in shape, color, and branding:")
+            contents.append(ref_media)  
+
+        contents.append(f"\nThis is the GENERATED {media_type} to be reviewed based on the prompt: '{prompt}'")
 
         # 1. تجهيز الميديا (صورة أو فيديو)
         if media_type == "image":
