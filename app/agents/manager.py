@@ -302,12 +302,12 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
 # ==============================================================================
 # المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
 # ==============================================================================
-def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None):
+def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True)
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
     
-    message = prompt_templates.get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio)
+    message = prompt_templates.get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio, event_name=event_name)
 
     chat_result = prompts_rag.initiate_chat(
         prompter, 
@@ -331,14 +331,14 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
-def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None):
+def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None):
     video_director = get_video_director()
     prompter = get_prompter()
 
     prompter.update_system_message(get_prompter_updated_message(aspect_ratio))
 
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True)
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
     
     
     groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
@@ -346,7 +346,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     num_scenes = max(1, duration // 8)
 
-    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio)
+    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=event_name)
 
     chat_result = prompts_rag.initiate_chat(
         manager, 
@@ -380,7 +380,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 def refine_text(current_copy, feedback):
     copywriter = get_copywriter()
     model_name = copywriter.llm_config['config_list'][0]['model']
-    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name, overwrite=True)
+    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
     
     msg = prompt_templates.get_refine_text_prompt(feedback, current_copy)
     chat_result = copy_rag.initiate_chat(
@@ -394,21 +394,21 @@ def refine_text(current_copy, feedback):
     return extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
 
 
-def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, notify_callback=None):
+def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompt_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True) 
+    prompt_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name) 
     
-
+    local_current_image_path = get_local_media_path(current_image_path)
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
     review_data = analyze_media(
-        file_path=original_image_path,
+        file_path=local_current_image_path,
         prompt=current_prompt,
         user_feedback=feedback,
         media_type="image"
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")    
-    msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, review_data.get("feedback", ""))
+    msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, review_data.get("feedback", ""), event_name=event_name)
     chat_result = prompt_rag.initiate_chat(
         prompter, 
         message=prompt_rag.message_generator, 
@@ -433,27 +433,28 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         
     return {"image_prompt": new_prompt, "image_url": image_url}
 
-def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None):
+def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None, event_name=None):
     video_director = get_video_director()
     prompter = get_prompter()
     
     model_name = prompter.llm_config['config_list'][0]['model']
-    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name, overwrite=True)
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
     
 
     groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
 
+    local_video_path = get_local_media_path(current_video_path)
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
     review_data = analyze_media(
-        file_path=current_video_path,
+        file_path=local_video_path,
         prompt=current_storyboard,
         user_feedback=feedback,
         media_type="video",
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
 
-    msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, review_data.get("feedback", ""))
+    msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, review_data.get("feedback", ""), event_name=event_name)
     chat_result = prompts_rag.initiate_chat(
         manager, 
         message=prompts_rag.message_generator,

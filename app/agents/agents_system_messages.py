@@ -84,13 +84,14 @@ video_director = """
         
         CRITICAL INSTRUCTIONS:
         - Divide the commercial into logical scenes (8 seconds per scene).
-        - Assign Arabic 'voiceover' ONLY if necessary, and ensure that words will fit within the time constraint (7 seconds). If a scene should just have music/action, set voiceover to "None".
+        - Assign Arabic 'voiceover' ONLY if necessary. 
+        - 🛑 CRITICAL RULE FOR VOICEOVER: Since each scene is only 8 seconds long, the voiceover text MUST BE EXTREMELY SHORT (Maximum 10-12 words per scene). If a scene should just have music/action, set voiceover to "None". Do not cram too much text into one scene.
         - Ask the 'Prompt_Engineer' to translate your vision into technical prompts.
         
         OUTPUT FORMAT (Strict JSON):
         {{
             "scenes": [
-                {{ "scene_number": 1, "action_description": "General description of what happens", "voiceover": "Arabic text" }},
+                {{ "scene_number": 1, "action_description": "General description of what happens", "voiceover": "Very short Arabic text (max 10 words)" }},
                 {{ "scene_number": 2, "action_description": "...", "voiceover": "..." }}
             ]
         }}
@@ -181,6 +182,7 @@ def get_prompter_updated_message(aspect_ratio: str) -> str:
         2. Create a `video_storyboard` array.
         3. DO NOT output a `main_image_prompt`.
         4. **CRITICAL:** The video aspect ratio is '{aspect_ratio}'. Ensure the visual descriptions (`image_prompt`) describe a composition suitable for this ratio (e.g., vertical for 9:16, horizontal for 16:9).
+        5. 🛑 CRITICAL RULE FOR VOICEOVER: The `voiceover_text` MUST exactly match the Video Director's short text. Do NOT expand it. It MUST be short enough to be spoken comfortably in under 8 seconds (Absolute maximum 12 Arabic words).
         
         ⛔ NEGATIVE CONSTRAINTS:
         - NO Text, Typography, Labels on screen.

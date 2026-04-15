@@ -46,12 +46,13 @@ def get_copy_generation_prompt(product_name, product_desc, audience, platforms_s
 # ==============================================================================
 # 3. Media Generation Prompts (مرحلة الوسائط)
 # ==============================================================================
-def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio):
+def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio, event_name=None):
+    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this image to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
     return f"""
     We need ONE image prompt for a product ad.
     Product: {product_name}
     Audience: {audience}
-    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}{event_context}
     Aspect Ratio: {aspect_ratio}
     
     CRITICAL RULE:
@@ -62,17 +63,18 @@ def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_rat
     Output ONLY JSON: {{ "main_image_prompt": "..." }}
     """
 
-def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio):
+def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=None):
+    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
     return f"""
     Product: {product_name}
     Audience: {audience}
-    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}{event_context}
     Requested Total Video Duration: {duration} seconds.
     Target Aspect Ratio: {aspect_ratio}
     
     TASK:
-    1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots.
-    2. Prompt_Engineer: Output the JSON `video_storyboard`.
+    1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots. REMEMBER: Keep the voiceover EXTREMELY short (max 10-12 words per scene) so it fits the 8-second timeframe.
+    2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
     """
 
 # ==============================================================================
@@ -86,20 +88,22 @@ def get_refine_text_prompt(feedback, current_copy):
     TASK: Rewrite the ad copy based on feedback. Output strict JSON.
     """
 
-def get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director_advice):
+def get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director_advice, event_name=None):
+    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this image to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
     return f"""
     User Feedback: {feedback}
     Current Prompt: {current_prompt}
-    Aspect Ratio: {aspect_ratio}
+    Aspect Ratio: {aspect_ratio}{event_context}
     ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER: {art_director_advice}
     
     TASK: Update the image prompt. Output JSON: {{ "main_image_prompt": "..." }}
     """
 
-def get_refine_video_prompt(feedback, current_storyboard, art_director_advice):
+def get_refine_video_prompt(feedback, current_storyboard, art_director_advice, event_name=None):
+    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
     return f"""
     User Feedback: {feedback}
-    Current Storyboard: {json.dumps(current_storyboard, ensure_ascii=False)}
+    Current Storyboard: {json.dumps(current_storyboard, ensure_ascii=False)}{event_context}
     ART DIRECTOR INSTRUCTIONS FOR PROMPT_ENGINEER:\n{art_director_advice}\n
     
     TASK: Update the scenes based on feedback. DO NOT change image_prompts. Output JSON `video_storyboard`.

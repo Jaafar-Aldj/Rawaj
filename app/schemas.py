@@ -71,6 +71,7 @@ class ImageAssetResponse(BaseModel):
     prompt: Optional[str] = None
     aspect_ratio: str
     platform: Optional[str] = None
+    event_name: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -83,6 +84,7 @@ class VideoAssetResponse(BaseModel):
     video_storyboard: Optional[List[Dict[str, Any]]] = None
     duration_seconds: int
     aspect_ratio: str
+    event_name: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -157,6 +159,7 @@ class GenerateImageRequest(BaseModel):
     asset_id: int
     aspect_ratio: str = "1:1"
     platform: Optional[str] = "Instagram"
+    event_name: Optional[str] = None 
 
 class EditImageRequest(BaseModel):
     image_id: int 
@@ -166,6 +169,7 @@ class GenerateVideoRequest(BaseModel):
     asset_id: int
     video_duration: int = 8
     aspect_ratio: str = "16:9"
+    event_name: Optional[str] = None
 
 class EditVideoRequest(BaseModel):
     video_id: int 

@@ -241,7 +241,8 @@ async def generate_image_asset(
             ad_copy_json=asset.ad_copy,
             aspect_ratio=request.aspect_ratio,
             original_image_path=asset.campaign.product.processed_image_url,
-            notify_callback = sync_notify
+            notify_callback = sync_notify,
+            event_name = request.event_name
         )
         
         image_path = ai_result.get("image_url")
@@ -257,7 +258,8 @@ async def generate_image_asset(
             image_url=public_image_url,
             prompt=ai_result.get("image_prompt"),
             aspect_ratio=request.aspect_ratio,
-            platform=request.platform
+            platform=request.platform,
+            event_name=request.event_name
         )
         db.add(new_image)
         db.commit()
@@ -312,7 +314,8 @@ async def generate_video_asset(
             duration=request.video_duration,
             aspect_ratio=request.aspect_ratio,
             base_image_path=asset.campaign.product.processed_image_url,
-            notify_callback=sync_notify
+            notify_callback=sync_notify,
+            event_name= request.event_name
         )
         
         video_path = ai_result.get("video_url")
@@ -328,7 +331,8 @@ async def generate_video_asset(
             video_url=public_video_url,
             video_storyboard=ai_result.get("video_storyboard"),
             duration_seconds=request.video_duration,
-            aspect_ratio=request.aspect_ratio
+            aspect_ratio=request.aspect_ratio,
+            event_name=request.event_name
         )
         db.add(new_video)
         db.commit()
@@ -429,7 +433,9 @@ async def edit_image_asset(
             feedback=request.feedback,
             aspect_ratio=old_image.aspect_ratio,
             original_image_path=old_image.asset.campaign.product.processed_image_url,
-            notify_callback=sync_notify
+            current_image_path=old_image.image_url,
+            notify_callback=sync_notify,
+            event_name=old_image.event_name
         )
         
         image_path = ai_result.get("image_url")
@@ -447,7 +453,8 @@ async def edit_image_asset(
             image_url=public_image_url,
             prompt=ai_result.get("image_prompt"),
             aspect_ratio=old_image.aspect_ratio,
-            platform=old_image.platform
+            platform=old_image.platform,
+            event_name=old_image.event_name
         )
         db.add(new_image)
         db.commit()
@@ -501,7 +508,9 @@ async def edit_video_asset(
             feedback=request.feedback,
             base_image_path=old_video.asset.campaign.product.processed_image_url,
             aspect_ratio=old_video.aspect_ratio,
-            notify_callback=sync_notify
+            current_video_path=old_video.video_url,
+            notify_callback=sync_notify,
+            event_name=old_video.event_name
         )
         
         video_path = ai_result.get("video_url")
@@ -517,7 +526,8 @@ async def edit_video_asset(
             video_url=public_video_url,
             video_storyboard=ai_result.get("video_storyboard"),
             duration_seconds=old_video.duration_seconds,
-            aspect_ratio=old_video.aspect_ratio
+            aspect_ratio=old_video.aspect_ratio,
+            event_name=old_video.event_name
         )
         db.add(new_video)
         db.commit()
