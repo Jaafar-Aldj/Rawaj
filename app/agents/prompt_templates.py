@@ -3,13 +3,14 @@ import json
 # ==============================================================================
 # 1. Strategy Prompts (مرحلة الاستراتيجية)
 # ==============================================================================
-def get_strategy_chat_context(product_name, product_desc, product_analysis, current_date, user_message, history_text=""):
+def get_strategy_chat_context(product_name, product_desc, product_analysis, current_date, user_message, real_events, history_text=""):
     context = f"""
     [SYSTEM CONTEXT - DO NOT SHOW TO USER]
     Product: {product_name}
     Description: {product_desc}
     Visual Analysis: {product_analysis}
     Today is {current_date}. Target Region: MENA.
+    {real_events}
     [END OF SYSTEM CONTEXT]
     """
     
@@ -46,8 +47,11 @@ def get_copy_generation_prompt(product_name, product_desc, audience, platforms_s
 # ==============================================================================
 # 3. Media Generation Prompts (مرحلة الوسائط)
 # ==============================================================================
-def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio, event_name=None):
-    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this image to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
+def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio, event_name=None, event_angle=None):
+    event_context = ""
+    if event_name:
+        angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
+        event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this image to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
     return f"""
     We need ONE image prompt for a product ad.
     Product: {product_name}
@@ -63,8 +67,11 @@ def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_rat
     Output ONLY JSON: {{ "main_image_prompt": "..." }}
     """
 
-def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=None):
-    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
+def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=None, event_angle=None):
+    event_context = ""
+    if event_name:
+        angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
+        event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
     return f"""
     Product: {product_name}
     Audience: {audience}
@@ -88,8 +95,11 @@ def get_refine_text_prompt(feedback, current_copy):
     TASK: Rewrite the ad copy based on feedback. Output strict JSON.
     """
 
-def get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director_advice, event_name=None):
-    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this image to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
+def get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director_advice, event_name=None, event_angle=None):
+    event_context = ""
+    if event_name:
+        angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
+        event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this image to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
     return f"""
     User Feedback: {feedback}
     Current Prompt: {current_prompt}
@@ -99,8 +109,11 @@ def get_refine_image_prompt(feedback, current_prompt, aspect_ratio, art_director
     TASK: Update the image prompt. Output JSON: {{ "main_image_prompt": "..." }}
     """
 
-def get_refine_video_prompt(feedback, current_storyboard, art_director_advice, event_name=None):
-    event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event: '{event_name}'. Add subtle visual elements related to this event." if event_name else ""
+def get_refine_video_prompt(feedback, current_storyboard, art_director_advice, event_name=None, event_angle=None):
+    event_context = ""
+    if event_name:
+        angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
+        event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
     return f"""
     User Feedback: {feedback}
     Current Storyboard: {json.dumps(current_storyboard, ensure_ascii=False)}{event_context}

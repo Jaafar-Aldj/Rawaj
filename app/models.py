@@ -74,6 +74,7 @@ class ImageAssets(Base):
     aspect_ratio = Column(String, default="1:1") # "1:1", "9:16", "16:9"
     platform = Column(String, nullable=True) # "instagram", "tiktok"
     event_name = Column(String, nullable=True)
+    event_angle = Column(String, nullable=True)
     
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     
@@ -93,6 +94,7 @@ class VideoAssets(Base):
     duration_seconds = Column(Integer, default=8)
     aspect_ratio = Column(String, default="16:9")
     event_name = Column(String, nullable=True)
+    event_angle = Column(String, nullable=True)
     
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     

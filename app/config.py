@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     location: str
     model_id: str
 
+    calendarific_api_key: str
+
     class Config:
         env_file = ".env"
 

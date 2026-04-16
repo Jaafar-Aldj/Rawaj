@@ -259,7 +259,8 @@ async def generate_image_asset(
             prompt=ai_result.get("image_prompt"),
             aspect_ratio=request.aspect_ratio,
             platform=request.platform,
-            event_name=request.event_name
+            event_name=request.event_name,
+            event_angle=request.event_angle
         )
         db.add(new_image)
         db.commit()
@@ -315,7 +316,8 @@ async def generate_video_asset(
             aspect_ratio=request.aspect_ratio,
             base_image_path=asset.campaign.product.processed_image_url,
             notify_callback=sync_notify,
-            event_name= request.event_name
+            event_name= request.event_name,
+            event_angle= request.event_angle
         )
         
         video_path = ai_result.get("video_url")
@@ -332,7 +334,8 @@ async def generate_video_asset(
             video_storyboard=ai_result.get("video_storyboard"),
             duration_seconds=request.video_duration,
             aspect_ratio=request.aspect_ratio,
-            event_name=request.event_name
+            event_name=request.event_name,
+            event_angle=request.event_angle
         )
         db.add(new_video)
         db.commit()
@@ -435,7 +438,8 @@ async def edit_image_asset(
             original_image_path=old_image.asset.campaign.product.processed_image_url,
             current_image_path=old_image.image_url,
             notify_callback=sync_notify,
-            event_name=old_image.event_name
+            event_name=old_image.event_name,
+            event_angle=old_image.event_angle
         )
         
         image_path = ai_result.get("image_url")
@@ -454,7 +458,8 @@ async def edit_image_asset(
             prompt=ai_result.get("image_prompt"),
             aspect_ratio=old_image.aspect_ratio,
             platform=old_image.platform,
-            event_name=old_image.event_name
+            event_name=old_image.event_name,
+            event_angle=old_image.event_angle
         )
         db.add(new_image)
         db.commit()
@@ -510,7 +515,8 @@ async def edit_video_asset(
             aspect_ratio=old_video.aspect_ratio,
             current_video_path=old_video.video_url,
             notify_callback=sync_notify,
-            event_name=old_video.event_name
+            event_name=old_video.event_name,
+            event_angle=old_video.event_angle
         )
         
         video_path = ai_result.get("video_url")
@@ -527,7 +533,8 @@ async def edit_video_asset(
             video_storyboard=ai_result.get("video_storyboard"),
             duration_seconds=old_video.duration_seconds,
             aspect_ratio=old_video.aspect_ratio,
-            event_name=old_video.event_name
+            event_name=old_video.event_name,
+            event_angle=old_video.event_angle
         )
         db.add(new_video)
         db.commit()

@@ -16,6 +16,7 @@ from app.services.video_gen import  generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
 from app.agents import prompt_templates
+from app.services.events import get_upcoming_events
 from app.agents.config import api_key
 
 
@@ -237,6 +238,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     model_name = strategist.llm_config['config_list'][0]['model']
     strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
 
+    real_events_context = get_upcoming_events(country="SA")
     current_date = datetime.now().strftime("%Y-%m-%d")
 
     history_text = ""
@@ -251,6 +253,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         product_analysis, 
         current_date, 
         user_message, 
+        real_events_context,
         history_text
     )
 
@@ -320,12 +323,12 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
 # ==============================================================================
 # المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
 # ==============================================================================
-def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None):
+def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None, event_angle=None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
     prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
     
-    message = prompt_templates.get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio, event_name=event_name)
+    message = prompt_templates.get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_ratio, event_name=event_name, event_angle=event_angle)
 
     chat_result = prompts_rag.initiate_chat(
         prompter, 
@@ -349,7 +352,7 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
-def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None):
+def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None):
     video_director = get_video_director()
     prompter = get_prompter()
 
@@ -364,7 +367,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     num_scenes = max(1, duration // 8)
 
-    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=event_name)
+    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=event_name, event_angle=event_angle)
 
     chat_result = prompts_rag.initiate_chat(
         manager, 
@@ -412,7 +415,7 @@ def refine_text(current_copy, feedback):
     return extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
 
 
-def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None):
+def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None, event_angle=None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
     prompt_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name) 
@@ -426,7 +429,7 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         media_type="image"
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")    
-    msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, review_data.get("feedback", ""), event_name=event_name)
+    msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, review_data.get("feedback", ""), event_name=event_name, event_angle=event_angle)
     chat_result = prompt_rag.initiate_chat(
         prompter, 
         message=prompt_rag.message_generator, 
@@ -451,7 +454,7 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         
     return {"image_prompt": new_prompt, "image_url": image_url}
 
-def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None, event_name=None):
+def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None, event_name=None, event_angle=None):
     video_director = get_video_director()
     prompter = get_prompter()
     
@@ -472,7 +475,7 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
 
-    msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, review_data.get("feedback", ""), event_name=event_name)
+    msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, review_data.get("feedback", ""), event_name=event_name, event_angle=event_angle)
     chat_result = prompts_rag.initiate_chat(
         manager, 
         message=prompts_rag.message_generator,

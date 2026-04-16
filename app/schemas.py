@@ -72,6 +72,7 @@ class ImageAssetResponse(BaseModel):
     aspect_ratio: str
     platform: Optional[str] = None
     event_name: Optional[str] = None
+    event_angle: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -85,6 +86,7 @@ class VideoAssetResponse(BaseModel):
     duration_seconds: int
     aspect_ratio: str
     event_name: Optional[str] = None
+    event_angle: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -160,6 +162,7 @@ class GenerateImageRequest(BaseModel):
     aspect_ratio: str = "1:1"
     platform: Optional[str] = "Instagram"
     event_name: Optional[str] = None 
+    event_angle: Optional[str] = None
 
 class EditImageRequest(BaseModel):
     image_id: int 
@@ -170,6 +173,7 @@ class GenerateVideoRequest(BaseModel):
     video_duration: int = 8
     aspect_ratio: str = "16:9"
     event_name: Optional[str] = None
+    event_angle: Optional[str] = None
 
 class EditVideoRequest(BaseModel):
     video_id: int 
