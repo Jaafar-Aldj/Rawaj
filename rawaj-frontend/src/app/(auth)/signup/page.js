@@ -3,13 +3,16 @@
 import AuthLayout from "@/components/AuthLayout";
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UserIcon, EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(''); // State لإظهار رسالة النجاح
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const baseUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -17,19 +20,24 @@ export default function SignupPage() {
   const handleSignup = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('كلمة المرور غير متطابقة');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const userData = {
-        name: name,
-        email: email,
-        password: password,
-      };
-
       const response = await fetch(`${baseUrl}/users/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
+        body: JSON.stringify({ name, email, password }),
       });
 
       if (!response.ok) {
@@ -38,12 +46,7 @@ export default function SignupPage() {
       }
 
       const createdUser = await response.json();
-      console.log('Signup successful, user ID:', createdUser.id);
-      
-      // ===== التعديل المهم هنا =====
-      // نقل المستخدم إلى صفحة التفعيل وتمرير ID المستخدم الجديد
       router.push(`/verify?user_id=${createdUser.id}`);
-
     } catch (err) {
       console.error(err);
       setError(err.message);
@@ -60,58 +63,89 @@ export default function SignupPage() {
       switchLink="/login"
       switchLinkText="تسجيل الدخول"
     >
-      <form onSubmit={handleSignup} className="space-y-4 text-right">
-        {/* إظهار رسائل الخطأ أو النجاح */}
+      <form onSubmit={handleSignup} className="space-y-5">
         {error && (
-          <div className="bg-red-500/20 border border-red-500 text-red-300 p-3 rounded-lg text-center">
+          <div className="bg-red-500/20 border border-red-500 text-red-300 p-3 rounded-xl text-center text-sm">
             {error}
           </div>
         )}
-        {success && (
-          <div className="bg-green-500/20 border border-green-500 text-green-300 p-3 rounded-lg text-center">
-            {success}
-          </div>
-        )}
-        
-        <div>
-          <label className="block mb-2 text-sm font-medium text-gray-300">الاسم الكامل</label>
+
+        <div className="relative group">
+          <UserIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-400 transition" />
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="اسمك الكامل"
+            placeholder="الاسم الكامل"
             required
-            className="w-full bg-[#020617] border border-gray-600/50 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+            className="w-full bg-white/5 border border-gray-700 rounded-xl pr-10 pl-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
         </div>
-        <div>
-          <label className="block mb-2 text-sm font-medium text-gray-300">البريد الإلكتروني</label>
+
+        <div className="relative group">
+          <EnvelopeIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-400 transition" />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="example@email.com"
+            placeholder="البريد الإلكتروني"
             required
-            className="w-full bg-[#020617] border border-gray-600/50 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+            className="w-full bg-white/5 border border-gray-700 rounded-xl pr-10 pl-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
         </div>
-        <div>
-          <label className="block mb-2 text-sm font-medium text-gray-300">كلمة المرور</label>
+
+        <div className="relative group">
+          <LockClosedIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-400 transition" />
           <input
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="كلمة المرور"
             required
-            className="w-full bg-[#020617] border border-gray-600/50 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+            className="w-full bg-white/5 border border-gray-700 rounded-xl pr-10 pl-10 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
           />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+          >
+            {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+          </button>
         </div>
+
+        <div className="relative group">
+          <LockClosedIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-400 transition" />
+          <input
+            type={showConfirmPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="تأكيد كلمة المرور"
+            required
+            className="w-full bg-white/5 border border-gray-700 rounded-xl pr-10 pl-10 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition"
+          >
+            {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+          </button>
+        </div>
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold py-3 px-8 rounded-full shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform mt-4 disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-600/30 transition-all transform hover:scale-[1.02] active:scale-95 disabled:opacity-70"
         >
-          {loading ? 'جاري الإنشاء...' : 'إنشاء حساب'}
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              جاري الإنشاء...
+            </span>
+          ) : 'إنشاء حساب'}
         </button>
       </form>
     </AuthLayout>

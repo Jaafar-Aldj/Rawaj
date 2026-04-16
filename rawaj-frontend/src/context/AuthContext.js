@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('authToken', newToken);
     // بعد تسجيل الدخول، قم بجلب بيانات المستخدم مباشرة
     fetchUser().then(() => {
-        router.push('/dashboard');
+        router.push('/upload-image');
     });
   };
 

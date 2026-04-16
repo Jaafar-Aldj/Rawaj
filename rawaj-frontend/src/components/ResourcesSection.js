@@ -1,63 +1,71 @@
 // src/components/ResourcesSection.js
-
-// سنحتاج إلى مكون Image من Next.js لعرض الصور بشكل محسن
 import Image from 'next/image';
 
-const ResourceCard = ({ imgSrc, title, description }) => {
+const ResourceCard = ({ imgSrc, title, description, step }) => {
   return (
-    // 'group' تسمح لنا بتغيير شكل عناصر داخلية عند عمل hover على العنصر الأب
     <div className="group bg-[#0f172a] rounded-2xl overflow-hidden border border-blue-500/20 shadow-lg hover:border-blue-500 hover:-translate-y-2 transition-all duration-300">
-      <div className="relative h-56 w-full">
+      <div className="relative h-40 w-full">   {/* تم التخفيض من h-56 إلى h-40 */}
         <Image
           src={imgSrc}
           alt={title}
           layout="fill"
           objectFit="cover"
-          className="transition-transform duration-500 group-hover:scale-110" // تأثير تكبير الصورة عند الـ hover
+          className="transition-transform duration-500 group-hover:scale-110"
         />
-        {/* يمكنك إضافة overlay هنا إذا أردت */}
         <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-all duration-300"></div>
+        {/* رقم الخطوة - تم تصغيره */}
+        <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-md shadow-lg">
+          {step}
+        </div>
       </div>
-      <div className="p-6">
-        <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-        <p className="text-gray-400">{description}</p>
+      <div className="p-4">   {/* تم التخفيض من p-6 إلى p-4 */}
+        <h3 className="text-lg font-bold text-white mb-1">{title}</h3>   {/* من text-xl إلى text-lg */}
+        <p className="text-gray-400 text-sm">{description}</p>   {/* إضافة text-sm */}
       </div>
     </div>
   );
 };
 
-
 const ResourcesSection = () => {
   return (
-    <section id="resources" className="py-20 lg:py-32">
-      <div className="container mx-auto px-4">
+    <section id="how-it-works" className="py-20 lg:py-32 bg-[#0b1120] border-y border-gray-800">
+      <div className="container mx-auto px-4" dir="rtl">
 
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl lg:text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
-            استراتيجيات تسويقية مدعومة بالذكاء الاصطناعي
+        <div className="text-center max-w-3xl mx-auto mb-12">  
+          <h2  className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
+            كيف يعمل فريق الوكلاء المتعددين؟
           </h2>
-          <p className="text-lg text-gray-400">
-            حلول مبتكرة لتحقيق أهدافك التسويقية
+          <p className="text-2xl text-gray-400">  
+            أربع خطوات ذكية لتحويل منتجك إلى حملة تسويقية متكاملة
           </p>
         </div>
 
-        {/* Resources Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Cards Grid - نفس الشبكة لكن البطاقات أصبحت أصغر */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">   
           <ResourceCard
-            imgSrc="/strategy-1.jpg" // سنضع هذه الصور في مجلد public
-            title="إدارة المحتوى الذكية"
-            description="جدولة وتوليد محتوى يومي مخصص تلقائياً"
+            step="1"
+            imgSrc="/step-chat.svg"
+            title="محادثة استراتيجية"
+            description="تحدث مع المدير الإبداعي الآلي لتحليل منتجك وبناء الخطة التسويقية"
           />
           <ResourceCard
-            imgSrc="/strategy-2.jpg"
-            title="هوية بصرية متسقة"
-            description="ضمان اتساق المنتج عبر جميع الحملات"
+            step="2"
+            imgSrc="/step-copy.svg"
+            title="نصوص إعلانية ذكية"
+            description="كاتب المحتوى ينتج نصوصاً مخصصة لكل منصة (فيسبوك، إنستغرام، تيك توك)"
           />
           <ResourceCard
-            imgSrc="/strategy-3.jpg"
-            title="تعاون مع المؤثرين"
-            description="اقتراح مؤثرين مناسبين بناءً على تحليل البيانات"
+            step="3"
+            imgSrc="/step-storyboard.svg"
+            title="لوحة قصة سينمائية"
+            description="المخرج الفني يحول النص إلى مشاهد متسلسلة مع تعليمات بصرية دقيقة"
+          />
+          <ResourceCard
+            step="4"
+            imgSrc="/step-video.svg"
+            title="فيديو جاهز للنشر"
+            description="محرك Google Veo يولد فيديو عالي الدقة"
           />
         </div>
 

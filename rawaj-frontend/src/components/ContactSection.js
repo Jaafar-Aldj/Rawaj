@@ -13,10 +13,10 @@ const ContactSection = () => {
     <section id="contact" className="py-20 lg:py-32">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl lg:text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
+          <h2 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
             تواصل معنا
           </h2>
-          <p className="text-lg text-gray-400">
+          <p className="text-2xl text-gray-400">
             هل تريد تجربة المنصة أو لديك استفسار؟ نحن هنا لمساعدتك.
           </p>
         </div>
@@ -68,9 +68,9 @@ const ContactSection = () => {
             <div className="bg-[#0f172a] p-8 rounded-2xl border border-blue-500/20 w-full">
               <h3 className="text-2xl font-bold text-white mb-6">معلومات التواصل</h3>
               <div className="space-y-4 text-lg">
-                <p className="flex items-center gap-4"><strong className="text-blue-400">البريد:</strong> support@marketing-ai.sa</p>
-                <p className="flex items-center gap-4"><strong className="text-blue-400">الهاتف:</strong> +966 55 123 4567</p>
-                <p className="flex items-center gap-4"><strong className="text-blue-400">الموقع:</strong> الرياض، المملكة العربية السعودية</p>
+                <p className="flex items-center gap-4"><strong className="text-blue-400">البريد:</strong> support@marketing-ai.sy</p>
+                <p className="flex items-center gap-4"><strong className="text-blue-400">الهاتف:</strong>  904 257 940 963+</p>
+                <p className="flex items-center gap-4"><strong className="text-blue-400">الموقع:</strong> سوريا - القلمون</p>
               </div>
             </div>
           </div>

@@ -3,7 +3,6 @@ import HeroSection from '@/components/HeroSection';
 import ServicesSection from '@/components/ServicesSection';
 import AnalyticsSection from '@/components/AnalyticsSection';
 import ResourcesSection from '@/components/ResourcesSection';
-import AboutSection from '@/components/LoadingSpinner';
 import ContactSection from '@/components/ContactSection';
 
 export default function HomePage() {
@@ -13,7 +12,6 @@ export default function HomePage() {
       <ServicesSection />
       <AnalyticsSection />
       <ResourcesSection />
-      <AboutSection />
       <ContactSection />
     </>
   );

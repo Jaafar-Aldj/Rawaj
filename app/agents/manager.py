@@ -51,12 +51,30 @@ def create_rag_proxy(name: str, folder: str, collection: str, llm_model: str, ov
 def get_local_media_path(file_path: str):
     """دالة مساعدة لاستخراج المسار المحلي من الرابط أو المسار المطلق"""
     if not file_path: return None
-    if "http" in file_path and "upload" in file_path:
-        filename = file_path.split("upload/")[-1]
-        path = os.path.join("rawaj-frontend", "assets", "upload", filename) 
-        if os.path.exists(path): return path
+    # if "http" in file_path and "upload" in file_path:
+    #     filename = file_path.split("upload/")[-1]
+    #     path = os.path.join("rawaj-frontend", "assets", "upload", filename) 
+    #     if os.path.exists(path): return path
+    # elif "http" in file_path and "images" in file_path:
+    #     filename = file_path.split("images/")[-1]
+    #     path = os.path.join("rawaj-frontend", "assets", "images", filename)
+    #     if os.path.exists(path): return path
+    # elif os.path.exists(file_path):
+    #     return file_path
+    # return None
+    if "http" in file_path:
+         if "assets/" in file_path:
+            relative_path = file_path.split("assets/")[-1]
+            local_path = os.path.join("rawaj-frontend", "assets", relative_path)
+            local_path = os.path.normpath(local_path)
+            if os.path.exists(local_path):
+                return local_path
+            else:
+                print(f"⚠️ Warning: File not found locally at {local_path}")
+                return None                
     elif os.path.exists(file_path):
         return file_path
+        
     return None
 
 def extract_agent_json(chat_history, target_agent_name, json_key=None):

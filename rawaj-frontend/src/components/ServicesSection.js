@@ -28,15 +28,15 @@ const AudienceIcon = () => (
 
 const ServicesSection = () => {
   return (
-    <section id="services" className="py-20 lg:py-32">
+    <section id="services" className=" pb-10 lg:pt-32 lg:pb-16">
       <div className="container mx-auto px-4">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-12">
-          <h2 className="text-3xl lg:text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
+          <h2 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-green-500 text-transparent bg-clip-text">
             خدماتنا الذكية
           </h2>
-          <p className="text-lg text-gray-400">
+          <p className="text-2xl text-gray-400">
             حلول تسويقية متكاملة تعتمد على الذكاء الاصطناعي المتقدم
           </p>
         </div>
@@ -45,12 +45,12 @@ const ServicesSection = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           <ServiceCard 
             title="فيديوهات تسويقية سينمائية"
-            description="توليد فيديوهات احترافية عالية الجودة باستخدام أحدث نماذج الذكاء الاصطناعي (Runway Gen-3 / Luma)."
+            description="توليد فيديوهات احترافية عالية الجودة باستخدام أحدث نماذج الذكاء الاصطناعي (Google Veo)."
             icon={<VideoIcon />}
           />
           <ServiceCard 
             title="صور إعلانية مخصصة"
-            description="إنشاء صور دعائية مبهرة مع الحفاظ على هوية المنتج باستخدام DALL·E 3 وتقنيات In-painting."
+            description="إنشاء صور دعائية مبهرة مع الحفاظ على هوية المنتج باستخدام Nano Banana"
             icon={<ImageIcon />}
           />
           <ServiceCard 

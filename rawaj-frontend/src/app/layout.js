@@ -22,8 +22,8 @@ export default function RootLayout({ children }) {
         سيضمن أن كل الصفحات ترث هذه الأنماط بشكل افتراضي.
       */}
       <body 
-        className={`${tajawal.variable} font-sans bg-background text-text-main`}
-      >
+       className={`${tajawal.variable} font-sans bg-[#020617] text-gray-200`}>
+      
         <AuthProvider>
           {children}
         </AuthProvider>

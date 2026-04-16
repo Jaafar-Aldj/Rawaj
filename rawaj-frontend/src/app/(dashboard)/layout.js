@@ -11,7 +11,8 @@ import {
   SparklesIcon, 
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
-  UserCircleIcon
+  Squares2X2Icon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = () => {
@@ -27,13 +28,14 @@ const Sidebar = () => {
     { name: 'الرئيسية', href: '/', icon: HomeIcon },
     { name: 'توليد المحتوى', href: '/upload-image/', icon: SparklesIcon },
     { name: 'الحملات', href: '/camp', icon: MegaphoneIcon },
+    { name: 'المنتجات', href: '/my-products', icon: Squares2X2Icon },
     { name: 'الإعدادات', href: '/dashboard/settings', icon: Cog6ToothIcon },
   ];
 
   if (!mounted) return null;
 
   return (
-    <aside className="bg-gradient-to-b from-[#1a1f2e] to-[#0d1117] border-l border-[#2a2f3f] p-6 flex flex-col h-screen sticky top-0">
+    <aside className="bg-gradient-to-b from-[#1a1f2e] to-[#0d1117] border-l border-[#2a2f3f] p-6 flex flex-col h-full min-h-screen sticky top-0">
       {/* Logo Section - محسنة */}
       <div className="text-center mb-8">
         <Link href="/" className="inline-block">
@@ -42,11 +44,10 @@ const Sidebar = () => {
               Rawaj
             </span>
           </h1>
-          <p className="text-xs text-[#8b8f9c] mt-1">منصة التسويق بالذكاء الاصطناعي</p>
         </Link>
       </div>
 
-      {/* User Info - معلومات المستخدم */}
+      {/* User Info - اسم المستخدم فقط (بدون إيميل) */}
       {user && (
         <div className="mb-8 p-4 bg-[#1e2335] rounded-2xl border border-[#2a2f3f]">
           <div className="flex items-center gap-3">
@@ -61,7 +62,7 @@ const Sidebar = () => {
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-white font-bold truncate">{user.name || 'مستخدم'}</h3>
-              <p className="text-xs text-[#8b8f9c] truncate">{user.email || 'user@example.com'}</p>
+              {/* تم إخفاء الإيميل */}
             </div>
           </div>
         </div>
@@ -107,7 +108,7 @@ export default function DashboardLayout({ children }) {
     <ProtectedRoute>
       <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[300px_1fr]">
         <Sidebar />
-        <main className="bg-[#0d1117] p-4 sm:p-8 overflow-y-auto">
+        <main className="bg-[#020617] p-4 sm:p-8 overflow-y-auto">
           {children}
         </main>
       </div>
