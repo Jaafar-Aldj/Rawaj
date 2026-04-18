@@ -1,6 +1,7 @@
 import autogen
 from app.agents.config import llm_config, directory_config
 import app.agents.agents_system_messages as sys_msg
+from app.services.events import fetch_country_events_tool
 
 # 1. Marketing Strategist (The Planner)
 def get_marketing_strategist() -> autogen.AssistantAgent:

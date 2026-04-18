@@ -10,13 +10,14 @@ import autogen
 from autogen.agentchat.contrib.retrieve_user_proxy_agent import RetrieveUserProxyAgent
 
 from app.agents.agents_system_messages import get_prompter_updated_message
+from app.agents.countries_utils import ARABIC_COUNTRIES
 from app.agents.roles import get_director, get_copywriter, get_marketing_strategist, get_video_director, get_prompter
 from app.services.image_gen import generate_image
 from app.services.video_gen import  generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
 from app.agents import prompt_templates
-from app.services.events import get_upcoming_events
+from app.services.events import fetch_country_events_tool, get_upcoming_events_for_strategy
 from app.agents.config import api_key
 
 
@@ -119,6 +120,14 @@ def normalize_prompts_data(data):
     if isinstance(image_prompt, dict): image_prompt = str(image_prompt)
 
     return image_prompt, video_storyboard
+
+def extract_country_code(text: str) -> str:
+    """يبحث في نص المستخدم عن أي اسم دولة ويرجع الكود الخاص بها"""
+    text_lower = text.lower()
+    for country_name, code in ARABIC_COUNTRIES.items():
+        if country_name in text_lower:
+            return code
+    return None
 
 #===============================================================================
 #  Vision QA
@@ -238,8 +247,18 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     model_name = strategist.llm_config['config_list'][0]['model']
     strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
 
-    real_events_context = get_upcoming_events(country="SA")
     current_date = datetime.now().strftime("%Y-%m-%d")
+
+    country_code = extract_country_code(user_message)
+    real_events_context = ""
+
+    if country_code:
+        print(f"🌍 User mentioned country: {country_code.upper()}. Fetching events...")
+        # نجلب الأحداث وراء الكواليس
+        real_events_context = get_upcoming_events_for_strategy(region=country_code, days_ahead=30)
+    else:
+        # إذا لم يذكر دولة، نعطيه تنبيهاً ليقوم بسؤال المستخدم (بدل الكراش)
+        real_events_context = "⚠️ NOTE TO STRATEGIST: The user has not specified a country yet. If you need to suggest events, politely ask the user which country they are targeting first."
 
     history_text = ""
     if chat_history:
@@ -253,7 +272,6 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         product_analysis, 
         current_date, 
         user_message, 
-        real_events_context,
         history_text
     )
 
@@ -264,7 +282,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         message=strategy_rag.message_generator,
         problem = full_prompt, 
         n_results=2,
-        max_turns=1,  # نريد رد واحد فقط من المدير في هذه المرحلة
+        max_turns=3,  
     )
 
     valid_replies = [msg['content'] for msg in chat_result.chat_history if msg.get('content') and msg.get('content').strip() != "" and msg.get('name') == 'Marketing_Strategist']

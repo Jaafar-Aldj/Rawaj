@@ -10,9 +10,18 @@ def get_strategy_chat_context(product_name, product_desc, product_analysis, curr
     Description: {product_desc}
     Visual Analysis: {product_analysis}
     Today is {current_date}. Target Region: MENA.
-    {real_events}
-    [END OF SYSTEM CONTEXT]
     """
+    if real_events:
+        context += f"""
+        \n\n{real_events}
+        
+        🛑 CRITICAL INSTRUCTION FOR TRENDING EVENTS: 
+        1. You MUST base your 'Trending Events' strategy ONLY on the exact real events listed above. 
+        2. DO NOT invent, guess, or hallucinate any religious or national holidays (like Eid Al-Fitr or Eid Al-Adha) if they are NOT explicitly listed in the REAL UPCOMING EVENTS provided above. The Islamic calendar changes every year!
+        3. If the list is empty or has no major holidays, rely ONLY on general seasonal themes (e.g., Spring, Summer, Weekend gatherings, Exams) and DO NOT mention any specific Eid.
+        """
+        
+    context += "\n[END OF SYSTEM CONTEXT]"
     
     if history_text:
         return f"{context}\n\n{history_text}\n\nUser Message: {user_message}"
