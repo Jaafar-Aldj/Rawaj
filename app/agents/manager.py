@@ -17,7 +17,8 @@ from app.services.video_gen import  generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
 from app.agents import prompt_templates
-from app.services.events import fetch_country_events_tool, get_upcoming_events_for_strategy
+from app.services.events import get_upcoming_events_for_strategy
+from app.services.audio_gen import generate_voiceover, generate_sfx, merge_video_audio
 from app.agents.config import api_key
 
 
@@ -528,11 +529,8 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
     """
     scene_num = scene.get("scene_number", 1)
     print(f"⏳ [Thread] Started Processing Scene {scene_num}...")
-    
 
-
-    if notify_callback:
-        notify_callback(f"⏳ جاري معالجة المشهد رقم {scene_num}...")
+    if notify_callback: notify_callback(f"⏳ جاري معالجة المشهد رقم {scene_num}...")
     motion_p = scene.get("motion_prompt", "")
     voice_p = scene.get("voiceover_text", "")
     audio_p = scene.get("audio_prompt", "")
@@ -551,35 +549,47 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
             )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
-                if notify_callback:
-                    notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")
+                if notify_callback: notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")
         except Exception as e:
-            if notify_callback:
-                notify_callback(f"⚠️ فشل تصميم إطار المشهد {scene_num}، سيتم استخدام الصورة الأساسية.")
+            if notify_callback: notify_callback(f"⚠️ فشل تصميم إطار المشهد {scene_num}، سيتم استخدام الصورة الأساسية.")
             print(f"⚠️ [Scene {scene_num}] Image Gen failed, using base image. Error: {e}")
 
     # 2. تجهيز برومبت الفيديو (الصوت اختياري)
     veo_prompt = f"{motion_p}."
-    if audio_p and str(audio_p).strip() != "":
-            veo_prompt += f" [Audio generation: {audio_p}]."
-    if voice_p and str(voice_p).strip() != "" and str(voice_p).lower() != "none":
-        veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
+    # if audio_p and str(audio_p).strip() != "":
+    #         veo_prompt += f" [Audio generation: {audio_p}]."
+    # if voice_p and str(voice_p).strip() != "" and str(voice_p).lower() != "none":
+    #     veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
         
     # 3. توليد الفيديو
-    if notify_callback:
-        notify_callback(f"🎬 جاري تحريك المشهد رقم {scene_num}...")
+    if notify_callback: notify_callback(f"🎬 جاري تحريك المشهد رقم {scene_num}...")
     try:
         scene_video_path = generate_and_review_video(veo_prompt, scene_image_path, aspect_ratio)
         print(f"✅ [Thread] Scene {scene_num} completed.")
-        # نرجع رقم المشهد مع المسار لضمان الترتيب لاحقاً
-        if notify_callback:
-            notify_callback(f"✅ تم الانتهاء من تحريك المشهد {scene_num} بنجاح!")
-        return {"scene_number": scene_num, "path": scene_video_path}
+        if notify_callback: notify_callback(f"✅ تم الانتهاء من تحريك المشهد {scene_num} بنجاح!")
     except Exception as e:
         print(f"❌ [Scene {scene_num}] Video Gen failed: {e}")
-        if notify_callback:
-            notify_callback(f"❌ فشل تحريك المشهد {scene_num}.")
+        if notify_callback: notify_callback(f"❌ فشل تحريك المشهد {scene_num}.")
         return {"scene_number": scene_num, "path": None}
+    
+     # 5. 🎙️ السحر الجديد: توليد ودمج الصوت (ElevenLabs + MoviePy)
+    if scene_video_path and os.path.exists(scene_video_path):
+        if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي والمؤثرات للمشهد {scene_num}...")
+        
+        # توليد صوت المعلق
+        voice_path = generate_voiceover(voice_p)
+        # توليد المؤثرات الصوتية والموسيقى (مدتها 8 ثواني لتطابق الفيديو)
+        sfx_path = generate_sfx(audio_p, duration_seconds=8) 
+        
+        # دمج الفيديو الصامت مع الأصوات
+        final_scene_path = merge_video_audio(scene_video_path, voice_path, sfx_path)
+        
+        # تحديث مسار الفيديو ليكون الفيديو الناطق الجديد
+        scene_video_path = final_scene_path
+        
+        if notify_callback: notify_callback(f"✅ اكتمل الإخراج الصوتي للمشهد {scene_num}!")
+
+    return {"scene_number": scene_num, "path": scene_video_path}
 
 def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", notify_callback=None):
     """

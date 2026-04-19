@@ -1,136 +1,157 @@
-# import os
-# from elevenlabs.client import ElevenLabs
-# from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip
-# # تأكد من أن ملف الإعدادات يحتوي على مفتاح ElevenLabs الصالح
-# from ..config import settings 
+import os
+import uuid
+from elevenlabs.client import ElevenLabs
+from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip
+from app.config import settings 
 
-# # إعداد العميل (تأكد أن المفتاح هنا صالح وجديد)
-# client = ElevenLabs(api_key=settings.elevenlabs_api_key) 
+# إعداد العميل
+client = ElevenLabs(api_key=settings.elevenlabs_api_key) 
 
-# def generate_voiceover(text: str, output_path="voice.mp3"):
-#     """توليد تعليق صوتي (Speech)"""
-#     print(f"🗣️ Generating Voiceover: {text[:30]}...")
-#     try:
-#         # ✅ التصحيح: استخدام convert بدلاً من generate
-#         audio_stream = client.text_to_speech.convert(
-#             text=text,
-#             voice_id="JBFqnCBsd6RMkjVDRZzb", # هذا ID لصوت 'Rachel'
-#             model_id="eleven_multilingual_v2",
-#             output_format="mp3_44100_128"
-#         )
+# مسار حفظ الصوتيات المؤقتة
+AUDIO_DIR = "rawaj-frontend/assets/video"
+os.makedirs(AUDIO_DIR, exist_ok=True)
+
+def generate_voiceover(text: str) -> str:
+    """توليد تعليق صوتي (TTS) باستخدام ElevenLabs"""
+    if not text or text.lower() == "none" or text.strip() == "":
+        return None
         
-#         # حفظ الملف (لأن النتيجة تأتي كتدفق بيانات Stream)
-#         with open(output_path, "wb") as f:
-#             for chunk in audio_stream:
-#                 if chunk:
-#                     f.write(chunk)
+    print(f"🗣️ Generating Voiceover: {text[:30]}...")
+    output_path = os.path.join(AUDIO_DIR, f"vo_{uuid.uuid4().hex[:8]}.mp3")
+    
+    try:
+        # استخدام الصوت المحدد في الإعدادات (أو صوت عربي افتراضي إذا لم يوجد)
+        voice_id = getattr(settings, "elevenlabs_voice_id", "JBFqnCBsd6RMkjVDRZzb") 
         
-#         print(f"✅ Voiceover saved: {output_path}")
-#         return output_path
-
-#     except Exception as e:
-#         print(f"❌ Voiceover failed: {e}")
-#         return None
-
-# def generate_sfx(prompt: str, duration_seconds=5, output_path="sfx.mp3"):
-#     """توليد مؤثرات صوتية (Sound Effects)"""
-#     print(f"🔊 Generating SFX: {prompt}...")
-#     try:
-#         # ✅ هذه الميزة تتطلب حساباً فيه رصيد كافٍ
-#         result = client.text_to_sound_effects.convert(
-#             text=prompt,
-#             duration_seconds=duration_seconds, 
-#             prompt_influence=0.5
-#         )
+        audio_stream = client.text_to_speech.convert(
+            text=text,
+            voice_id=voice_id, 
+            model_id="eleven_multilingual_v2", # الموديل الداعم للعربية
+            output_format="mp3_44100_128"
+        )
         
-#         with open(output_path, "wb") as f:
-#             for chunk in result:
-#                 if chunk:
-#                     f.write(chunk)
+        with open(output_path, "wb") as f:
+            for chunk in audio_stream:
+                if chunk:
+                    f.write(chunk)
+        
+        print("✅ Voiceover saved successfully.")
+        return output_path
+
+    except Exception as e:
+        print(f"❌ ElevenLabs TTS Failed: {e}")
+        return None
+
+def generate_sfx(prompt: str, duration_seconds: int = 8) -> str:
+    """توليد مؤثرات صوتية (Sound Effects) باستخدام ElevenLabs"""
+    if not prompt or prompt.lower() == "none" or prompt.strip() == "":
+        return None
+        
+    print(f"🔊 Generating SFX: {prompt[:30]}...")
+    output_path = os.path.join(AUDIO_DIR, f"sfx_{uuid.uuid4().hex[:8]}.mp3")
+    
+    try:
+        result = client.text_to_sound_effects.convert(
+            text=prompt,
+            duration_seconds=duration_seconds, 
+            prompt_influence=0.5
+        )
+        
+        with open(output_path, "wb") as f:
+            for chunk in result:
+                if chunk:
+                    f.write(chunk)
                 
-#         print(f"✅ SFX saved: {output_path}")
-#         return output_path
+        print("✅ SFX saved successfully.")
+        return output_path
 
-#     except Exception as e:
-#         print(f"❌ SFX failed: {e}")
-#         return None
+    except Exception as e:
+        print(f"❌ ElevenLabs SFX Failed: {e}")
+        return None
 
-# def merge_video_audio(video_path, voice_path=None, sfx_path=None, output_path="final_output.mp4"):
-#     """دمج الفيديو مع الأصوات"""
-#     print("🎬 Merging Audio & Video...")
-    
-#     if not os.path.exists(video_path):
-#         print(f"❌ Video path not found: {video_path}")
-#         return None
+def merge_video_audio(video_path: str, voice_path: str = None, sfx_path: str = None) -> str:
+    """
+    دمج الفيديو الصامت مع التعليق الصوتي والمؤثرات.
+    """
+    if not video_path or not os.path.exists(video_path):
+        return video_path
 
-#     try:
-#         video = VideoFileClip(video_path)
-#         audio_tracks = []
+    if not voice_path and not sfx_path:
+        return video_path # لا يوجد صوت لدمجه
 
-#         # 1. إضافة التعليق الصوتي
-#         if voice_path and os.path.exists(voice_path):
-#             voice_clip = AudioFileClip(voice_path)
-#             # رفع صوت المعلق ليكون واضحاً
-#             voice_clip = voice_clip.with_volume_scaled(1.8) 
+    print("🎬 Merging Audio & Video using MoviePy...")
+    output_path = video_path.replace(".mp4", f"_audio_{uuid.uuid4().hex[:4]}.mp4")
+
+    video = None
+    voice_clip = None
+    sfx_clip = None
+    final_audio = None
+
+    try:
+        video = VideoFileClip(video_path)
+        audio_tracks = []
+
+        # 1. معالجة التعليق الصوتي (Voiceover)
+        if voice_path and os.path.exists(voice_path):
+            voice_clip = AudioFileClip(voice_path)
+            # رفع مستوى الصوت ليكون المعلق هو الأوضح
+            voice_clip = voice_clip.with_volume_scaled(1.5) 
             
-#             # إذا كان الصوت أطول من الفيديو، نمدد الفيديو (Loop)
-#             if voice_clip.duration > video.duration:
-#                 print("ℹ️ Audio is longer than video. Looping video.")
-#                 video = video.loop(duration=voice_clip.duration)
+            # إذا كان الصوت أطول من الفيديو، نقص الصوت (أو نسرعه، لكن القص أأمن)
+            if voice_clip.duration > video.duration:
+                print("⚠️ Voiceover is longer than video. Trimming audio.")
+                voice_clip = voice_clip.subclipped(0, video.duration)
                 
-#             audio_tracks.append(voice_clip)
+            audio_tracks.append(voice_clip)
 
-#         # 2. إضافة المؤثرات الصوتية (اختياري)
-#         if sfx_path and os.path.exists(sfx_path):
-#             sfx_clip = AudioFileClip(sfx_path)
-#             # تكرار المؤثرات لتغطي كامل الفيديو
-#             if sfx_clip.duration < video.duration:
-#                 sfx_clip = sfx_clip.loop(duration=video.duration)
-#             else:
-#                 sfx_clip = sfx_clip.subclipped(0, video.duration)
+        # 2. معالجة المؤثرات والموسيقى (SFX)
+        if sfx_path and os.path.exists(sfx_path):
+            sfx_clip = AudioFileClip(sfx_path)
             
-#             # خفض صوت المؤثرات لتكون خلفية فقط
-#             sfx_clip = sfx_clip.with_volume_scaled(0.3) 
-#             audio_tracks.append(sfx_clip)
-
-#         if audio_tracks:
-#             # دمج المسارات الصوتية
-#             final_audio = CompositeAudioClip(audio_tracks)
-#             # التأكد من أن الصوت بنفس طول الفيديو النهائي
-#             final_audio = final_audio.subclipped(0, video.duration)
+            # إذا كانت الموسيقى أقصر من الفيديو، نكررها (Loop)
+            if sfx_clip.duration < video.duration:
+                # تكرار الموسيقى لتغطي الفيديو
+                sfx_clip = sfx_clip.loop(duration=video.duration)
+            else:
+                sfx_clip = sfx_clip.subclipped(0, video.duration)
             
-#             final_video = video.with_audio(final_audio)
+            # خفض مستوى الموسيقى لكي لا تطغى على المعلق
+            volume_level = 0.3 if voice_path else 0.8
+            sfx_clip = sfx_clip.with_volume_scaled(volume_level) 
+            audio_tracks.append(sfx_clip)
+
+        # 3. الدمج النهائي
+        if audio_tracks:
+            final_audio = CompositeAudioClip(audio_tracks)
+            # تعيين الصوت للفيديو
+            final_video = video.with_audio(final_audio)
             
-#             # تصدير الفيديو النهائي
-#             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac")
-#             print(f"✅ Final video saved successfully at: {output_path}")
-#             return output_path
-#         else:
-#             print("⚠️ No audio tracks found to merge.")
-#             return None
-
-#     except Exception as e:
-#         print(f"❌ Merge failed: {e}")
-#         return None
-
-# # --- تجربة النظام ---
-# if __name__ == "__main__":
-#     # 1. حدد مسار الفيديو الذي استعدته من Veo
-#     video_file = r"final_video.mp4"  # تأكد أن هذا الملف موجود بجانب الكود
-    
-#     # 2. النص المراد تحويله لصوت
-#     text_prompt = "Experience the ultimate performance with our new smart tracker."
-    
-#     # 3. وصف المؤثرات الصوتية
-#     sfx_prompt = "Cinematic futuristic whoosh and high tech ambiance"
-
-#     # تشغيل العمليات
-#     if os.path.exists(video_file):
-#         voice = generate_voiceover(text_prompt)
-#         sfx = generate_sfx(sfx_prompt, duration_seconds=5) # مدة قصيرة للتجربة
+            # رندرة الفيديو النهائي (بأسرع إعدادات ممكنة لعدم تعطيل السيرفر)
+            final_video.write_videofile(
+                output_path, 
+                codec="libx264", 
+                audio_codec="aac",
+                preset="ultrafast",
+                logger=None # إخفاء شريط التحميل من الكونسول
+            )
+            print(f"✅ Final video with audio saved: {output_path}")
+            return output_path
         
-#         # الدمج
-#         if voice:
-#             merge_video_audio(video_file, voice, sfx)
-#     else:
-#         print("❌ Please put a video file named 'final_video.mp4' to test.")
+        return video_path
+
+    except Exception as e:
+        print(f"❌ Audio Merge Failed: {e}")
+        return video_path # في حال فشل الدمج، نرجع الفيديو الصامت
+        
+    finally:
+        # 🧹 تنظيف الذاكرة (Memory Leak Prevention)
+        if video: video.close()
+        if voice_clip: voice_clip.close()
+        if sfx_clip: sfx_clip.close()
+        if final_audio: final_audio.close()
+        
+        # حذف الملفات الصوتية المؤقتة لتوفير المساحة
+        try:
+            if voice_path and os.path.exists(voice_path): os.remove(voice_path)
+            if sfx_path and os.path.exists(sfx_path): os.remove(sfx_path)
+        except: pass
