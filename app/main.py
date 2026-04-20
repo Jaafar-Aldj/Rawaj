@@ -26,11 +26,3 @@ app.include_router(auth.router)
 app.include_router(campaign.router)
 
 app.mount("/assets", StaticFiles(directory="rawaj-frontend/assets"), name="assets")
-
-@app.get('/')
-async def root():
-    return {'message':'Hello world!!!!'}
-
-
-
-

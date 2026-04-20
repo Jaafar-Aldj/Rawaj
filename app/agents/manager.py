@@ -397,6 +397,8 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard = normalize_prompts_data(data)
+    selected_voice = data.get("selected_voice_profile", "female_dynamic") if isinstance(data, dict) else "female_dynamic"
+    print(f"🎙️ AI selected voice profile: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
 

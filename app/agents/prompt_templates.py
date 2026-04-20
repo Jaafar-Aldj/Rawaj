@@ -88,9 +88,23 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     Requested Total Video Duration: {duration} seconds.
     Target Aspect Ratio: {aspect_ratio}
     
+    AVAILABLE VOICE PROFILES:
+    - "male_formal": Deep, luxurious, formal Arabic. Good for high-end.
+    - "male_energetic": Upbeat, casual, youth-oriented Arabic. Good for food/sports.
+    - "female_soft": Elegant, trustworthy. Good for beauty/family.
+    - "female_dynamic": Confident, modern. Good for lifestyle/tech.
+
     TASK:
     1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots. REMEMBER: Keep the voiceover EXTREMELY short (max 10-12 words per scene) so it fits the 8-second timeframe.
     2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
+
+    OUTPUT JSON FORMAT MUST BE EXACTLY:
+    {{
+        "selected_voice_profile": "male_energetic",
+        "video_storyboard": [
+            {{ "scene_number": 1, ... }}
+        ]
+    }}
     """
 
 # ==============================================================================

@@ -6,7 +6,7 @@ import autogen
 # 1. إعداد المسارات لاستيراد الإعدادات من مجلد app
 sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
 try:
-    from agents.config import llm_config
+    from app.agents.config import llm_config
 except ImportError as e:
     print("Error: Could not import config. Make sure 'app/agents/config.py' exists.")
     print(e)

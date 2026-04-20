@@ -11,7 +11,66 @@ client = ElevenLabs(api_key=settings.elevenlabs_api_key)
 AUDIO_DIR = "rawaj-frontend/assets/video"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-def generate_voiceover(text: str) -> str:
+AVAILABLE_VOICES = {
+    "Sara": {
+        "id": "XTa3iQyMA6f1qrI4F6kZ", 
+        "description": "Soft, Expressive, and Warm. EchoAura — The Voice of Emotion & Clarity - EchoAura is a warm, expressive female voice designed to bring stories and scripts to life. Its tone balances natural clarity with emotional depth, making it perfect for audiobooks, AI assistants, educational videos, and ads. This voice smoothly blends Arabic and English accents, reflecting the modern authenticity of the Middle East. Clear, versatile, and humanlike — EchoAura turns every word into emotion."
+    },
+    "Adam": {
+        "id": "OFHP1Qg30FPoNfkUFFlA", 
+        "description": "Deep, Rich and Expressive. Adam - Narrator - Experience a rich, expressive Arabic voice that blends clarity with warmth — perfect for narrations, audiobooks, documentaries, and emotional storytelling. This voice features precise articulation, natural pacing, and a versatile emotional range — from calm and reflective to powerful and dramatic. Ideal for content that requires a genuine human touch, whether in Modern Standard Arabic or colloquial Egyptian. A trustworthy voice that elevates your message and keeps your audience engaged."
+    },
+    "Sana": {
+        "id": "mRdG9GYEjJmIzqbYTidv", 
+        "description": "Calm, Soft and Honest. Sana - A middle-aged woman with an Arabic accent and a slightly soft quality to her voice. The tone is upbeat, a little bouncy and direct. Great for news, media texts, documentaries, podcast ads, and audiobooks."
+    },
+    "Hamid": {
+        "id": "A9ATTqUUQ6GHu0coCz8t", 
+        "description": "Friendly, Natural and Positive. Hamid - Young voice male with a pleasant tone. Perfect for news."
+    },
+    "Ghaida": {
+        "id": "rFDdsCQRZCUL8cPOWtnP", 
+        "description": "Soft, Warm and Expressive. Ghaidā - Stories of Syria - Soft and warm stories are told by Syrian women - this is the very first! Ghaidā’ brings the gentle strength and emotional depth of the Arabic language to life. A dynamic female voice with a calm yet expressive tone, ideal for storytelling, documentaries, educational projects, and cultural narration. Her delivery moves between warmth and clarity, carrying the rhythm, truth, and authenticity of modern Syrian storytelling - a voice that connects memory, emotion, and meaning."
+    },
+    "Ahmed": {
+        "id": "bHCN6EPPyN5hYpU9UVUz", 
+        "description": "Clear, Natural and Neutral. Ahmed - Middle-aged male voice. Works well for characters & Animation."
+    },
+    "Khaled Alnajjar": {
+        "id": "drMurExmkWVIH5nW8snR", 
+        "description": "Strong and Expressive. Khaled Alnajjar - A heavy, melodious Arabic voice that symbolizes strength and chivalry. It is eloquent and expresses feelings and emotions, making you feel as if you are seeing the voice."
+    },
+    "Jawad": {
+        "id": "PmGnwGtnBs40iau7JfoF ", 
+        "description": "Natural and Conversational. Jawad - Moroccan Darija - Warm and clear Arabic Moroccan Darija male voice, natural and conversational."
+    },
+    "Chaouki": {
+        "id": "G1HOkzin3NMwRHSq60UI",
+        "description": "Deep, Clear and Engaging. Chaouki - A deep, clear male voice with a neutral Arabic accent, ideal for documentaries, events, and commercials. I offer a smooth, engaging delivery that brings authority and warmth, making my voice versatile for both informative and promotional content."
+    },
+    "Farah": {
+        "id": "4wf10lgibMnboGJGCLrP",
+        "description": "Smooth, Calm and Warm. Farah - Premium Arabic Female Voice - A premium Arabic female voice with a warm, clear, and expressive tone, ideal for ads, narration, storytelling, audiobooks, YouTube content, podcasts, educational videos, and AI avatars. Features a natural Levantine accent (Jordanian/Ammani) blended with modern Arabic fluency and subtle English code-switching — perfect for today’s digital audience. Tested in production environments, including AI content, media, and voice assistant applications."
+    },
+    "Khalil": {
+        "id": "NrhVFquWMOHTRNOAY8AO",
+        "description": "Crisp and Approachable. A clear, well-paced Moroccan male voice with a modern, neutral tone. He speaks with natural ease and understated warmth, making him a versatile fit for narration, informational content, or professional voiceover projects."
+    },
+    "Ghizlane": {
+        "id": "OfGMGmhShO8iL9jCkXy8",
+        "description": "Warm, Natural and Encouraging. Ghizlane - Moroccan Darija Dialect - A natural, dynamic, and expressive voice in Darija (Moroccan Arabic), optimized for commercial use. Ideal for advertising, brand promotions, and professional narrations, with a warm, convincing, and engaging tone."
+    },
+    "Hamida": {
+        "id": "JjTirzdD7T3GMLkwdd3a",
+        "description": "Professional and Positive. HMIDA - Middle aged male voice suitable for radio. When listening to the broadcaster's voice without watching it, his voice may raise a degree of emotions and mental images that the listener relies on, without awareness, to imagine the features of the speaker and the suggestions of his words or mental images, and the radio voice creates a fingerprint and An accurate auditory in the mind of the listener."
+    },
+    "Noura": {
+        "id": "isQLuoVuANx6FjDxyasX",
+        "description": "Soft and Polished. A young Gulf Arabic female voice with a gentle, refined tone. She has a smooth, understated elegance and a naturally warm cadence that feels modern yet culturally grounded, perfect for short brand introductions, app prompts, or sleek product descriptions."
+    }
+}
+
+def generate_voiceover(text: str, voice_profile_name: str = "Noura") -> str:
     """توليد تعليق صوتي (TTS) باستخدام ElevenLabs"""
     if not text or text.lower() == "none" or text.strip() == "":
         return None
@@ -20,8 +79,8 @@ def generate_voiceover(text: str) -> str:
     output_path = os.path.join(AUDIO_DIR, f"vo_{uuid.uuid4().hex[:8]}.mp3")
     
     try:
-        # استخدام الصوت المحدد في الإعدادات (أو صوت عربي افتراضي إذا لم يوجد)
-        voice_id = getattr(settings, "elevenlabs_voice_id", "JBFqnCBsd6RMkjVDRZzb") 
+        voice_data = AVAILABLE_VOICES.get(voice_profile_name, AVAILABLE_VOICES["Noura"])
+        voice_id = voice_data["id"] 
         
         audio_stream = client.text_to_speech.convert(
             text=text,
