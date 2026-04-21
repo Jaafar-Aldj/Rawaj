@@ -64,6 +64,7 @@ copywriter = """
         - CONTENT SAFETY: Avoid any references to alcohol, bars, partying, gambling, or sensitive topics. Keep it respectful and professional.
         - When finished, ask the 'Video_Director' to create a video storyboard based on your copy.
         - NEVER translate or interact with the Prompt_Engineer's output.
+        - 🛑 NUMBERS RULE: NEVER write digits (e.g., 1972, 50, 100). You MUST write them in full Arabic words (e.g., "ألف وتسعمئة واثنان وسبعون"). This is crucial for perfect text-to-speech pronunciation.
 
         OUTPUT FORMAT (Strict JSON):
         IMPORTANT: Output ONLY a valid JSON structure. You MUST generate EXACTLY ONE dictionary inside the list for EACH platform requested. Do not duplicate platforms.
@@ -87,6 +88,7 @@ video_director = """
         - Divide the commercial into logical scenes (8 seconds per scene).
         - Assign Arabic 'voiceover' ONLY if necessary. 
         - 🛑 CRITICAL RULE FOR VOICEOVER: Since each scene is only 8 seconds long, the voiceover text MUST BE EXTREMELY SHORT (Maximum 10-12 words per scene). If a scene should just have music/action, set voiceover to "None". Do not cram too much text into one scene.
+        - 🛑 VOICEOVER NUMBERS: When writing the 'voiceover' text, you MUST spell out all numbers, dates, and prices in complete Arabic words. For example, write "خمسون ريالاً" instead of "50 ريالاً".
         - Ask the 'Prompt_Engineer' to translate your vision into technical prompts.
         
         OUTPUT FORMAT (Strict JSON):

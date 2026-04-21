@@ -18,7 +18,7 @@ from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
 from app.agents import prompt_templates
 from app.services.events import get_upcoming_events_for_strategy
-from app.services.audio_gen import generate_voiceover, generate_sfx, merge_video_audio
+from app.services.audio_gen import generate_voiceover, merge_video_audio
 from app.agents.config import api_key
 
 
@@ -397,7 +397,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard = normalize_prompts_data(data)
-    selected_voice = data.get("selected_voice_profile", "female_dynamic") if isinstance(data, dict) else "female_dynamic"
+    selected_voice = data.get("selected_voice_profile", "Noura") if isinstance(data, dict) else "Noura"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
@@ -558,10 +558,9 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
 
     # 2. تجهيز برومبت الفيديو (الصوت اختياري)
     veo_prompt = f"{motion_p}."
-    # if audio_p and str(audio_p).strip() != "":
-    #         veo_prompt += f" [Audio generation: {audio_p}]."
-    # if voice_p and str(voice_p).strip() != "" and str(voice_p).lower() != "none":
-    #     veo_prompt += f". [AUDIO GENERATION ONLY - DO NOT RENDER TEXT ON SCREEN]: Voiceover says: '{voice_p}'"
+    veo_prompt = f"{motion_p}"
+    if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
+        veo_prompt += f". Audio context: {audio_p}"
         
     # 3. توليد الفيديو
     if notify_callback: notify_callback(f"🎬 جاري تحريك المشهد رقم {scene_num}...")
@@ -580,11 +579,9 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
         
         # توليد صوت المعلق
         voice_path = generate_voiceover(voice_p)
-        # توليد المؤثرات الصوتية والموسيقى (مدتها 8 ثواني لتطابق الفيديو)
-        sfx_path = generate_sfx(audio_p, duration_seconds=8) 
         
         # دمج الفيديو الصامت مع الأصوات
-        final_scene_path = merge_video_audio(scene_video_path, voice_path, sfx_path)
+        final_scene_path = merge_video_audio(scene_video_path, voice_path)
         
         # تحديث مسار الفيديو ليكون الفيديو الناطق الجديد
         scene_video_path = final_scene_path

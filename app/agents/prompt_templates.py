@@ -51,6 +51,7 @@ def get_copy_generation_prompt(product_name, product_desc, audience, platforms_s
     1. Director: Instruct Copywriter briefly.
     2. Copywriter: Write specific Arabic ads for the Target Audience on the requested Platforms. Output JSON.
     🛑 CRITICAL RULE: The Copywriter MUST generate EXACTLY ONE ad text per platform listed above. If only 1 platform is provided, the JSON list MUST contain only 1 item.
+    🛑 IMPORTANT: Spell out all numbers and prices in Arabic words (Tafqeet). DO NOT use digits.
     """
 
 # ==============================================================================
@@ -88,21 +89,36 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     Requested Total Video Duration: {duration} seconds.
     Target Aspect Ratio: {aspect_ratio}
     
-    AVAILABLE VOICE PROFILES:
-    - "male_formal": Deep, luxurious, formal Arabic. Good for high-end.
-    - "male_energetic": Upbeat, casual, youth-oriented Arabic. Good for food/sports.
-    - "female_soft": Elegant, trustworthy. Good for beauty/family.
-    - "female_dynamic": Confident, modern. Good for lifestyle/tech.
+    AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
+    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
+    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
+    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
+    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
+    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
+    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
+    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
+    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
+    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
+    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
+    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
+    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
 
     TASK:
     1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots. REMEMBER: Keep the voiceover EXTREMELY short (max 10-12 words per scene) so it fits the 8-second timeframe.
     2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
+    🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
 
-    OUTPUT JSON FORMAT MUST BE EXACTLY:
+    OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
     {{
-        "selected_voice_profile": "male_energetic",
+        "selected_voice_profile": "Farah",
         "video_storyboard": [
-            {{ "scene_number": 1, ... }}
+            {{ 
+                "scene_number": 1,
+                "image_prompt": "Cinematic visual setup...",
+                "motion_prompt": "Camera movement...",
+                "voiceover_text": "Short Arabic text (max 12 words)",
+                "audio_prompt": "Cinematic music..."
+            }}
         ]
     }}
     """
