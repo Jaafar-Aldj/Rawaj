@@ -13,7 +13,7 @@ from app.agents.agents_system_messages import get_prompter_updated_message
 from app.agents.countries_utils import ARABIC_COUNTRIES
 from app.agents.roles import get_director, get_copywriter, get_marketing_strategist, get_video_director, get_prompter
 from app.services.image_gen import generate_image
-from app.services.video_gen import  generate_veo_video
+from app.services.video_gen import  extend_veo_video, generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
 from app.agents import prompt_templates
@@ -204,7 +204,7 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
         if notify_callback:
             notify_callback(f"🎬 جاري التوليد (المحاولة {attempt}/{max_retries})...")
         print(f"\n🔄 [Video QA] Attempt {attempt}/{max_retries}...")
-        video_path = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
+        video_path, _ = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
         
         if not video_path: return last_generated_video
         last_generated_video = video_path
@@ -401,7 +401,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard = normalize_prompts_data(data)
-    selected_voice = data.get("selected_voice_profile", "Noura") if isinstance(data, dict) else "Noura"
+    selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Auto"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
@@ -420,6 +420,123 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
         )
         
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
+
+def generate_extended_video(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None, voice_preference="Auto"):
+    """
+    توليد مشهد واحد ممتد (Extended One-Shot) بدلاً من مشاهد متعددة.
+    """
+    video_director = get_video_director()
+    prompter = get_prompter()
+
+    prompter.update_system_message(get_prompter_updated_message(aspect_ratio))
+
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+
+    # 1. إجبار المخرج على مشهد واحد فقط يحمل كل القصة
+    message = prompt_templates.get_extend_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes=1, aspect_ratio=aspect_ratio, event_name=event_name, event_angle=event_angle, voice_preference=voice_preference)
+
+    groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    
+    manager = autogen.GroupChatManager(
+        groupchat=groupchat, 
+        llm_config=video_director.llm_config,
+        is_termination_msg=lambda x: False
+    )
+
+    chat_result = prompts_rag.initiate_chat(
+        manager, 
+        message=prompts_rag.message_generator,
+        problem=message,
+        n_results=2
+    )
+
+    data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
+    _, vid_storyboard = normalize_prompts_data(data)
+    selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Farah"
+    print(f"🎙️ AI selected voice profile: {selected_voice}")
+
+    # 🛑 إصلاح الخطأ 1 و 2: استخراج البيانات من الستوري بورد
+    if not vid_storyboard or len(vid_storyboard) == 0:
+        print("❌ AI failed to generate storyboard.")
+        return {"video_storyboard": [], "video_url": None}
+
+    # بما أننا أجبرناه على مشهد واحد، نأخذ العنصر الأول
+    scene = vid_storyboard[0]
+    motion_p = scene.get("motion_prompt", "")
+    voice_p = scene.get("voiceover_text", "")
+    audio_p = scene.get("audio_prompt", "")
+    scene_img_prompt = scene.get("image_prompt", "")
+    scene_image_path = get_local_media_path(base_image_path) 
+    
+    if scene_img_prompt:
+        if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد...")
+        try:
+            generated_img = generate_and_review_image(
+                scene_img_prompt, 
+                reference_image_path=scene_image_path, 
+                aspect_ratio=aspect_ratio,
+                notify_callback=notify_callback,
+                max_retries=0
+            )
+            if generated_img and os.path.exists(generated_img):
+                scene_image_path = generated_img # تحديث المسار للصورة المولدة حديثاً
+                if notify_callback: notify_callback(f"✅ تم تصميم الصورة الافتتاحية بنجاح!")
+        except Exception as e:
+            print(f"⚠️ Image Gen failed, using base image. Error: {e}")
+
+    if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
+    
+    # 2. توليد أول 8 ثواني وتمرير الصورة المولدة
+    first_video_path, google_video_name = generate_veo_video(scene_prompt, scene_image_path, aspect_ratio)
+    
+    # 🛑 إصلاح الخطأ 3: دمج البرومبت
+    scene_prompt = f"{motion_p}"
+    if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
+        scene_prompt += f". Audio context: {audio_p}"
+
+    local_ref_path = get_local_media_path(base_image_path)
+
+    if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
+    
+    # 2. توليد أول 8 ثواني (ملاحظة: يجب أن تتأكد أن generate_veo_video ترجع مسار الفيديو + اسم الملف على جوجل)
+    # سنستخدم الدالة المعدلة التي ترجع القيمتين
+    first_video_path, google_video_name = generate_veo_video(scene_prompt, local_ref_path, aspect_ratio)
+
+    if not first_video_path or not google_video_name:
+        return {"video_storyboard": vid_storyboard, "video_url": None}
+
+    # 3. حساب عدد التمديدات المطلوبة (كل تمديد يضيف حوالي 7 ثواني)
+    extensions_needed = max(0, (duration - 8) // 7)
+    
+    current_google_name = google_video_name
+    final_video_path = first_video_path
+
+    # 4. حلقة التمديد المتتالية
+    for i in range(extensions_needed):
+        if notify_callback: notify_callback(f"🔄 جاري تمديد الفيديو (الجزء {i+2})...")
+        
+        # نرسل نفس البرومبت، مع مرجع الفيديو السابق
+        ext_path, new_google_name = extend_veo_video(scene_prompt, current_google_name, aspect_ratio)
+        
+        if ext_path:
+            final_video_path = ext_path # الفيديو الجديد يحتوي المقطع الأول مدمجاً مع الثاني
+            current_google_name = new_google_name
+        else:
+            print("⚠️ Extension failed, stopping early.")
+            break # إذا فشل التمديد، نكتفي بما تم توليده
+
+    # 5. توليد الصوت ودمجه
+    if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
+        if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي...")
+        voice_path = generate_voiceover(voice_p, voice_profile_name=selected_voice)
+        final_video_with_audio = merge_video_audio(final_video_path, voice_path)
+    else:
+        final_video_with_audio = final_video_path # إذا لم يكن هناك تعليق صوتي
+
+    if notify_callback: notify_callback(f"✅ تم الانتهاء من الفيديو الممتد!")
+    return {"video_storyboard": vid_storyboard, "video_url": final_video_with_audio}
+
 # ==============================================================================
 # المرحلة 4: التعديلات (Refining)
 # ==============================================================================
@@ -551,7 +668,8 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
                 scene_img_prompt, 
                 reference_image_path=valid_image_path, 
                 aspect_ratio=aspect_ratio,
-                notify_callback=notify_callback
+                notify_callback=notify_callback,
+                max_retries=0
             )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img

@@ -124,6 +124,77 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
     🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
 
+    ⛔ NEGATIVE CONSTRAINTS:
+    - NO Text, Typography, Labels on screen.
+    - NO Lip-syncing, speaking, or talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
+    
+    OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
+    {{
+        "selected_voice_profile": "Farah",
+        "video_storyboard": [
+            {{ 
+                "scene_number": 1,
+                "image_prompt": "Cinematic visual setup...",
+                "motion_prompt": "Camera movement...",
+                "voiceover_text": "Short Arabic text (max 12 words)",
+                "audio_prompt": "Cinematic music..."
+            }}
+        ]
+    }}
+    """
+
+def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, total_duration, num_scenes, aspect_ratio, event_name=None, event_angle=None, voice_preference="Auto"):
+    event_context = ""
+    if event_name:
+        angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
+        event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
+    voice_instruction = ""
+
+    if voice_preference and voice_preference.lower() != "auto" and voice_preference.strip() != "" and voice_preference in AVAILABLE_VOICES:
+        voice_instruction = f"""
+        USER SELECTED VOICE: "{voice_preference}".
+        You MUST set `"selected_voice_profile": "{voice_preference}"` in your JSON output. Do not change it.
+        """
+    else:
+        voice_instruction = """
+        USER SELECTED VOICE: AUTO (You Decide).
+        You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
+        """
+    return f"""
+    Product: {product_name}
+    Audience: {audience}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}{event_context}
+    Total Video Duration: {total_duration} seconds.
+    Target Aspect Ratio: {aspect_ratio}
+    
+    
+    AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
+    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
+    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
+    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
+    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
+    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
+    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
+    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
+    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
+    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
+    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
+    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
+    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+
+    {voice_instruction}
+
+    TASK:
+    1. Video_Director: Create a storyboard for EXACTLY ONE long continuous scene that lasts {total_duration} seconds.
+       - Describe the continuous action. 
+       - Write a single, cohesive `voiceover` script. The word count MUST match the {total_duration} seconds duration (assume 2 words per second. E.g., for 15 seconds, write about 30 Arabic words).
+    2. Prompt_Engineer: Output the JSON `video_storyboard` containing ONLY ONE scene object.
+    🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
+
+    ⛔ NEGATIVE CONSTRAINTS:
+    - NO Text, Typography, Labels on screen.
+    - NO Lip-syncing, speaking, or talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
+    
     OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
     {{
         "selected_voice_profile": "Farah",

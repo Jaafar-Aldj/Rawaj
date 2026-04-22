@@ -1,12 +1,11 @@
+import base64
+import mimetypes
 import os
 import time
-import base64
-import requests
-import google.auth.transport.requests
-import mimetypes
-from moviepy import ImageClip, AudioFileClip, VideoFileClip
+from google import genai
+from google.genai import types
+from moviepy import AudioFileClip, VideoFileClip
 from google.oauth2 import service_account
-# تأكد من أن هذا الاستيراد يعمل عندك
 from ..config import settings 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,189 +18,130 @@ SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
 VIDEO_DIR = "rawaj-frontend/assets/video"
 os.makedirs(VIDEO_DIR, exist_ok=True)
 
-def create_video_from_image_and_audio(image_path, audio_path):
-    """
-    إنشاء فيديو بسيط: صورة ثابتة + صوت + تأثير زووم (اختياري)
-    """
+client = genai.Client(api_key=settings.google_api_key)
+
+def _download_and_save_video(operation, prefix="veo"):
+    """دالة مساعدة لتحميل الفيديو من سيرفر جوجل وحفظه محلياً"""
     try:
-        print("🎬 Creating video...")
+        if not operation.response or not operation.response.generated_videos:
+            print("❌ Google API returned empty response (possibly blocked by safety filter).")
+            return None, None
+        # استخراج كائن الفيديو من الرد
+        video_obj = operation.response.generated_videos[0]
         
-        # تحميل الملفات
-        audio = AudioFileClip(audio_path)
-        image = ImageClip(image_path).with_duration(audio.duration)
+        # تحميل الملف فعلياً من سيرفر جوجل (الميزة الجديدة في الـ SDK)
+        file_bytes = client.files.download(file=video_obj.video)
         
-        # دمج الصوت مع الصورة
-        video = image.with_audio(audio)
-    
-        unique_filename =  f"video_{os.urandom(4).hex()}.mp4"
-        output_path = os.path.join(VIDEO_DIR, unique_filename)
+        # حفظه محلياً
+        filename = f"{prefix}_{os.urandom(4).hex()}.mp4"
+        output_path = os.path.join(VIDEO_DIR, filename)
+        
+        with open(output_path, "wb") as f:
+            f.write(file_bytes)
             
-        # الرندرة (هذه العملية تأخذ وقتاً)
-        video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
-        
-        print(f"✅ Video saved at: {output_path}")
-        return output_path
-
+        print(f"✅ Video successfully saved to: {output_path}")
+        return output_path, video_obj.video # نُرجع الكائن (Video Object) لنستخدمه في التمديد لاحقاً!
     except Exception as e:
-        print(f"❌ Video Creation Failed: {e}")
-        return 
-
-
-def get_access_token():
-    """الحصول على توكن المصادقة باستخدام ملف JSON"""
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    request = google.auth.transport.requests.Request()
-    credentials.refresh(request)
-    return credentials.token
+        print(f"❌ Error downloading/saving video: {e}")
+        return None, None
 
 
 def generate_veo_video(prompt_text: str, image_path: str = None, aspect_ratio: str = "16:9"):
-    if not image_path:
-        print(f"❌ No image provided. Veo model requires an image input.")
-        return None
+    """
+    توليد فيديو افتتاحي (8 ثواني) باستخدام Veo 3.
+    """
+    print(f"🎬 Starting initial Veo generation...")
     
-    if "image/" in image_path:
-        filename = image_path.split("image/")[-1]
-        local_path = os.path.join("rawaj-frontend", "assets", "image", filename)
-    elif "upload/" in image_path: # إضافة دعم مجلد الرفع هنا أيضاً
-            filename = image_path.split("upload/")[-1]
-            local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
-    else:
-        local_path = image_path # افتراض أنه مسار محلي
-
-
-    if local_path:
-        print(f"🖼️  Using image input: {local_path}")
-        if not os.path.exists(local_path):
-            print(f"❌ Image file not found: {image_path}")
-            return None
     try:
-        access_token = get_access_token()
-    except Exception as e:
-        print(f"❌ Auth Error: {e}")
-        return None
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json; charset=utf-8"
-    }
-
-    # تجهيز البيانات
-    instance = {"prompt": prompt_text}
-
-    # معالجة الصورة
-    if local_path:
-        mime_type, _ = mimetypes.guess_type(local_path)
-        if not mime_type: mime_type = "image/png"
-        
-        with open(local_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-            instance["image"] = {
-                "bytesBase64Encoded": encoded_string,
-                "mimeType": mime_type 
-            }
-
-    # الروابط
-    base_url = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}"
-    start_url = f"{base_url}:predictLongRunning"
-    
-    # 1. إرسال طلب البدء
-    try:
-        response = requests.post(start_url, headers=headers, json={
-            "instances": [instance],
-            "parameters": {
-                "sampleCount": 1, 
-                "safetySetting": "block_only_high", 
-                "personGeneration": "allow_all",
-                "negativePrompt": "text, typography, labels, watermarks, subtitles, words, letters, writing",
-                "aspectRatio": aspect_ratio
-            }
-        }, timeout=30) # تايم أوت للطلب الأول
-        
-        if response.status_code != 200:
-            print(f"❌ Error starting generation ({response.status_code}):", response.text)
-            return None
-            
-        operation_name = response.json()["name"]
-        print(f"⏳ Operation started. ID: {operation_name}")
-
-    except Exception as e:
-        print(f"❌ Connection Error during start: {e}")
-        return None
-
-    # 2. حلقة الانتظار (Polling Loop)
-    check_url = f"{base_url}:fetchPredictOperation"
-    start_time = time.time()
-    
-    while True:
-        elapsed = int(time.time() - start_time)
-        print(f"Checking status... (Elapsed: {elapsed}s)")
-        
-        try:
-            # ✅ إضافة Timeout لمنع التجمد
-            check_response = requests.post(
-                check_url, 
-                headers=headers, 
-                json={"operationName": operation_name},
-                timeout=120
+        # 1. إعداد البرومبت
+        kwargs = {
+            "model": "veo-3.0-fast-generate-001",
+            "prompt": prompt_text,
+            "config": types.GenerateVideosConfig(
+                aspect_ratio=aspect_ratio,
+                person_generation="allow_adult" 
             )
+        }
+
+        # 2. إضافة الصورة المرجعية إذا وجدت
+        if image_path and os.path.exists(image_path):
+            print(f"🖼️ Reading reference image as Base64: {image_path}...")
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if not mime_type: mime_type = "image/png"
             
-            if check_response.status_code != 200:
-                print(f"⚠️ Polling warning ({check_response.status_code}). Retrying...")
-                time.sleep(10)
-                continue
-
-            result = check_response.json()
-
-            if "done" in result and result["done"]:
-                if "error" in result:
-                    print("❌ Generation failed:", result["error"])
-                    return None
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
                 
-                # --- (التعديل هنا) استخراج الفيديو بشكل صحيح ---
-                try:
-                    # 1. نتأكد من وجود الفيديو في الاستجابة
-                    if "response" in result and "videos" in result["response"]:
-                        video_obj = result["response"]["videos"][0]
-                        
-                        # 2. نبحث عن الفيديو سواء بالاسم الجديد أو القديم
-                        video_data = video_obj.get("bytesBase64Encoded") or video_obj.get("videoBytes")
+                # تمريرها بصيغة Dictionary كما يطلب الـ SDK
+                kwargs["image"] = types.Image(
+                    image_bytes=base64.b64decode(encoded_string), # הـ SDK يقبل البايتات المباشرة هنا
+                    mime_type=mime_type
+                )
 
-                        if video_data:
-                            
-                            filename = f"veo_{os.urandom(4).hex()}.mp4"
-                            output_path = os.path.join(VIDEO_DIR, filename)
-                            # التأكد من وجود المجلد
-                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                            
-                            # حفظ الملف
-                            with open(output_path, "wb") as f:
-                                f.write(base64.b64decode(video_data))
-                                
-                            print(f"✅ Video generated successfully: {output_path}")
-                            return output_path
-                        else:
-                            print("❌ 'videos' list exists but no video data key found.")
-                            return None
-                    else:
-                        print("❌ No video found in successful response.")
-                        return None
 
-                except Exception as e:
-                    print(f"❌ Error saving video: {e}")
-                    return None
+        # 3. إطلاق عملية التوليد
+        operation = client.models.generate_videos(**kwargs)
+        print(f"⏳ Operation started. Name: {operation.name}")
+
+        # 4. انتظار انتهاء التوليد (Polling)
+        while not operation.done:
+            print("Checking status... (Waiting 10s)")
+            time.sleep(10)
+            operation = client.operations.get(operation=operation)
+
+        # 5. معالجة النتيجة
+        if operation.error:
+            print(f"❌ Generation failed: {operation.error}")
+            return None, None
             
-        except requests.exceptions.Timeout:
-            print("⚠️ Timeout checking status. Network is slow, retrying...")
-        except Exception as e:
-            print(f"⚠️ Error checking status: {e}")
+        # تحميل الفيديو وحفظه
+        return _download_and_save_video(operation, prefix="veo")
 
-        # انتظار قبل المحاولة التالية
-        time.sleep(10)
+    except Exception as e:
+        print(f"❌ Veo API Error: {e}")
+        return None, None
 
+
+def extend_veo_video(prompt_text: str, previous_video_obj, aspect_ratio: str = "16:9"):
+    """
+    تمديد فيديو موجود مسبقاً (يضيف 7 ثواني).
+    يستقبل `previous_video_obj` القادم من الدالة السابقة.
+    """
+    if not previous_video_obj:
+        print("❌ Extension Error: No previous video object provided.")
+        return None, None
+
+    print(f"🎬 Starting Veo extension...")
+
+    try:
+        operation = client.models.generate_videos(
+            model="veo-3.1-generate-preview",
+            prompt=prompt_text,
+            video=previous_video_obj, 
+            config=types.GenerateVideosConfig(
+                number_of_videos=1,
+                resolution="720p" 
+                # Aspect Ratio يتم وراثته تلقائياً من الفيديو الأصلي
+            )
+        )
+        print(f"⏳ Extension Operation started. Name: {operation.name}")
+
+        # انتظار انتهاء التمديد
+        while not operation.done:
+            print("Checking extension status... (Waiting 10s)")
+            time.sleep(10)
+            operation = client.operations.get(operation=operation)
+
+        if operation.error:
+            print(f"❌ Extension failed: {operation.error}")
+            return None, None
+            
+        # تحميل الفيديو الممتد وحفظه
+        return _download_and_save_video(operation, prefix="veo_ext")
+
+    except Exception as e:
+        print(f"❌ Veo Extension API Error: {e}")
+        return None, None
 
 
 def merge_video_with_audio(video_path, audio_path):
@@ -231,15 +171,5 @@ def merge_video_with_audio(video_path, audio_path):
         return output_path
     except Exception as e:
         print(f"❌ Merge Failed: {e}")
-        return video_path # نرجع الفيديو الصامت كحل بديل
+        return video_path 
 
-
-
-if __name__ == "__main__" :
-    # تأكد من المسار
-    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\image\gen_76282eb1.png"
-    prompt = '''A short, dynamic video showcasing the navy captain's hat rotating slowly on a turntable against a neutral background. The camera slowly zooms in to highlight key features such as the brim, insignia, and stitching. Use smooth, controlled camera movements. The video ends with a title card displaying the product name and a call to action. [Hat + Slow Rotation + Zoom In + Product Demo]'''
-    generate_veo_video(
-        prompt_text=prompt,
-        image_path=image_path,
-    )

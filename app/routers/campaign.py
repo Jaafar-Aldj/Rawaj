@@ -350,6 +350,78 @@ async def generate_video_asset(
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+
+@router.post("/generate_extended_video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
+async def generate_extended_video_asset(
+    request: schemas.GenerateVideoRequest,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if not asset or asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Asset not found or unauthorized")
+
+    process_id = f"video_{asset.id}"
+    await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
+    try:
+        ai_result = await run_in_threadpool(
+            manager.generate_extended_video,
+            product_name=asset.campaign.product.name,
+            audience=asset.target_audience,
+            ad_copy_json=asset.ad_copy,
+            duration=request.video_duration,
+            aspect_ratio=request.aspect_ratio,
+            base_image_path=asset.campaign.product.processed_image_url,
+            notify_callback=sync_notify,
+            event_name= request.event_name,
+            event_angle= request.event_angle,
+            voice_preference= request.voice_preference if request.voice_preference in AVAILABLE_VOICES else "Auto"
+        )
+        
+        video_path = ai_result.get("video_url")
+        if not video_path:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video generation failed")
+             
+        filename = os.path.basename(video_path)
+        public_video_url = f"{req.base_url}assets/video/{filename}"
+        
+        # حفظ الفيديو في جدول video_assets الجديد
+        new_video = models.VideoAssets(
+            asset_id=asset.id,
+            video_url=public_video_url,
+            video_storyboard=ai_result.get("video_storyboard"),
+            duration_seconds=request.video_duration,
+            aspect_ratio=request.aspect_ratio,
+            event_name=request.event_name,
+            event_angle=request.event_angle
+        )
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+        
+        await send_notification(process_id, "✅ تم حفظ الفيديو في النظام.")
+        background_tasks.add_task(close_connection, process_id)
+
+        return new_video
+
+    except Exception as e:
+        print(f"Video Error: {e}")
+        await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
 # ==============================================================================
 # المرحلة 4: التعديلات (Feedback & Refining)
 # ==============================================================================
