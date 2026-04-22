@@ -174,6 +174,7 @@ class GenerateVideoRequest(BaseModel):
     aspect_ratio: str = "16:9"
     event_name: Optional[str] = None
     event_angle: Optional[str] = None
+    voice_preference: Optional[str] = None
 
 class EditVideoRequest(BaseModel):
     video_id: int 
@@ -203,3 +204,15 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     id: Optional[int] = None
+
+
+# ==============================================================================
+# Audio & Voice Schemas
+# ==============================================================================
+class VoiceProfileResponse(BaseModel):
+    name: str 
+    description: str 
+    preview_url: Optional[str] = None
+
+class VoiceListResponse(BaseModel):
+    voices: List[VoiceProfileResponse]

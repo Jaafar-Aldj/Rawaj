@@ -27,14 +27,14 @@ def run_audio_test():
     # ==========================================
     # 2. اكتب النصوص التي تريد تجربتها
     # ==========================================
-    voice_text = "موديل الف وتسعمئة واثنان وسبعون متينة ودقيقة. استثمار يزيد إنتاجيتكم. اتصلوا بنا اليوم!"
+    voice_text = "تألقي مع طوق الألماس الفاخر، رمز الأناقة والترف."  # جرب نصوصًا مختلفة لترى كيف يؤثر ذلك على النتيجة!
     
 
     # ==========================================
     # 3. التشغيل والدمج
     # ==========================================
     print("\n🎙️ 1. Generating Voiceover...")
-    voice_path = generate_voiceover(voice_text, voice_profile_name="Chaouki")  # يمكنك تجربة أصوات أخرى مثل "Ghizlane", "Hamida", "Noura"
+    voice_path = generate_voiceover(voice_text, voice_profile_name="Farah")  # يمكنك تجربة أصوات أخرى مثل "Ghizlane", "Hamida", "Noura"
     
     
     if voice_path :

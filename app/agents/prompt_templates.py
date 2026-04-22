@@ -1,5 +1,7 @@
 import json
 
+from app.services.audio_gen import AVAILABLE_VOICES
+
 # ==============================================================================
 # 1. Strategy Prompts (مرحلة الاستراتيجية)
 # ==============================================================================
@@ -45,7 +47,7 @@ def get_copy_generation_prompt(product_name, product_desc, audience, platforms_s
     Product: {product_name}
     Description: {product_desc}
     Target Audience: {audience}
-    Platforms: {platforms_str}
+    {platforms_str}
     
     TASK:
     1. Director: Instruct Copywriter briefly.
@@ -77,11 +79,23 @@ def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_rat
     Output ONLY JSON: {{ "main_image_prompt": "..." }}
     """
 
-def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=None, event_angle=None):
+def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=None, event_angle=None, voice_preference="Auto"):
     event_context = ""
     if event_name:
         angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
         event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
+    voice_instruction = ""
+
+    if voice_preference and voice_preference.lower() != "auto" and voice_preference.strip() != "" and voice_preference in AVAILABLE_VOICES:
+        voice_instruction = f"""
+        USER SELECTED VOICE: "{voice_preference}".
+        You MUST set `"selected_voice_profile": "{voice_preference}"` in your JSON output. Do not change it.
+        """
+    else:
+        voice_instruction = """
+        USER SELECTED VOICE: AUTO (You Decide).
+        You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
+        """
     return f"""
     Product: {product_name}
     Audience: {audience}
@@ -102,6 +116,8 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
     - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
     - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+
+    {voice_instruction}
 
     TASK:
     1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots. REMEMBER: Keep the voiceover EXTREMELY short (max 10-12 words per scene) so it fits the 8-second timeframe.

@@ -326,9 +326,13 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
     groupchat = autogen.GroupChat(agents=[copy_rag, director, copywriter], messages=[], max_round=4, speaker_selection_method="round_robin")
     manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
 
-    platforms_str = ", ".join(platforms) if platforms else "Instagram, Facebook, Twitter(X)"
+    if platforms and len(platforms) > 0:
+        platforms_str = ", ".join(platforms)
+        platform_instruction = f"Target Platforms: {platforms_str}"
+    else:
+        platform_instruction = "Target Platforms: USER DID NOT SPECIFY. You MUST choose the 2 or 3 most suitable social media platforms for this specific product and audience."
     
-    message = prompt_templates.get_copy_generation_prompt(product_name, product_desc, audience, platforms_str)
+    message = prompt_templates.get_copy_generation_prompt(product_name, product_desc, audience, platform_instruction)
 
     chat_result = copy_rag.initiate_chat(
         manager, 
@@ -371,7 +375,7 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
-def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None):
+def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None, voice_preference="Auto"):
     video_director = get_video_director()
     prompter = get_prompter()
 
@@ -386,7 +390,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     num_scenes = max(1, duration // 8)
 
-    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=event_name, event_angle=event_angle)
+    message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=event_name, event_angle=event_angle, voice_preference=voice_preference)
 
     chat_result = prompts_rag.initiate_chat(
         manager, 

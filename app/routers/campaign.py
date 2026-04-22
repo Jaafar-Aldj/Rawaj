@@ -8,6 +8,7 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.concurrency import run_in_threadpool
 
 from app.notifications import  get_queue, send_notification, close_connection, active_connections
+from app.services.audio_gen import AVAILABLE_VOICES
 from .. import models, schemas, oauth2
 from ..database import get_db
 from ..agents import manager 
@@ -159,9 +160,7 @@ async def generate_copies(
     db.commit()
     
 
-
-    # تحديد المنصات (إذا لم يرسل المستخدم، نتركها فارغة ليتصرف الذكاء)
-    platforms = request.selected_platforms if request.selected_platforms else ["Instagram", "Facebook", "TikTok"]
+    platforms = request.selected_platforms if request.selected_platforms else []
     generated_assets = []
     
     process_id = f"copies_{campaign.id}"
@@ -277,8 +276,6 @@ async def generate_image_asset(
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-
-
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (On-Demand Video)
 # ==============================================================================
@@ -317,7 +314,8 @@ async def generate_video_asset(
             base_image_path=asset.campaign.product.processed_image_url,
             notify_callback=sync_notify,
             event_name= request.event_name,
-            event_angle= request.event_angle
+            event_angle= request.event_angle,
+            voice_preference= request.voice_preference if request.voice_preference in AVAILABLE_VOICES else "Auto"
         )
         
         video_path = ai_result.get("video_url")
@@ -744,3 +742,39 @@ async def stream_notifications(proccess_id: str, request: Request):
                 del active_connections[proccess_id]  # تنظيف الطابور عند انتهاء الاتصال
 
     return EventSourceResponse(event_generator())
+
+
+@router.get("/options/voices", response_model=schemas.VoiceListResponse, status_code=status.HTTP_200_OK)
+def get_available_voices(request: Request):
+    """
+    يُرجع قائمة بجميع الأصوات المتاحة (النبرات) ليختار منها المستخدم في الواجهة الأمامية.
+    """
+    voices_list = []
+    
+    # تحويل قاموس AVAILABLE_VOICES إلى قائمة (List) ليفهمها الـ Frontend
+    for voice_name, voice_data in AVAILABLE_VOICES.items():
+        # 1. استخراج الوصف القصير
+        short_desc = voice_data.get("description", "").split(" - ")[0]
+        
+        # 2. تجهيز رابط الاستعراض (Preview URL)
+        raw_url = voice_data.get("url")
+        full_preview_url = None
+        
+        if raw_url:
+            # إذا كان الرابط يبدأ بـ assets (مسار محلي)، نقوم بتحويله لرابط قابل للتشغيل على النت
+            if raw_url.startswith("assets"):
+                # استبدال الـ backslashes (\) بـ forward slashes (/) لكي يعمل كـ URL في المتصفح
+                clean_path = raw_url.replace("\\", "/")
+                full_preview_url = f"{request.base_url}{clean_path}"
+            else:
+                # إذا كان الرابط خارجياً أصلاً (مثل https://...)
+                full_preview_url = raw_url
+        
+        # 3. إضافته للقائمة
+        voices_list.append({
+            "name": voice_name,
+            "description": short_desc,
+            "preview_url": full_preview_url # 👈 الرابط الجاهز للتشغيل
+        })
+        
+    return {"voices": voices_list}
