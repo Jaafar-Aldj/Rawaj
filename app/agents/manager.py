@@ -456,52 +456,52 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Farah"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
-    # 🛑 إصلاح الخطأ 1 و 2: استخراج البيانات من الستوري بورد
     if not vid_storyboard or len(vid_storyboard) == 0:
         print("❌ AI failed to generate storyboard.")
         return {"video_storyboard": [], "video_url": None}
 
-    # بما أننا أجبرناه على مشهد واحد، نأخذ العنصر الأول
     scene = vid_storyboard[0]
     motion_p = scene.get("motion_prompt", "")
     voice_p = scene.get("voiceover_text", "")
     audio_p = scene.get("audio_prompt", "")
     scene_img_prompt = scene.get("image_prompt", "")
-    scene_image_path = get_local_media_path(base_image_path) 
+
+    local_ref_path = get_local_media_path(base_image_path)
+    scene_image_path = local_ref_path 
     
     if scene_img_prompt:
         if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد...")
         try:
-            generated_img = generate_and_review_image(
+            generated_img = generate_image(
                 scene_img_prompt, 
-                reference_image_path=scene_image_path, 
-                aspect_ratio=aspect_ratio,
-                notify_callback=notify_callback,
-                max_retries=0
+                reference_image_path=scene_image_path,
+                aspect_ratio=aspect_ratio
             )
+            # generated_img = generate_and_review_image(
+            #     scene_img_prompt, 
+            #     reference_image_path=scene_image_path, 
+            #     aspect_ratio=aspect_ratio,
+            #     notify_callback=notify_callback,
+            #     max_retries=1
+            # )
             if generated_img and os.path.exists(generated_img):
-                scene_image_path = generated_img # تحديث المسار للصورة المولدة حديثاً
+                scene_image_path = generated_img 
                 if notify_callback: notify_callback(f"✅ تم تصميم الصورة الافتتاحية بنجاح!")
         except Exception as e:
             print(f"⚠️ Image Gen failed, using base image. Error: {e}")
 
-    if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
     
-    # 2. توليد أول 8 ثواني وتمرير الصورة المولدة
-    first_video_path, google_video_name = generate_veo_video(scene_prompt, scene_image_path, aspect_ratio)
-    
-    # 🛑 إصلاح الخطأ 3: دمج البرومبت
     scene_prompt = f"{motion_p}"
     if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
         scene_prompt += f". Audio context: {audio_p}"
+    scene_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting. No voiceover. "
 
-    local_ref_path = get_local_media_path(base_image_path)
 
     if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
     
     # 2. توليد أول 8 ثواني (ملاحظة: يجب أن تتأكد أن generate_veo_video ترجع مسار الفيديو + اسم الملف على جوجل)
     # سنستخدم الدالة المعدلة التي ترجع القيمتين
-    first_video_path, google_video_name = generate_veo_video(scene_prompt, local_ref_path, aspect_ratio)
+    first_video_path, google_video_name = generate_veo_video(scene_prompt, scene_image_path, aspect_ratio)
 
     if not first_video_path or not google_video_name:
         return {"video_storyboard": vid_storyboard, "video_url": None}
@@ -524,7 +524,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
             current_google_name = new_google_name
         else:
             print("⚠️ Extension failed, stopping early.")
-            break # إذا فشل التمديد، نكتفي بما تم توليده
+            break 
 
     # 5. توليد الصوت ودمجه
     if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
@@ -664,13 +664,18 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
     
     if scene_img_prompt:
         try:
-            generated_img = generate_and_review_image(
+            generated_img = generate_image(
                 scene_img_prompt, 
                 reference_image_path=valid_image_path, 
-                aspect_ratio=aspect_ratio,
-                notify_callback=notify_callback,
-                max_retries=0
+                aspect_ratio=aspect_ratio
             )
+            # generated_img = generate_and_review_image(
+            #     scene_img_prompt, 
+            #     reference_image_path=valid_image_path, 
+            #     aspect_ratio=aspect_ratio,
+            #     notify_callback=notify_callback,
+            #     max_retries=1
+            # )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
                 if notify_callback: notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")
@@ -683,11 +688,16 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
     veo_prompt = f"{motion_p}"
     if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
         veo_prompt += f". Audio context: {audio_p}"
+    veo_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting. No voiceover."
         
     # 3. توليد الفيديو
     if notify_callback: notify_callback(f"🎬 جاري تحريك المشهد رقم {scene_num}...")
     try:
         scene_video_path = generate_and_review_video(veo_prompt, scene_image_path, aspect_ratio)
+        if not scene_video_path or not os.path.exists(scene_video_path):
+            print(f"❌ [Scene {scene_num}] Video Gen failed (API returned None or File missing).")
+            if notify_callback: notify_callback(f"❌ فشل تحريك المشهد {scene_num} (مرفوض من جوجل).")
+            return {"scene_number": scene_num, "path": None}
         print(f"✅ [Thread] Scene {scene_num} completed.")
         if notify_callback: notify_callback(f"✅ تم الانتهاء من تحريك المشهد {scene_num} بنجاح!")
     except Exception as e:

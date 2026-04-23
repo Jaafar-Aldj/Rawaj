@@ -126,7 +126,9 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
 
     ⛔ NEGATIVE CONSTRAINTS:
     - NO Text, Typography, Labels on screen.
-    - NO Lip-syncing, speaking, or talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
+    - NO speaking
+    - No Lip-syncing
+    - NO talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
     
     OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
     {{
@@ -193,7 +195,9 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
 
     ⛔ NEGATIVE CONSTRAINTS:
     - NO Text, Typography, Labels on screen.
-    - NO Lip-syncing, speaking, or talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
+    - NO speaking
+    - No Lip-syncing
+    - NO talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
     
     OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
     {{

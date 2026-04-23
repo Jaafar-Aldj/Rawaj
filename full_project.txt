@@ -70,6 +70,94 @@ user_proxy.initiate_chat(
 )
 
 ==================================================
+FILE: .\test_ai_logic.py
+==================================================
+import os
+import sys
+import json
+from dotenv import load_dotenv
+import autogen
+
+load_dotenv()
+sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
+
+from app.agents.roles import get_director, get_copywriter, get_video_director, get_prompter
+from app.agents.manager import create_rag_proxy, extract_agent_json
+from app.agents import prompt_templates
+
+def test_dynamic_platforms():
+    print("\n" + "="*50)
+    print("🧪 1. TESTING DYNAMIC PLATFORM SELECTION (COPYWRITING)")
+    print("="*50)
+    
+    product = "عطر ليالي الشرق"
+    desc = "عطر رجالي فخم برائحة العود، مناسب للمناسبات الرسمية."
+    audience = "الرجال (30-50 عاماً)"
+    
+    director = get_director()
+    copywriter = get_copywriter()
+    model_name = copywriter.llm_config['config_list'][0]['model']
+    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
+
+    groupchat = autogen.GroupChat(agents=[copy_rag, director, copywriter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
+
+    # هنا لم نرسل أي منصة (تركنا الخيار للذكاء الاصطناعي)
+    platform_instruction = "Target Platforms: USER DID NOT SPECIFY. You MUST choose the 2 or 3 most suitable social media platforms for this specific product and audience."
+    message = prompt_templates.get_copy_generation_prompt(product, desc, audience, platform_instruction)
+
+    chat_result = copy_rag.initiate_chat(manager, message=copy_rag.message_generator, problem=message, n_results=2)
+    ad_copy = extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
+    
+    print("\n✅ AI DECISION FOR PLATFORMS:")
+    print(json.dumps(ad_copy, indent=4, ensure_ascii=False))
+
+
+def test_dynamic_voice_selection():
+    print("\n" + "="*50)
+    print("🧪 2. TESTING DYNAMIC VOICE SELECTION (VIDEO STORYBOARD)")
+    print("="*50)
+    
+    # 💡 قم بتغيير المنتج لترى كيف سيغير الذكاء الاصطناعي رأيه في اختيار الصوت!
+    product = "طوق ألماس"
+    audience = "المليونيرات العربيات (40-60 عاماً)"
+    fake_ad_copy = [{"platform": "TikTok", "ad_copy": "تألقي مع طوق الألماس الفاخر - رمز الأناقة والترف الذي يليق بكِ!"}]
+    
+    # 💡 جرب وضع "Auto" لترى من سيختار، أو ضع "Sara" لتجبره عليها.
+    voice_preference = "Auto" 
+
+    video_director = get_video_director()
+    prompter = get_prompter()
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+
+    groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
+
+    message = prompt_templates.get_video_generation_prompt(
+        product_name=product, 
+        audience=audience, 
+        ad_copy_json=fake_ad_copy, 
+        duration=8, 
+        num_scenes=1, 
+        aspect_ratio="9:16", 
+        voice_preference=voice_preference
+    )
+
+    chat_result = prompts_rag.initiate_chat(manager, message=prompts_rag.message_generator, problem=message, n_results=2)
+    data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
+    
+    print("\n✅ AI DECISION FOR VOICE & STORYBOARD:")
+    selected_voice = data.get("selected_voice_profile", "ERROR") if data else "ERROR"
+    print(f"🎙️ SELECTED VOICE: {selected_voice}")
+    print(json.dumps(data, indent=4, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    # test_dynamic_platforms()
+    test_dynamic_voice_selection()
+
+==================================================
 FILE: .\test_audio.py
 ==================================================
 import os
@@ -101,14 +189,14 @@ def run_audio_test():
     # ==========================================
     # 2. اكتب النصوص التي تريد تجربتها
     # ==========================================
-    voice_text = "موديل الف وتسعمئة واثنان وسبعون متينة ودقيقة. استثمار يزيد إنتاجيتكم. اتصلوا بنا اليوم!"
+    voice_text = "تألقي مع طوق الألماس الفاخر، رمز الأناقة والترف."  # جرب نصوصًا مختلفة لترى كيف يؤثر ذلك على النتيجة!
     
 
     # ==========================================
     # 3. التشغيل والدمج
     # ==========================================
     print("\n🎙️ 1. Generating Voiceover...")
-    voice_path = generate_voiceover(voice_text, voice_profile_name="Chaouki")  # يمكنك تجربة أصوات أخرى مثل "Ghizlane", "Hamida", "Noura"
+    voice_path = generate_voiceover(voice_text, voice_profile_name="Farah")  # يمكنك تجربة أصوات أخرى مثل "Ghizlane", "Hamida", "Noura"
     
     
     if voice_path :
@@ -120,6 +208,115 @@ def run_audio_test():
 
 if __name__ == "__main__":
     run_audio_test()
+
+==================================================
+FILE: .\test_extend_video.py
+==================================================
+import os
+import sys
+import json
+from dotenv import load_dotenv
+import autogen
+
+# تحميل المتغيرات البيئية ومسار التطبيق
+load_dotenv()
+sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
+
+from app.agents.roles import get_video_director, get_prompter
+from app.agents.manager import create_rag_proxy, extract_agent_json, normalize_prompts_data
+from app.agents import prompt_templates
+from app.services.audio_gen import generate_voiceover, merge_video_audio
+
+# =================================================================================
+# 🛑 MOCKING FUNCTIONS (لخداع السيرفر وتوفير المال!)
+# =================================================================================
+def mock_generate_veo_video(prompt, image_path, aspect_ratio):
+    print(f"💰 [SAVED $] MOCKING VEO GENERATION: {prompt[:50]}...")
+    # 👈 ضع هنا مسار أي فيديو حقيقي موجود لديك في مجلد assets/video
+    mock_path = r"rawaj-frontend\assets\video\veo_d734605f.mp4" 
+    
+    if not os.path.exists(mock_path):
+        print("❌ المرجو وضع مسار فيديو صالح في دالة الـ Mock!")
+        return None, None
+        
+    return mock_path, "mock_google_video_object"
+
+def mock_extend_veo_video(prompt, prev_obj, aspect_ratio):
+    print(f"💰 [SAVED $] MOCKING VEO EXTENSION: {prompt[:50]}...")
+    # 👈 ضع هنا مسار فيديو آخر (أو نفس الفيديو) ليمثل نتيجة التمديد
+    mock_path = r"rawaj-frontend\assets\video\veo_ff46ab61.mp4" 
+    return mock_path, "mock_google_video_object_extended"
+
+
+# =================================================================================
+# 🚀 THE TEST PIPELINE
+# =================================================================================
+def test_extended_video_logic():
+    print("🚀 Starting MOCKED Extended Video Test...\n")
+    
+    # 1. إعداد المعطيات
+    product = "قهوة الإشراق"
+    audience = "عشاق القهوة في الصباح"
+    ad_copy = [{"platform": "Instagram", "ad_copy": "استيقظ على رائحة البن الكولومبي الأصيل. قهوة الإشراق، يومك يبدأ من هنا!"}]
+    duration = 15 # نطلب 15 ثانية (يعني سيقوم בתمديد واحد!)
+    aspect_ratio = "9:16"
+    voice_preference = "Adam"
+
+    # 2. تشغيل عقل الذكاء الاصطناعي (AI Planning)
+    video_director = get_video_director()
+    prompter = get_prompter()
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+
+    message = prompt_templates.get_video_generation_prompt(
+        product, audience, ad_copy, duration, 1, aspect_ratio, voice_preference=voice_preference
+    )
+
+    groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config, is_termination_msg=lambda x: False)
+
+    print("🧠 AI is creating the Extended Storyboard...")
+    chat_result = prompts_rag.initiate_chat(manager, message=prompts_rag.message_generator, problem=message, n_results=2)
+    
+    data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
+    _, vid_storyboard = normalize_prompts_data(data)
+    
+    if not vid_storyboard:
+        print("❌ AI failed to generate storyboard.")
+        return
+
+    scene = vid_storyboard[0]
+    print(f"\n📋 Generated Scene Prompt: {scene.get('motion_prompt')}")
+    print(f"🗣️ Generated Voiceover: {scene.get('voiceover_text')}\n")
+
+    # 3. اختبار مسار التوليد (Mocked Generation & Extension)
+    extensions_needed = max(0, (duration - 8) // 7)
+    print(f"🎬 Planning 1 Base Generation + {extensions_needed} Extensions.")
+    
+    # التوليد الأول (Mocked)
+    final_video_path, current_google_obj = mock_generate_veo_video("scene_prompt", "base_image", aspect_ratio)
+    
+    # التمديد (Mocked)
+    for i in range(extensions_needed):
+        ext_path, new_google_obj = mock_extend_veo_video("scene_prompt", current_google_obj, aspect_ratio)
+        if ext_path:
+            final_video_path = ext_path
+            current_google_obj = new_google_obj
+
+    # 4. اختبار الصوت الحقيقي (Real Audio Generation)
+    # ملاحظة: سنستهلك بعض حروف ElevenLabs هنا، لكن تكلفتها شبه صفرية
+    voice_p = scene.get("voiceover_text")
+    if voice_p and voice_p.lower() != "none":
+        print("\n🎙️ Generating REAL Voiceover...")
+        voice_path = generate_voiceover(voice_p, voice_profile_name=voice_preference)
+        
+        print("🎬 Merging Audio and Video...")
+        final_video_with_audio = merge_video_audio(final_video_path, voice_path)
+        
+        print(f"\n🎉 TEST COMPLETE! Final Video saved at: {final_video_with_audio}")
+
+if __name__ == "__main__":
+    test_extended_video_logic()
 
 ==================================================
 FILE: .\test_team.py
@@ -1930,7 +2127,7 @@ from app.agents.agents_system_messages import get_prompter_updated_message
 from app.agents.countries_utils import ARABIC_COUNTRIES
 from app.agents.roles import get_director, get_copywriter, get_marketing_strategist, get_video_director, get_prompter
 from app.services.image_gen import generate_image
-from app.services.video_gen import  generate_veo_video
+from app.services.video_gen import  extend_veo_video, generate_veo_video
 from app.services.video_processing import concatenate_veo_videos
 from app.services.vision_qa import analyze_media 
 from app.agents import prompt_templates
@@ -2121,7 +2318,7 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
         if notify_callback:
             notify_callback(f"🎬 جاري التوليد (المحاولة {attempt}/{max_retries})...")
         print(f"\n🔄 [Video QA] Attempt {attempt}/{max_retries}...")
-        video_path = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
+        video_path, _ = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
         
         if not video_path: return last_generated_video
         last_generated_video = video_path
@@ -2318,7 +2515,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard = normalize_prompts_data(data)
-    selected_voice = data.get("selected_voice_profile", "Noura") if isinstance(data, dict) else "Noura"
+    selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Auto"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
@@ -2337,6 +2534,123 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
         )
         
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
+
+def generate_extended_video(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None, voice_preference="Auto"):
+    """
+    توليد مشهد واحد ممتد (Extended One-Shot) بدلاً من مشاهد متعددة.
+    """
+    video_director = get_video_director()
+    prompter = get_prompter()
+
+    prompter.update_system_message(get_prompter_updated_message(aspect_ratio))
+
+    model_name = prompter.llm_config['config_list'][0]['model']
+    prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
+
+    # 1. إجبار المخرج على مشهد واحد فقط يحمل كل القصة
+    message = prompt_templates.get_extend_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes=1, aspect_ratio=aspect_ratio, event_name=event_name, event_angle=event_angle, voice_preference=voice_preference)
+
+    groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=4, speaker_selection_method="round_robin")
+    
+    manager = autogen.GroupChatManager(
+        groupchat=groupchat, 
+        llm_config=video_director.llm_config,
+        is_termination_msg=lambda x: False
+    )
+
+    chat_result = prompts_rag.initiate_chat(
+        manager, 
+        message=prompts_rag.message_generator,
+        problem=message,
+        n_results=2
+    )
+
+    data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
+    _, vid_storyboard = normalize_prompts_data(data)
+    selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Farah"
+    print(f"🎙️ AI selected voice profile: {selected_voice}")
+
+    if not vid_storyboard or len(vid_storyboard) == 0:
+        print("❌ AI failed to generate storyboard.")
+        return {"video_storyboard": [], "video_url": None}
+
+    scene = vid_storyboard[0]
+    motion_p = scene.get("motion_prompt", "")
+    voice_p = scene.get("voiceover_text", "")
+    audio_p = scene.get("audio_prompt", "")
+    scene_img_prompt = scene.get("image_prompt", "")
+    scene_image_path = get_local_media_path(base_image_path) 
+    
+    if scene_img_prompt:
+        if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد...")
+        try:
+            generated_img = generate_image(
+                scene_img_prompt, 
+                reference_image_path=scene_image_path,
+                aspect_ratio=aspect_ratio
+            )
+            # generated_img = generate_and_review_image(
+            #     scene_img_prompt, 
+            #     reference_image_path=scene_image_path, 
+            #     aspect_ratio=aspect_ratio,
+            #     notify_callback=notify_callback,
+            #     max_retries=1
+            # )
+            if generated_img and os.path.exists(generated_img):
+                scene_image_path = generated_img 
+                if notify_callback: notify_callback(f"✅ تم تصميم الصورة الافتتاحية بنجاح!")
+        except Exception as e:
+            print(f"⚠️ Image Gen failed, using base image. Error: {e}")
+
+    if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
+    
+    scene_prompt = f"{motion_p}"
+    if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
+        scene_prompt += f". Audio context: {audio_p}"
+    scene_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting."
+
+    local_ref_path = get_local_media_path(base_image_path)
+
+    if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
+    
+    # 2. توليد أول 8 ثواني (ملاحظة: يجب أن تتأكد أن generate_veo_video ترجع مسار الفيديو + اسم الملف على جوجل)
+    # سنستخدم الدالة المعدلة التي ترجع القيمتين
+    first_video_path, google_video_name = generate_veo_video(scene_prompt, local_ref_path, aspect_ratio)
+
+    if not first_video_path or not google_video_name:
+        return {"video_storyboard": vid_storyboard, "video_url": None}
+
+    # 3. حساب عدد التمديدات المطلوبة (كل تمديد يضيف حوالي 7 ثواني)
+    extensions_needed = max(0, (duration - 8) // 7)
+    
+    current_google_name = google_video_name
+    final_video_path = first_video_path
+
+    # 4. حلقة التمديد المتتالية
+    for i in range(extensions_needed):
+        if notify_callback: notify_callback(f"🔄 جاري تمديد الفيديو (الجزء {i+2})...")
+        
+        # نرسل نفس البرومبت، مع مرجع الفيديو السابق
+        ext_path, new_google_name = extend_veo_video(scene_prompt, current_google_name, aspect_ratio)
+        
+        if ext_path:
+            final_video_path = ext_path # الفيديو الجديد يحتوي المقطع الأول مدمجاً مع الثاني
+            current_google_name = new_google_name
+        else:
+            print("⚠️ Extension failed, stopping early.")
+            break 
+
+    # 5. توليد الصوت ودمجه
+    if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
+        if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي...")
+        voice_path = generate_voiceover(voice_p, voice_profile_name=selected_voice)
+        final_video_with_audio = merge_video_audio(final_video_path, voice_path)
+    else:
+        final_video_with_audio = final_video_path # إذا لم يكن هناك تعليق صوتي
+
+    if notify_callback: notify_callback(f"✅ تم الانتهاء من الفيديو الممتد!")
+    return {"video_storyboard": vid_storyboard, "video_url": final_video_with_audio}
+
 # ==============================================================================
 # المرحلة 4: التعديلات (Refining)
 # ==============================================================================
@@ -2464,12 +2778,18 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
     
     if scene_img_prompt:
         try:
-            generated_img = generate_and_review_image(
+            generated_img = generate_image(
                 scene_img_prompt, 
                 reference_image_path=valid_image_path, 
-                aspect_ratio=aspect_ratio,
-                notify_callback=notify_callback
+                aspect_ratio=aspect_ratio
             )
+            # generated_img = generate_and_review_image(
+            #     scene_img_prompt, 
+            #     reference_image_path=valid_image_path, 
+            #     aspect_ratio=aspect_ratio,
+            #     notify_callback=notify_callback,
+            #     max_retries=1
+            # )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
                 if notify_callback: notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")
@@ -2482,6 +2802,7 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
     veo_prompt = f"{motion_p}"
     if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
         veo_prompt += f". Audio context: {audio_p}"
+    veo_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting."
         
     # 3. توليد الفيديو
     if notify_callback: notify_callback(f"🎬 جاري تحريك المشهد رقم {scene_num}...")
@@ -2579,6 +2900,8 @@ FILE: .\app\agents\prompt_templates.py
 ==================================================
 import json
 
+from app.services.audio_gen import AVAILABLE_VOICES
+
 # ==============================================================================
 # 1. Strategy Prompts (مرحلة الاستراتيجية)
 # ==============================================================================
@@ -2662,7 +2985,8 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
         angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
         event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
     voice_instruction = ""
-    if voice_preference and voice_preference.lower() != "auto" and voice_preference.strip() != "":
+
+    if voice_preference and voice_preference.lower() != "auto" and voice_preference.strip() != "" and voice_preference in AVAILABLE_VOICES:
         voice_instruction = f"""
         USER SELECTED VOICE: "{voice_preference}".
         You MUST set `"selected_voice_profile": "{voice_preference}"` in your JSON output. Do not change it.
@@ -2700,6 +3024,81 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
     🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
 
+    ⛔ NEGATIVE CONSTRAINTS:
+    - NO Text, Typography, Labels on screen.
+    - NO speaking
+    - No Lip-syncing
+    - NO talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
+    
+    OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
+    {{
+        "selected_voice_profile": "Farah",
+        "video_storyboard": [
+            {{ 
+                "scene_number": 1,
+                "image_prompt": "Cinematic visual setup...",
+                "motion_prompt": "Camera movement...",
+                "voiceover_text": "Short Arabic text (max 12 words)",
+                "audio_prompt": "Cinematic music..."
+            }}
+        ]
+    }}
+    """
+
+def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, total_duration, num_scenes, aspect_ratio, event_name=None, event_angle=None, voice_preference="Auto"):
+    event_context = ""
+    if event_name:
+        angle_text = f" focusing heavily on this specific marketing angle: '{event_angle}'" if event_angle else ""
+        event_context = f"\n🎯 SPECIAL INSTRUCTION: Tie this video to the trending event '{event_name}'{angle_text}. Add subtle visual elements that strongly reflect this theme."
+    voice_instruction = ""
+
+    if voice_preference and voice_preference.lower() != "auto" and voice_preference.strip() != "" and voice_preference in AVAILABLE_VOICES:
+        voice_instruction = f"""
+        USER SELECTED VOICE: "{voice_preference}".
+        You MUST set `"selected_voice_profile": "{voice_preference}"` in your JSON output. Do not change it.
+        """
+    else:
+        voice_instruction = """
+        USER SELECTED VOICE: AUTO (You Decide).
+        You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
+        """
+    return f"""
+    Product: {product_name}
+    Audience: {audience}
+    Copy Context: {json.dumps(ad_copy_json, ensure_ascii=False)}{event_context}
+    Total Video Duration: {total_duration} seconds.
+    Target Aspect Ratio: {aspect_ratio}
+    
+    
+    AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
+    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
+    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
+    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
+    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
+    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
+    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
+    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
+    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
+    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
+    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
+    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
+    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+
+    {voice_instruction}
+
+    TASK:
+    1. Video_Director: Create a storyboard for EXACTLY ONE long continuous scene that lasts {total_duration} seconds.
+       - Describe the continuous action. 
+       - Write a single, cohesive `voiceover` script. The word count MUST match the {total_duration} seconds duration (assume 2 words per second. E.g., for 15 seconds, write about 30 Arabic words).
+    2. Prompt_Engineer: Output the JSON `video_storyboard` containing ONLY ONE scene object.
+    🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
+
+    ⛔ NEGATIVE CONSTRAINTS:
+    - NO Text, Typography, Labels on screen.
+    - NO speaking
+    - No Lip-syncing
+    - NO talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
+    
     OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
     {{
         "selected_voice_profile": "Farah",
@@ -3234,6 +3633,78 @@ async def generate_video_asset(
     try:
         ai_result = await run_in_threadpool(
             manager.generate_video_on_demand,
+            product_name=asset.campaign.product.name,
+            audience=asset.target_audience,
+            ad_copy_json=asset.ad_copy,
+            duration=request.video_duration,
+            aspect_ratio=request.aspect_ratio,
+            base_image_path=asset.campaign.product.processed_image_url,
+            notify_callback=sync_notify,
+            event_name= request.event_name,
+            event_angle= request.event_angle,
+            voice_preference= request.voice_preference if request.voice_preference in AVAILABLE_VOICES else "Auto"
+        )
+        
+        video_path = ai_result.get("video_url")
+        if not video_path:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Video generation failed")
+             
+        filename = os.path.basename(video_path)
+        public_video_url = f"{req.base_url}assets/video/{filename}"
+        
+        # حفظ الفيديو في جدول video_assets الجديد
+        new_video = models.VideoAssets(
+            asset_id=asset.id,
+            video_url=public_video_url,
+            video_storyboard=ai_result.get("video_storyboard"),
+            duration_seconds=request.video_duration,
+            aspect_ratio=request.aspect_ratio,
+            event_name=request.event_name,
+            event_angle=request.event_angle
+        )
+        db.add(new_video)
+        db.commit()
+        db.refresh(new_video)
+        
+        await send_notification(process_id, "✅ تم حفظ الفيديو في النظام.")
+        background_tasks.add_task(close_connection, process_id)
+
+        return new_video
+
+    except Exception as e:
+        print(f"Video Error: {e}")
+        await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
+        background_tasks.add_task(close_connection, process_id)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post("/generate_extended_video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
+async def generate_extended_video_asset(
+    request: schemas.GenerateVideoRequest,
+    req: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
+):
+    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
+    if not asset or asset.campaign.product.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Asset not found or unauthorized")
+
+    process_id = f"video_{asset.id}"
+    await send_notification(process_id, "🎬 جاري كتابة السيناريو السينمائي (Storyboard)...")
+
+    main_loop = asyncio.get_running_loop()
+    def sync_notify(message: str):
+        """
+        هذه الدالة عادية (Sync)، يمكن استدعاؤها من أي مكان (حتى داخل Thread).
+        وظيفتها إرسال الإشعار للـ Event Loop الرئيسي بأمان.
+        """
+        if main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(send_notification(process_id, message), main_loop)
+
+    try:
+        ai_result = await run_in_threadpool(
+            manager.generate_extended_video,
             product_name=asset.campaign.product.name,
             audience=asset.target_audience,
             ad_copy_json=asset.ad_copy,
@@ -4450,15 +4921,14 @@ if __name__ == "__main__":
 ==================================================
 FILE: .\app\services\video_gen.py
 ==================================================
+import base64
+import mimetypes
 import os
 import time
-import base64
-import requests
-import google.auth.transport.requests
-import mimetypes
-from moviepy import ImageClip, AudioFileClip, VideoFileClip
+from google import genai
+from google.genai import types
+from moviepy import AudioFileClip, VideoFileClip
 from google.oauth2 import service_account
-# تأكد من أن هذا الاستيراد يعمل عندك
 from ..config import settings 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -4471,189 +4941,130 @@ SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
 VIDEO_DIR = "rawaj-frontend/assets/video"
 os.makedirs(VIDEO_DIR, exist_ok=True)
 
-def create_video_from_image_and_audio(image_path, audio_path):
-    """
-    إنشاء فيديو بسيط: صورة ثابتة + صوت + تأثير زووم (اختياري)
-    """
+client = genai.Client(api_key=settings.google_api_key)
+
+def _download_and_save_video(operation, prefix="veo"):
+    """دالة مساعدة لتحميل الفيديو من سيرفر جوجل وحفظه محلياً"""
     try:
-        print("🎬 Creating video...")
+        if not operation.response or not operation.response.generated_videos:
+            print("❌ Google API returned empty response (possibly blocked by safety filter).")
+            return None, None
+        # استخراج كائن الفيديو من الرد
+        video_obj = operation.response.generated_videos[0]
         
-        # تحميل الملفات
-        audio = AudioFileClip(audio_path)
-        image = ImageClip(image_path).with_duration(audio.duration)
+        # تحميل الملف فعلياً من سيرفر جوجل (الميزة الجديدة في الـ SDK)
+        file_bytes = client.files.download(file=video_obj.video)
         
-        # دمج الصوت مع الصورة
-        video = image.with_audio(audio)
-    
-        unique_filename =  f"video_{os.urandom(4).hex()}.mp4"
-        output_path = os.path.join(VIDEO_DIR, unique_filename)
+        # حفظه محلياً
+        filename = f"{prefix}_{os.urandom(4).hex()}.mp4"
+        output_path = os.path.join(VIDEO_DIR, filename)
+        
+        with open(output_path, "wb") as f:
+            f.write(file_bytes)
             
-        # الرندرة (هذه العملية تأخذ وقتاً)
-        video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
-        
-        print(f"✅ Video saved at: {output_path}")
-        return output_path
-
+        print(f"✅ Video successfully saved to: {output_path}")
+        return output_path, video_obj.video # نُرجع الكائن (Video Object) لنستخدمه في التمديد لاحقاً!
     except Exception as e:
-        print(f"❌ Video Creation Failed: {e}")
-        return 
-
-
-def get_access_token():
-    """الحصول على توكن المصادقة باستخدام ملف JSON"""
-    credentials = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE,
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    request = google.auth.transport.requests.Request()
-    credentials.refresh(request)
-    return credentials.token
+        print(f"❌ Error downloading/saving video: {e}")
+        return None, None
 
 
 def generate_veo_video(prompt_text: str, image_path: str = None, aspect_ratio: str = "16:9"):
-    if not image_path:
-        print(f"❌ No image provided. Veo model requires an image input.")
-        return None
+    """
+    توليد فيديو افتتاحي (8 ثواني) باستخدام Veo 3.
+    """
+    print(f"🎬 Starting initial Veo generation...")
     
-    if "image/" in image_path:
-        filename = image_path.split("image/")[-1]
-        local_path = os.path.join("rawaj-frontend", "assets", "image", filename)
-    elif "upload/" in image_path: # إضافة دعم مجلد الرفع هنا أيضاً
-            filename = image_path.split("upload/")[-1]
-            local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
-    else:
-        local_path = image_path # افتراض أنه مسار محلي
-
-
-    if local_path:
-        print(f"🖼️  Using image input: {local_path}")
-        if not os.path.exists(local_path):
-            print(f"❌ Image file not found: {image_path}")
-            return None
     try:
-        access_token = get_access_token()
-    except Exception as e:
-        print(f"❌ Auth Error: {e}")
-        return None
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json; charset=utf-8"
-    }
-
-    # تجهيز البيانات
-    instance = {"prompt": prompt_text}
-
-    # معالجة الصورة
-    if local_path:
-        mime_type, _ = mimetypes.guess_type(local_path)
-        if not mime_type: mime_type = "image/png"
-        
-        with open(local_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-            instance["image"] = {
-                "bytesBase64Encoded": encoded_string,
-                "mimeType": mime_type 
-            }
-
-    # الروابط
-    base_url = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}"
-    start_url = f"{base_url}:predictLongRunning"
-    
-    # 1. إرسال طلب البدء
-    try:
-        response = requests.post(start_url, headers=headers, json={
-            "instances": [instance],
-            "parameters": {
-                "sampleCount": 1, 
-                "safetySetting": "block_only_high", 
-                "personGeneration": "allow_all",
-                "negativePrompt": "text, typography, labels, watermarks, subtitles, words, letters, writing",
-                "aspectRatio": aspect_ratio
-            }
-        }, timeout=30) # تايم أوت للطلب الأول
-        
-        if response.status_code != 200:
-            print(f"❌ Error starting generation ({response.status_code}):", response.text)
-            return None
-            
-        operation_name = response.json()["name"]
-        print(f"⏳ Operation started. ID: {operation_name}")
-
-    except Exception as e:
-        print(f"❌ Connection Error during start: {e}")
-        return None
-
-    # 2. حلقة الانتظار (Polling Loop)
-    check_url = f"{base_url}:fetchPredictOperation"
-    start_time = time.time()
-    
-    while True:
-        elapsed = int(time.time() - start_time)
-        print(f"Checking status... (Elapsed: {elapsed}s)")
-        
-        try:
-            # ✅ إضافة Timeout لمنع التجمد
-            check_response = requests.post(
-                check_url, 
-                headers=headers, 
-                json={"operationName": operation_name},
-                timeout=120
+        # 1. إعداد البرومبت
+        kwargs = {
+            "model": "veo-3.1-generate-preview",
+            "prompt": prompt_text,
+            "config": types.GenerateVideosConfig(
+                aspect_ratio=aspect_ratio,
+                person_generation="allow_adult" 
             )
+        }
+
+        # 2. إضافة الصورة المرجعية إذا وجدت
+        if image_path and os.path.exists(image_path):
+            print(f"🖼️ Reading reference image as Base64: {image_path}...")
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if not mime_type: mime_type = "image/png"
             
-            if check_response.status_code != 200:
-                print(f"⚠️ Polling warning ({check_response.status_code}). Retrying...")
-                time.sleep(10)
-                continue
-
-            result = check_response.json()
-
-            if "done" in result and result["done"]:
-                if "error" in result:
-                    print("❌ Generation failed:", result["error"])
-                    return None
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
                 
-                # --- (التعديل هنا) استخراج الفيديو بشكل صحيح ---
-                try:
-                    # 1. نتأكد من وجود الفيديو في الاستجابة
-                    if "response" in result and "videos" in result["response"]:
-                        video_obj = result["response"]["videos"][0]
-                        
-                        # 2. نبحث عن الفيديو سواء بالاسم الجديد أو القديم
-                        video_data = video_obj.get("bytesBase64Encoded") or video_obj.get("videoBytes")
+                # تمريرها بصيغة Dictionary كما يطلب الـ SDK
+                kwargs["image"] = types.Image(
+                    image_bytes=base64.b64decode(encoded_string), # הـ SDK يقبل البايتات المباشرة هنا
+                    mime_type=mime_type
+                )
 
-                        if video_data:
-                            
-                            filename = f"veo_{os.urandom(4).hex()}.mp4"
-                            output_path = os.path.join(VIDEO_DIR, filename)
-                            # التأكد من وجود المجلد
-                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                            
-                            # حفظ الملف
-                            with open(output_path, "wb") as f:
-                                f.write(base64.b64decode(video_data))
-                                
-                            print(f"✅ Video generated successfully: {output_path}")
-                            return output_path
-                        else:
-                            print("❌ 'videos' list exists but no video data key found.")
-                            return None
-                    else:
-                        print("❌ No video found in successful response.")
-                        return None
 
-                except Exception as e:
-                    print(f"❌ Error saving video: {e}")
-                    return None
+        # 3. إطلاق عملية التوليد
+        operation = client.models.generate_videos(**kwargs)
+        print(f"⏳ Operation started. Name: {operation.name}")
+
+        # 4. انتظار انتهاء التوليد (Polling)
+        while not operation.done:
+            print("Checking status... (Waiting 10s)")
+            time.sleep(10)
+            operation = client.operations.get(operation=operation)
+
+        # 5. معالجة النتيجة
+        if operation.error:
+            print(f"❌ Generation failed: {operation.error}")
+            return None, None
             
-        except requests.exceptions.Timeout:
-            print("⚠️ Timeout checking status. Network is slow, retrying...")
-        except Exception as e:
-            print(f"⚠️ Error checking status: {e}")
+        # تحميل الفيديو وحفظه
+        return _download_and_save_video(operation, prefix="veo")
 
-        # انتظار قبل المحاولة التالية
-        time.sleep(10)
+    except Exception as e:
+        print(f"❌ Veo API Error: {e}")
+        return None, None
 
+
+def extend_veo_video(prompt_text: str, previous_video_obj, aspect_ratio: str = "16:9"):
+    """
+    تمديد فيديو موجود مسبقاً (يضيف 7 ثواني).
+    يستقبل `previous_video_obj` القادم من الدالة السابقة.
+    """
+    if not previous_video_obj:
+        print("❌ Extension Error: No previous video object provided.")
+        return None, None
+
+    print(f"🎬 Starting Veo extension...")
+
+    try:
+        operation = client.models.generate_videos(
+            model="veo-3.1-generate-preview",
+            prompt=prompt_text,
+            video=previous_video_obj, 
+            config=types.GenerateVideosConfig(
+                number_of_videos=1,
+                resolution="720p" 
+                # Aspect Ratio يتم وراثته تلقائياً من الفيديو الأصلي
+            )
+        )
+        print(f"⏳ Extension Operation started. Name: {operation.name}")
+
+        # انتظار انتهاء التمديد
+        while not operation.done:
+            print("Checking extension status... (Waiting 10s)")
+            time.sleep(10)
+            operation = client.operations.get(operation=operation)
+
+        if operation.error:
+            print(f"❌ Extension failed: {operation.error}")
+            return None, None
+            
+        # تحميل الفيديو الممتد وحفظه
+        return _download_and_save_video(operation, prefix="veo_ext")
+
+    except Exception as e:
+        print(f"❌ Veo Extension API Error: {e}")
+        return None, None
 
 
 def merge_video_with_audio(video_path, audio_path):
@@ -4683,18 +5094,9 @@ def merge_video_with_audio(video_path, audio_path):
         return output_path
     except Exception as e:
         print(f"❌ Merge Failed: {e}")
-        return video_path # نرجع الفيديو الصامت كحل بديل
+        return video_path 
 
 
-
-if __name__ == "__main__" :
-    # تأكد من المسار
-    image_path = r"D:\UOK_Final_Proj\Rawaj\rawaj-frontend\assets\image\gen_76282eb1.png"
-    prompt = '''A short, dynamic video showcasing the navy captain's hat rotating slowly on a turntable against a neutral background. The camera slowly zooms in to highlight key features such as the brim, insignia, and stitching. Use smooth, controlled camera movements. The video ends with a title card displaying the product name and a call to action. [Hat + Slow Rotation + Zoom In + Product Demo]'''
-    generate_veo_video(
-        prompt_text=prompt,
-        image_path=image_path,
-    )
 
 ==================================================
 FILE: .\app\services\video_processing.py

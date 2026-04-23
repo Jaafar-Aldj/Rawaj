@@ -55,7 +55,7 @@ def generate_veo_video(prompt_text: str, image_path: str = None, aspect_ratio: s
     try:
         # 1. إعداد البرومبت
         kwargs = {
-            "model": "veo-3.0-fast-generate-001",
+            "model": "veo-3.1-generate-preview",
             "prompt": prompt_text,
             "config": types.GenerateVideosConfig(
                 aspect_ratio=aspect_ratio,

@@ -83,14 +83,16 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image", ref
             # --- سيناريو: فحص الجودة الآلي (QA) ---
             system_instruction += f"""
             TASK: Quality check this {media_type}.
-            CRITICAL CHECKS (Reject ONLY if one of these is true):
-            1. Severe Watermarks, floating text, or gibberish letters.
-            2. Deformed humans, extra fingers, or highly distorted faces.
-            3. Violates safety rules (Contains alcohol, nudity, etc.).
-            4. Completely ignores the core subject.
+            1. Identity Loss: The product in the generated {media_type} looks completely different from the ORIGINAL product image (wrong color, wrong shape, missing key logos).
+            2. Text Artifacts: Severe watermarks, floating text, or gibberish letters are visible.
+            3. Anatomical Errors: Deformed humans, extra fingers, or highly distorted faces.
+            4. Safety Violation: Contains alcohol, nudity, or inappropriate content.
             
-            BE LENIENT. Generative AI is not perfect. Ignore minor background details.
-            If REJECTED, you MUST provide an 'improved_prompt' that tells the AI exactly how to avoid this error.
+            BE EXTREMELY LENIENT. Generative AI is not perfect. 
+            - IGNORE minor background details.
+            - IGNORE smiles, open mouths, or facial expressions. DO NOT reject the video just because a character opens their mouth or smiles, as long as they are not explicitly talking/lip-syncing to non-existent dialogue.
+            
+            If REJECTED, you MUST provide an 'improved_prompt' that tells the Prompt_Engineer exactly how to avoid this error.
             """
 
         # 3. إجبار الموديل على إخراج JSON صارم
