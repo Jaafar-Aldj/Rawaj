@@ -245,6 +245,7 @@ async def generate_image_asset(
         )
         
         image_path = ai_result.get("image_url")
+        signature = ai_result.get("thought_signature")
         if not image_path:
              raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image generation failed")
              
@@ -259,7 +260,8 @@ async def generate_image_asset(
             aspect_ratio=request.aspect_ratio,
             platform=request.platform,
             event_name=request.event_name,
-            event_angle=request.event_angle
+            event_angle=request.event_angle,
+            thought_signature=signature
         )
         db.add(new_image)
         db.commit()
@@ -509,10 +511,12 @@ async def edit_image_asset(
             current_image_path=old_image.image_url,
             notify_callback=sync_notify,
             event_name=old_image.event_name,
-            event_angle=old_image.event_angle
+            event_angle=old_image.event_angle,
+            thought_signature=old_image.thought_signature
         )
         
         image_path = ai_result.get("image_url")
+        signature = ai_result.get("thought_signature")
         if not image_path:
             await send_notification(process_id, "❌ فشل التوليد: AI لم يُعد الصورة المحدثة")
             background_tasks.add_task(close_connection, process_id)
@@ -529,7 +533,8 @@ async def edit_image_asset(
             aspect_ratio=old_image.aspect_ratio,
             platform=old_image.platform,
             event_name=old_image.event_name,
-            event_angle=old_image.event_angle
+            event_angle=old_image.event_angle,
+            thought_signature=signature or old_image.thought_signature
         )
         db.add(new_image)
         db.commit()

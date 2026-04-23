@@ -1,5 +1,7 @@
+from glob import glob
 import math
 import os
+from time import time
 import uuid
 from elevenlabs.client import ElevenLabs
 from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip, concatenate_videoclips
@@ -79,7 +81,15 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
     """توليد تعليق صوتي (TTS) باستخدام ElevenLabs"""
     if not text or text.lower() == "none" or text.strip() == "":
         return None
-        
+
+    if getattr(settings, "use_mock_api", False):
+        print(f"💰 [SAVED $] MOCKING ELEVENLABS TTS...")
+        time.sleep(1)
+        existing_audio = glob.glob(os.path.join(AUDIO_DIR, "vo_*.mp3"))
+        if existing_audio:
+            return existing_audio[0]
+        return None    
+    
     print(f"🗣️ Generating Voiceover: {text[:30]}...")
     output_path = os.path.join(AUDIO_DIR, f"vo_{uuid.uuid4().hex[:8]}.mp3")
     

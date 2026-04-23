@@ -147,22 +147,24 @@ def analyze_image_content(image_path):
         print(f"⚠️ Image Analysis Failed: {e}")
         return ""
 
-def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback=None):
+def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback=None, thought_signature=None):
     current_prompt = image_prompt
     attempt = 1
     last_generated_image = None
+    last_signature = None
 
     while attempt <= max_retries:
         if notify_callback: notify_callback(f"🕵️‍♂️ جاري تدقيق الصورة آلياً (المحاولة {attempt}/{max_retries})...")
         print(f"\n🔄 [Image QA] Attempt {attempt}/{max_retries}...")
-        image_path = generate_image(current_prompt, reference_image_path, aspect_ratio)
+        image_path, signature = generate_image(current_prompt, reference_image_path, aspect_ratio, thought_signature)
         
         if not image_path or not os.path.exists(image_path):
             print(f"❌ Image generation failed at attempt {attempt}.")
             if notify_callback:
                 notify_callback("⚠️ فشل توليد الصورة. محاولة جديدة...")
-            return last_generated_image
+            return last_generated_image, last_signature
         last_generated_image = image_path
+        last_signature = signature
         # استدعاء المخرج الفني لتقييم الصورة
         if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الصورة...")
         review_data = analyze_media(image_path, current_prompt, media_type="image", reference_image_path=reference_image_path)
@@ -171,7 +173,7 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
             print("✅ Art Director APPROVED the image!")
             if notify_callback:
                 notify_callback("✅ الصورة اجتازت التدقيق الفني.")
-            return image_path
+            return image_path, signature
         elif review_data["status"] == "REJECTED":
             reason = review_data["feedback"]
             
@@ -189,11 +191,11 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
             attempt += 1
         else:
             if notify_callback: notify_callback("✅ تم اعتماد الصورة (تجاوز الفحص).")
-            return image_path # كاحتياط
+            return image_path, signature # كاحتياط
 
     if notify_callback: notify_callback("⚠️ تم استنفاد محاولات التحسين. تم اعتماد أفضل نتيجة.")
     print("⚠️ Max retries reached. Returning last image.")
-    return last_generated_image
+    return last_generated_image, last_signature
 
 def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback = None):
     current_prompt = video_prompt
@@ -346,7 +348,7 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
 # ==============================================================================
 # المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
 # ==============================================================================
-def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None, event_angle=None):
+def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature = None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
     prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
@@ -366,12 +368,13 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
     local_ref_path = get_local_media_path(original_image_path)
 
     try:
-        image_path = generate_and_review_image(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio, notify_callback=notify_callback)
+        image_path, signature = generate_and_review_image(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio, notify_callback=notify_callback, thought_signature=thought_signature)
     except Exception as e:
         print(f"❌ Image Gen Error: {e}")
         image_path = None
+        signature = None
 
-    return {"image_prompt": img_prompt, "image_url": image_path}
+    return {"image_prompt": img_prompt, "image_url": image_path, "thought_signature": signature}
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
@@ -472,18 +475,11 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     if scene_img_prompt:
         if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد...")
         try:
-            generated_img = generate_image(
+            generated_img, _ = generate_image(
                 scene_img_prompt, 
                 reference_image_path=scene_image_path,
                 aspect_ratio=aspect_ratio
             )
-            # generated_img = generate_and_review_image(
-            #     scene_img_prompt, 
-            #     reference_image_path=scene_image_path, 
-            #     aspect_ratio=aspect_ratio,
-            #     notify_callback=notify_callback,
-            #     max_retries=1
-            # )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img 
                 if notify_callback: notify_callback(f"✅ تم تصميم الصورة الافتتاحية بنجاح!")
@@ -557,7 +553,7 @@ def refine_text(current_copy, feedback):
     return extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
 
 
-def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None, event_angle=None):
+def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature=None):
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
     prompt_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name) 
@@ -586,15 +582,16 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
     image_url = None
     if new_prompt:
         try:
-            image_url = generate_and_review_image(
+            image_url, signature = generate_and_review_image(
                 new_prompt, 
                 reference_image_path=local_ref_path, 
                 aspect_ratio=aspect_ratio,
-                notify_callback=notify_callback
+                notify_callback=notify_callback,
+                thought_signature=thought_signature
             )
         except: pass
         
-    return {"image_prompt": new_prompt, "image_url": image_url}
+    return {"image_prompt": new_prompt, "image_url": image_url, "thought_signature": signature}
 
 def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None, event_name=None, event_angle=None):
     video_director = get_video_director()
@@ -664,18 +661,11 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
     
     if scene_img_prompt:
         try:
-            generated_img = generate_image(
+            generated_img, _ = generate_image(
                 scene_img_prompt, 
                 reference_image_path=valid_image_path, 
                 aspect_ratio=aspect_ratio
             )
-            # generated_img = generate_and_review_image(
-            #     scene_img_prompt, 
-            #     reference_image_path=valid_image_path, 
-            #     aspect_ratio=aspect_ratio,
-            #     notify_callback=notify_callback,
-            #     max_retries=1
-            # )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
                 if notify_callback: notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")

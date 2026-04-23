@@ -76,6 +76,7 @@ class ImageAssets(Base):
     event_name = Column(String, nullable=True)
     event_angle = Column(String, nullable=True)
     
+    thought_signature = Column(String, nullable=True) 
     created_at = Column(TIMESTAMP(timezone=True), server_default=text('now()'))
     
     asset = relationship("CampaignAssets", back_populates="images")

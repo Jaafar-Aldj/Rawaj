@@ -2,6 +2,7 @@ import base64
 import mimetypes
 import os
 import time
+import glob
 from google import genai
 from google.genai import types
 from moviepy import AudioFileClip, VideoFileClip
@@ -50,8 +51,17 @@ def generate_veo_video(prompt_text: str, image_path: str = None, aspect_ratio: s
     """
     توليد فيديو افتتاحي (8 ثواني) باستخدام Veo 3.
     """
+    if settings.use_mock_api:
+        print(f"💰 [SAVED $] MOCKING VEO VIDEO GENERATION...")
+        time.sleep(3) # محاكاة وقت التحميل للفرونت إند
+        # البحث عن أي فيديو قديم تم توليده سابقاً في جهازك
+        existing_videos = glob.glob(os.path.join(VIDEO_DIR, "veo_*.mp4"))
+        if existing_videos:
+            return existing_videos[0], "mock_google_id_123"
+        print("❌ لم أجد فيديو قديم للمحاكاة، يرجى وضع فيديو في مجلد assets/video")
+        return None, None
     print(f"🎬 Starting initial Veo generation...")
-    
+
     try:
         # 1. إعداد البرومبت
         kwargs = {
@@ -107,6 +117,14 @@ def extend_veo_video(prompt_text: str, previous_video_obj, aspect_ratio: str = "
     تمديد فيديو موجود مسبقاً (يضيف 7 ثواني).
     يستقبل `previous_video_obj` القادم من الدالة السابقة.
     """
+    if settings.use_mock_api:
+        print(f"💰 [SAVED $] MOCKING VEO VIDEO EXTENSION...")
+        time.sleep(3)
+        existing_vids = glob.glob(os.path.join(VIDEO_DIR, "veo_ext_*.mp4")) or glob.glob(os.path.join(VIDEO_DIR, "veo_*.mp4"))
+        if existing_vids:
+            return existing_vids[0], "mock_google_id_extended"
+        return None, None
+    
     if not previous_video_obj:
         print("❌ Extension Error: No previous video object provided.")
         return None, None

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     model_id: str
 
     calendarific_api_key: str
+    use_mock_api: bool
 
     class Config:
         env_file = ".env"
