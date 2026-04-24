@@ -20,6 +20,7 @@ from app.agents import prompt_templates
 from app.services.events import get_upcoming_events_for_strategy
 from app.services.audio_gen import generate_voiceover, merge_video_audio
 from app.agents.config import api_key
+from app.config import settings
 
 
 # إعداد مكتبة جوجل مباشرة لتحليل الصور
@@ -134,6 +135,9 @@ def extract_country_code(text: str) -> str:
 #  Vision QA
 #===============================================================================
 def analyze_image_content(image_path):
+    if getattr(settings, "use_mock_api", False):
+        print("💰[SAVED $] MOCKING IMAGE ANALYSIS...")
+        return "\n[AI Visual Analysis]: This is a mock analysis of the image content. The image features a modern product with sleek design, vibrant colors, and appears to be made of high-quality materials. Key features include a minimalist style, user-friendly interface, and innovative functionality that stands out in the market."
     local_path = get_local_media_path(image_path)
     if not local_path: return ""
     try:
@@ -246,6 +250,15 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     تدير محادثة مفتوحة بين المستخدم والمدير الإبداعي.
     لا تولد JSON، بل ترجع رسالة نصية فقط.
     """
+    if getattr(settings, "use_mock_api", False):
+        print("💰[SAVED $] MOCKING STRATEGIST CHAT...")
+        
+        # 1. إذا كان المستخدم يطلب اعتماد الخطة (عندما يضغط على زر الاعتماد اليدوي)
+        if "اعتماد" in user_message or "موافق" in user_message:
+            return "تم اعتماد الخطة النهائية بنجاح! الاستراتيجية جاهزة للانطلاق إلى فريق العمل."
+        
+        # 2. في حالة الدردشة العادية، نقترح عليه خطة ونسأله "هل توافق" لكي يظهر زر الاعتماد
+        return f"هذه استراتيجية تسويقية تجريبية لمنتج ({product_name}) تم توليدها بواسطة وضع المحاكاة. اقترح استهداف فئة الشباب. هل توافق على اعتماد الخطة؟"
     strategist = get_marketing_strategist()
     model_name = strategist.llm_config['config_list'][0]['model']
     strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
@@ -298,6 +311,20 @@ def finalize_strategy(product_name, chat_history):
     """
     تجبر المدير على تلخيص المحادثة السابقة وإخراجها كـ JSON صارم.
     """
+    if getattr(settings, "use_mock_api", False):
+        print("💰[SAVED $] MOCKING STRATEGY FINALIZATION...")
+        return {
+            "suggested_audiences": {
+                "audience_1": {"name": "الشباب المهتم بالتكنولوجيا", "description": "شريحة من الشباب الذين يحبون التكنولوجيا والابتكارات الحديثة."},
+                "audience_2": {"name": "الأمهات العاملات", "description": "نساء يعملن ولديهن أطفال، يبحثن عن حلول تسهل حياتهن اليومية."}
+            },
+            "key_message": "اكتشف روعة منتجنا الجديد الذي يجمع بين الابتكار والراحة لتلبية احتياجاتك اليومية!",
+            "recommended_platforms": ["Instagram", "TikTok"],
+            "suggested_events": [
+                {"name": "مهرجان التكنولوجيا في الرياض", "date": "2024-09-15", "description": "حدث سنوي يضم أحدث الابتكارات في مجال التكنولوجيا."},
+                {"name": "معرض الأمومة في جدة", "date": "2024-10-05", "description": "معرض مخصص للأمهات العاملات يقدم منتجات وخدمات تسهل حياتهن."}
+            ]
+        }
     strategist = get_marketing_strategist()
     user_proxy = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
 
@@ -320,6 +347,17 @@ def finalize_strategy(product_name, chat_history):
 # المرحلة 2: توليد النصوص فقط (Generate Copy)
 # ==============================================================================
 def generate_copy_only(product_name, product_desc, audience, platforms):
+    if getattr(settings, "use_mock_api", False):
+        import time
+        print("💰[SAVED $] MOCKING COPYWRITER...")
+        time.sleep(2) # محاكاة وقت الكتابة
+        platforms_list = platforms if platforms and len(platforms) > 0 else["Instagram", "TikTok"]
+        # توليد نصوص وهمية تتوافق مع الـ JSON المطلوب
+        ad_copy =[
+            {"platform": p, "ad_copy": f"إعلان تجريبي لمنصة {p}: اكتشف روعة {product_name} الآن! #تسويق #محاكاة"} 
+            for p in platforms_list
+        ]
+        return {"ad_copy": ad_copy}
     director = get_director()
     copywriter = get_copywriter()
     model_name = copywriter.llm_config['config_list'][0]['model']
@@ -537,6 +575,9 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
 # المرحلة 4: التعديلات (Refining)
 # ==============================================================================
 def refine_text(current_copy, feedback):
+    if getattr(settings, "use_mock_api", False):
+        print("💰[SAVED $] MOCKING COPY REFINEMENT...")
+        return {"ad_copy": [{"platform": "Instagram", "ad_copy": f"نسخة محسنة بناءً على الملاحظات: {feedback}"}]}
     copywriter = get_copywriter()
     model_name = copywriter.llm_config['config_list'][0]['model']
     copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)

@@ -66,8 +66,7 @@ def chat_with_strategist(
     # 3. تسجيل رسالة المستخدم في التاريخ (History)
     user_msg = {"role": "user", "content": request.message}
     chat_history.append(user_msg)
-
-    # 4. استدعاء الذكاء الاصطناعي (المدير الإبداعي كـ "مستشار")
+        # 4. استدعاء الذكاء الاصطناعي (المدير الإبداعي كـ "مستشار")
     try:
         # نمرر التاريخ السابق ليفهم السياق
         ai_reply_text = manager.chat_with_director(
@@ -112,11 +111,13 @@ def approve_strategy(
     
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+
         
     if campaign.is_strategy_approved:
-         raise HTTPException(status_code=400, detail="Strategy already approved.")
+         return campaign
 
-    # 2. استدعاء الذكاء لإخراج الـ JSON بناءً على المحادثة السابقة
+   
+        # 2. استدعاء الذكاء لإخراج الـ JSON بناءً على المحادثة السابقة
     try:
         final_json_strategy = manager.finalize_strategy(campaign.product.name, campaign.chat_history)
     except Exception as e:
@@ -170,6 +171,7 @@ async def generate_copies(
         try:
             await send_notification(process_id, f"✍️ جاري كتابة إعلان مخصص لفئة: {audience}...")
 
+            
             ai_result = await run_in_threadpool( 
                 manager.generate_copy_only,
                 product_name=campaign.product.name, 
