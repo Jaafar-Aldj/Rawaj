@@ -315,16 +315,23 @@ def finalize_strategy(product_name, chat_history):
         print("💰[SAVED $] MOCKING STRATEGY FINALIZATION...")
         return {
             "suggested_audiences": {
-                "audience_1": {"name": "الشباب المهتم بالتكنولوجيا", "description": "شريحة من الشباب الذين يحبون التكنولوجيا والابتكارات الحديثة."},
-                "audience_2": {"name": "الأمهات العاملات", "description": "نساء يعملن ولديهن أطفال، يبحثن عن حلول تسهل حياتهن اليومية."}
-            },
-            "key_message": "اكتشف روعة منتجنا الجديد الذي يجمع بين الابتكار والراحة لتلبية احتياجاتك اليومية!",
-            "recommended_platforms": ["Instagram", "TikTok"],
-            "suggested_events": [
-                {"name": "مهرجان التكنولوجيا في الرياض", "date": "2024-09-15", "description": "حدث سنوي يضم أحدث الابتكارات في مجال التكنولوجيا."},
-                {"name": "معرض الأمومة في جدة", "date": "2024-10-05", "description": "معرض مخصص للأمهات العاملات يقدم منتجات وخدمات تسهل حياتهن."}
-            ]
+                "suggestions": [
+                    {
+                    "reason": "يبحثون عن معدات موثوقة بتكلفة معقولة لتوسيع قدراتهم الإنتاجية.",
+                    "audience": "أصحاب الورش الصغيرة والمتوسطة"
+                    },
+                    {
+                    "reason": "يحتاجون إلى آلات متخصصة أو احتياطية للمهام الدقيقة أو الإصلاحات العاجلة.",
+                    "audience": "مديرو الإنتاج والصيانة في المصانع"
+                    },
+                    {
+                    "reason": "ينفذون مشاريع خاصة ويحتاجون إلى دقة عالية لا تتوفر في الآلات التجارية العادية.",
+                    "audience": "المقاولون والمحترفون المستقلون"
+                    }
+                ]
+            }
         }
+            
     strategist = get_marketing_strategist()
     user_proxy = autogen.UserProxyAgent(name="User", human_input_mode="NEVER", code_execution_config=False)
 
@@ -387,6 +394,17 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
 # المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
 # ==============================================================================
 def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature = None):
+    if getattr(settings, "use_mock_api", False):
+        import time, glob
+        print(f"💰 [SAVED $] MOCKING ENTIRE IMAGE PIPELINE...")
+        time.sleep(2) # محاكاة وقت التحميل
+        existing_images = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "image", "gen_*.png"))
+        mock_path = existing_images[0] if existing_images else None
+        if mock_path:
+            return {"image_prompt": "Mocked image prompt for UI testing.", "image_url": mock_path, "thought_signature": "mock_sig_123"}
+        return {"image_prompt": "Mocked prompt", "image_url": "rawaj-frontend/assets/image/gen_de864cf5.png"}
+
+    
     prompter = get_prompter()
     model_name = prompter.llm_config['config_list'][0]['model']
     prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
@@ -417,6 +435,15 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 # المرحلة 3B: توليد فيديو حسب الطلب (Generate Video)
 # ==============================================================================
 def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None, voice_preference="Auto"):
+    if getattr(settings, "use_mock_api", False):
+        import time, glob
+        print(f"💰 [SAVED $] MOCKING ENTIRE VIDEO PIPELINE...")
+        time.sleep(3) # محاكاة وقت التحميل والتوليد
+        existing_videos = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "video", "gen_*.mp4"))
+        mock_video_path = existing_videos[0] if existing_videos else None
+        if mock_video_path:
+            return {"video_storyboard": [{"scene_number": 1, "image_prompt": "Mocked image prompt for video storyboard.", "motion_prompt": "Mocked motion prompt for video storyboard.", "voiceover_text": "Mocked voiceover text for video storyboard."}], "video_url": mock_video_path}
+        return {"video_storyboard": [{"scene_number": 1, "image_prompt": "Mocked image prompt for video storyboard.", "motion_prompt": "Mocked motion prompt for video storyboard.", "voiceover_text": "Mocked voiceover text for video storyboard."}], "video_url": "rawaj-frontend/assets/video/veo_41fc31aa_audio_7530.mp4"}
     video_director = get_video_director()
     prompter = get_prompter()
 
@@ -466,6 +493,15 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     """
     توليد مشهد واحد ممتد (Extended One-Shot) بدلاً من مشاهد متعددة.
     """
+    if getattr(settings, "use_mock_api", False):
+        import time, glob
+        print(f"💰 [SAVED $] MOCKING ENTIRE VIDEO PIPELINE...")
+        time.sleep(3) # محاكاة وقت التحميل والتوليد
+        existing_videos = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "video", "gen_*.mp4"))
+        mock_video_path = existing_videos[0] if existing_videos else None
+        if mock_video_path:
+            return {"video_storyboard": [{"scene_number": 1, "image_prompt": "Mocked image prompt for video storyboard.", "motion_prompt": "Mocked motion prompt for video storyboard.", "voiceover_text": "Mocked voiceover text for video storyboard."}], "video_url": mock_video_path}
+        return {"video_storyboard": [{"scene_number": 1, "image_prompt": "Mocked image prompt for video storyboard.", "motion_prompt": "Mocked motion prompt for video storyboard.", "voiceover_text": "Mocked voiceover text for video storyboard."}], "video_url": "rawaj-frontend/assets/video/veo_41fc31aa_audio_7530.mp4"}
     video_director = get_video_director()
     prompter = get_prompter()
 

@@ -9,8 +9,6 @@ import api from '@/services/api';
 import {
   ArrowLeftIcon,
   CheckCircleIcon,
-  PhotoIcon,
-  VideoCameraIcon,
   ClipboardDocumentListIcon,
   RocketLaunchIcon,
   CursorArrowRaysIcon,
@@ -27,18 +25,6 @@ const platformsList = [
   { id: 'LinkedIn', name: 'لينكد إن', icon: FaLinkedin },
 ];
 
-const aspectRatios = [
-  { id: '1:1', name: 'مربع 1:1' },
-  { id: '16:9', name: 'أفقي 16:9' },
-  { id: '9:16', name: 'عمودي 9:16' },
-];
-
-const videoDurations = [
-  { id: 8, name: '8 ثواني' },
-  { id: 15, name: '15 ثانية (ممتد)' },
-  { id: 22, name: '22 ثانية (ممتد)' },
-];
-
 export default function SelectPlatformsPage() {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -49,10 +35,6 @@ export default function SelectPlatformsPage() {
   
   const [selectedAudiences, setSelectedAudiences] = useState([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
-  const [contentType, setContentType] = useState('');
-  const [imageAspectRatio, setImageAspectRatio] = useState('16:9');
-  const [videoDuration, setVideoDuration] = useState(8);
-  const [videoAspectRatio, setVideoAspectRatio] = useState('9:16');
   
   const [generating, setGenerating] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -74,6 +56,11 @@ export default function SelectPlatformsPage() {
         if (!response.ok) throw new Error('فشل في تحميل بيانات الحملة');
         const data = await response.json();
         setCampaign(data);
+        
+        // التحديد التلقائي لكل الفئات المقترحة لتسهيل الأمر على المستخدم
+        const audiencesList = extractAudiences(data);
+        setSelectedAudiences(audiencesList.map(a => a.name));
+        
       } catch (err) {
         setError(err.message);
       } finally {
@@ -86,23 +73,23 @@ export default function SelectPlatformsPage() {
     }
   }, [authLoading, isAuthenticated]);
 
-  const getAudiences = () => {
-    if (!campaign) return [];
+  const extractAudiences = (campaignData) => {
+    if (!campaignData) return [];
     let audiencesList = [];
-    if (campaign.suggested_audiences) {
-      if (Array.isArray(campaign.suggested_audiences.suggestions)) {
-        audiencesList = campaign.suggested_audiences.suggestions;
-      } else if (Array.isArray(campaign.suggested_audiences)) {
-        audiencesList = campaign.suggested_audiences;
+    if (campaignData.suggested_audiences) {
+      if (Array.isArray(campaignData.suggested_audiences.suggestions)) {
+        audiencesList = campaignData.suggested_audiences.suggestions;
+      } else if (Array.isArray(campaignData.suggested_audiences)) {
+        audiencesList = campaignData.suggested_audiences;
       }
-    } else if (Array.isArray(campaign.suggestions)) {
-      audiencesList = campaign.suggestions;
     }
     return audiencesList.map(item => ({
       name: item.audience || item.name || '',
       reason: item.reason || ''
     }));
   };
+
+  const getAudiences = () => extractAudiences(campaign);
 
   const toggleAudience = (audienceName) => {
     setSelectedAudiences(prev =>
@@ -123,7 +110,6 @@ export default function SelectPlatformsPage() {
   const listenToSSE = (processId) => {
     return new Promise((resolve) => {
       const eventSource = new EventSource(`${baseUrl}/campaigns/stream/${processId}`);
-      
       eventSource.onmessage = (e) => {
         if (e.data === '[DONE]') {
           eventSource.close();
@@ -132,7 +118,6 @@ export default function SelectPlatformsPage() {
           setCurrentProgressText(e.data); 
         }
       };
-
       eventSource.onerror = () => {
         eventSource.close();
         resolve();
@@ -142,12 +127,7 @@ export default function SelectPlatformsPage() {
 
   const handleGenerate = async () => {
     if (selectedAudiences.length === 0) {
-      setError('يرجى اختيار فئة مستهدفة');
-      return;
-    }
-    // 👇 أزلنا شرط "يرجى اختيار منصة واحدة" لنسمح للذكاء بالاختيار
-    if (!contentType) {
-      setError('يرجى اختيار نوع المحتوى');
+      setError('يرجى اختيار فئة مستهدفة واحدة على الأقل');
       return;
     }
 
@@ -156,13 +136,13 @@ export default function SelectPlatformsPage() {
     
     setGenerating(true);
     setShowProgressModal(true);
-    setCurrentProgressText('جاري تهيئة بيئة العمل...');
+    setCurrentProgressText('جاري إعداد المنصات المستهدفة...');
 
     try {
+      // 1. فقط توليد النصوص للفئات والمنصات المختارة (الفيديو والصور ستكون في الصفحة القادمة)
       const copiesProcessId = `copies_${campaignId}`;
       const copiesSSEPromise = listenToSSE(copiesProcessId);
       
-      // نرسل المنصات (وإذا كانت فارغة سيرسل مصفوفة فارغة فيفهمها الباك إند كـ Auto)
       const copiesResponse = await api('/campaigns/generate_copies', {
         method: 'POST',
         body: JSON.stringify({
@@ -173,66 +153,11 @@ export default function SelectPlatformsPage() {
       });
 
       if (!copiesResponse.ok) throw new Error('فشل في توليد النصوص الإعلانية');
+      
+      // ننتظر انتهاء الذكاء الاصطناعي من كتابة النصوص
       await copiesSSEPromise;
 
-      setCurrentProgressText('جاري تجهيز استوديوهات الإنتاج الفني...');
-      const campaignResponse = await api(`/campaigns/${campaignId}`);
-      const campaignData = await campaignResponse.json();
-      const assets = campaignData.assets || [];
-
-      if (assets.length === 0) throw new Error('حدث خطأ ولم يتم العثور على أصول للحملة');
-
-      for (let i = 0; i < assets.length; i++) {
-        const asset = assets[i];
-        
-        let generateEndpoint = '';
-        let body = {};
-        let mediaProcessId = '';
-
-        if (contentType === 'image') {
-          mediaProcessId = `image_${asset.id}`;
-          generateEndpoint = '/campaigns/generate_image';
-          
-          // 👇 إذا لم يختر المستخدم منصة، نأخذ المنصة الأولى التي اختارها الذكاء الاصطناعي من النصوص
-          const aiChosenPlatform = asset.ad_copy && asset.ad_copy.length > 0 ? asset.ad_copy[0].platform : "Instagram";
-          const targetPlatform = selectedPlatforms.length > 0 ? selectedPlatforms[0] : aiChosenPlatform;
-
-          body = {
-            asset_id: asset.id,
-            aspect_ratio: imageAspectRatio,
-            platform: targetPlatform // تصحيح اسم المتغير ليتوافق مع schemas.py
-          };
-        } else {
-          mediaProcessId = `video_${asset.id}`;
-          if (videoDuration > 8) {
-            generateEndpoint = '/campaigns/generate_extended_video';
-          } else {
-            generateEndpoint = '/campaigns/generate_video';
-          }
-          
-          body = {
-            asset_id: asset.id,
-            video_duration: videoDuration,
-            aspect_ratio: videoAspectRatio,
-            voice_preference: "Auto"
-          };
-        }
-
-        setCurrentProgressText(`[${asset.target_audience}] جاري تحضير الإنتاج...`);
-        const mediaSSEPromise = listenToSSE(mediaProcessId);
-
-        const generateResponse = await api(generateEndpoint, {
-          method: 'POST',
-          body: JSON.stringify(body)
-        });
-
-        if (!generateResponse.ok) throw new Error(`خطأ في إنتاج الأصل للفئة: ${asset.target_audience}`);
-        
-        await mediaSSEPromise;
-      }
-      
-      setCurrentProgressText('اكتمل الإنتاج بنجاح! جاري التوجيه...');
-      localStorage.setItem('contentType', contentType);
+      setCurrentProgressText('تم بناء هيكل الحملة بنجاح! جاري التوجيه للاستوديو...');
       
       setTimeout(() => {
         setShowProgressModal(false);
@@ -294,7 +219,7 @@ export default function SelectPlatformsPage() {
                 <div className="w-12 h-12 bg-green-500/20 rounded-2xl flex items-center justify-center">
                   <ClipboardDocumentListIcon className="w-7 h-7 text-green-400" />
                 </div>
-                <h2 className="text-2xl font-black text-white tracking-tight">استراتيجية الحملة المعتمدة</h2>
+                <h2 className="text-2xl font-black text-white tracking-tight">هيكل الحملة الاستراتيجي</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
@@ -309,76 +234,50 @@ export default function SelectPlatformsPage() {
             </div>
           )}
 
-          {/* 1. اختيار الجمهور */}
-          <div className="bg-panel/50 backdrop-blur-sm rounded-[2.5rem] p-10 border border-border-color">
-            <div className="flex items-center gap-3 mb-8">
-              <CursorArrowRaysIcon className="w-6 h-6 text-green-400" />
-              <h3 className="text-xl font-black text-white">1. حدد الجمهور المستهدف للإطلاق</h3>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {getAudiences().map((audience, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => toggleAudience(audience.name)}
-                  className={`group p-6 rounded-3xl border-2 cursor-pointer transition-all duration-300 ${
-                    selectedAudiences.includes(audience.name) 
-                      ? 'border-green-500 bg-green-500/10' 
-                      : 'border-border-color bg-panel/30 hover:border-green-500/50'
-                  }`}
-                >
-                  <div className="flex flex-col gap-4">
-                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${
-                      selectedAudiences.includes(audience.name) ? 'border-green-500' : 'border-border-color'
-                    }`}>
-                      {selectedAudiences.includes(audience.name) && <div className="w-2 h-2 bg-green-500 rounded-full" />}
-                    </div>
-                    <div>
-                      <h4 className={`font-black text-md mb-2 ${selectedAudiences.includes(audience.name) ? 'text-green-400' : 'text-white'}`}>
-                        {audience.name}
-                      </h4>
-                      <p className={`text-xs font-medium leading-relaxed ${selectedAudiences.includes(audience.name) ? 'text-white/60' : 'text-text-muted'}`}>
-                        {audience.reason}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
-            {/* 2. شكل المحتوى */}
+            {/* 1. اختيار الجمهور */}
             <div className="bg-panel/50 backdrop-blur-sm rounded-[2.5rem] p-10 border border-border-color">
-              <h3 className="text-lg font-black text-white mb-8 flex items-center gap-2">
-                <PhotoIcon className="w-5 h-5 text-green-400" /> 2. شكل المحتوى
-              </h3>
-              <div className="grid grid-cols-2 gap-5">
-                {[
-                  { id: 'image', name: 'صور احترافية', icon: PhotoIcon },
-                  { id: 'video', name: 'فيديو إبداعي', icon: VideoCameraIcon }
-                ].map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => setContentType(type.id)}
-                    className={`p-8 rounded-3xl border-2 flex flex-col items-center gap-4 transition-all ${
-                      contentType === type.id ? 'border-green-500 bg-green-500/10' : 'border-border-color bg-panel/30 hover:border-green-500/50'
+              <div className="flex items-center gap-3 mb-8">
+                <CursorArrowRaysIcon className="w-6 h-6 text-green-400" />
+                <h3 className="text-xl font-black text-white">1. تأكيد الفئات المستهدفة</h3>
+              </div>
+              
+              <div className="flex flex-col gap-4">
+                {getAudiences().map((audience, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => toggleAudience(audience.name)}
+                    className={`group p-5 rounded-2xl border-2 cursor-pointer transition-all duration-300 ${
+                      selectedAudiences.includes(audience.name) 
+                        ? 'border-green-500 bg-green-500/10' 
+                        : 'border-border-color bg-panel/30 hover:border-green-500/50'
                     }`}
                   >
-                    <type.icon className={`w-10 h-10 ${contentType === type.id ? 'text-green-400' : 'text-text-muted'}`} />
-                    <span className={`font-black text-sm ${contentType === type.id ? 'text-white' : 'text-text-muted'}`}>{type.name}</span>
-                  </button>
+                    <div className="flex items-start gap-4">
+                      <div className={`w-6 h-6 rounded-lg border-2 flex-shrink-0 flex items-center justify-center mt-1 ${
+                        selectedAudiences.includes(audience.name) ? 'border-green-500' : 'border-border-color'
+                      }`}>
+                        {selectedAudiences.includes(audience.name) && <div className="w-3 h-3 bg-green-500 rounded-full" />}
+                      </div>
+                      <div>
+                        <h4 className={`font-black text-md mb-1 ${selectedAudiences.includes(audience.name) ? 'text-green-400' : 'text-white'}`}>
+                          {audience.name}
+                        </h4>
+                        <p className={`text-xs font-medium leading-relaxed ${selectedAudiences.includes(audience.name) ? 'text-white/60' : 'text-text-muted'}`}>
+                          {audience.reason}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {/* 3. منصات النشر */}
+            {/* 2. منصات النشر */}
             <div className="bg-panel/50 backdrop-blur-sm rounded-[2.5rem] p-10 border border-border-color">
-              {/* التحديث هنا: زر دع الذكاء الاصطناعي يختار */}
               <div className="flex items-center justify-between mb-8">
-                <h3 className="text-lg font-black text-white flex items-center gap-2">
-                  <RocketLaunchIcon className="w-5 h-5 text-green-400" /> 3. منصات النشر
+                <h3 className="text-xl font-black text-white flex items-center gap-2">
+                  <RocketLaunchIcon className="w-6 h-6 text-green-400" /> 2. المنصات المستهدفة
                 </h3>
                 <button
                   onClick={() => setSelectedPlatforms([])}
@@ -389,11 +288,11 @@ export default function SelectPlatformsPage() {
                   }`}
                 >
                   <SparklesIcon className="w-4 h-4" />
-                  دع الذكاء يختار المنصة
+                  دع الذكاء يختار
                 </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {platformsList.map(p => {
                   const Icon = p.icon;
                   const isSelected = selectedPlatforms.includes(p.id);
@@ -401,12 +300,12 @@ export default function SelectPlatformsPage() {
                     <button
                       key={p.id}
                       onClick={() => togglePlatform(p.id)}
-                      className={`p-5 rounded-2xl border-2 flex flex-col items-center gap-3 transition-all ${
+                      className={`p-5 rounded-2xl border-2 flex flex-col items-center justify-center gap-3 transition-all ${
                         isSelected ? 'border-green-500 bg-green-500/10' : 'border-border-color bg-panel/30 hover:border-green-500/50'
                       }`}
                     >
-                      <Icon className={`w-6 h-6 ${isSelected ? 'text-green-400' : 'text-text-muted'}`} />
-                      <span className={`text-[11px] font-black ${isSelected ? 'text-white' : 'text-text-muted'}`}>{p.name}</span>
+                      <Icon className={`w-8 h-8 ${isSelected ? 'text-green-400' : 'text-text-muted'}`} />
+                      <span className={`text-xs font-black ${isSelected ? 'text-white' : 'text-text-muted'}`}>{p.name}</span>
                     </button>
                   );
                 })}
@@ -414,91 +313,20 @@ export default function SelectPlatformsPage() {
             </div>
           </div>
 
-          {/* خيارات الأبعاد والمدة للصور والفيديو */}
-          {contentType === 'image' && (
-            <div className="bg-panel/50 backdrop-blur-sm rounded-[2.5rem] p-10 border border-border-color">
-              <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
-                <PhotoIcon className="w-5 h-5 text-green-400" /> أبعاد الصورة
-              </h3>
-              <div className="flex flex-wrap gap-4">
-                {aspectRatios.map(ratio => (
-                  <button
-                    key={ratio.id}
-                    onClick={() => setImageAspectRatio(ratio.id)}
-                    className={`px-6 py-3 rounded-xl font-black text-sm transition-all ${
-                      imageAspectRatio === ratio.id
-                        ? 'bg-green-600 text-white shadow-lg'
-                        : 'bg-panel/30 border border-border-color text-text-muted hover:border-green-500/50'
-                    }`}
-                  >
-                    {ratio.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {contentType === 'video' && (
-            <div className="bg-panel/50 backdrop-blur-sm rounded-[2.5rem] p-10 border border-border-color">
-              <h3 className="text-lg font-black text-white mb-6 flex items-center gap-2">
-                <VideoCameraIcon className="w-5 h-5 text-green-400" /> إعدادات الفيديو
-              </h3>
-              <div className="space-y-6">
-                <div>
-                  <p className="text-white/70 font-bold text-sm mb-3">المدة</p>
-                  <div className="flex flex-wrap gap-4">
-                    {videoDurations.map(dur => (
-                      <button
-                        key={dur.id}
-                        onClick={() => setVideoDuration(dur.id)}
-                        className={`px-6 py-3 rounded-xl font-black text-sm transition-all ${
-                          videoDuration === dur.id
-                            ? 'bg-green-600 text-white shadow-lg'
-                            : 'bg-panel/30 border border-border-color text-text-muted hover:border-green-500/50'
-                        }`}
-                      >
-                        {dur.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-white/70 font-bold text-sm mb-3">نسبة الأبعاد</p>
-                  <div className="flex flex-wrap gap-4">
-                    {aspectRatios.slice(1).map(ratio => (
-                      <button
-                        key={ratio.id}
-                        onClick={() => setVideoAspectRatio(ratio.id)}
-                        className={`px-6 py-3 rounded-xl font-black text-sm transition-all ${
-                          videoAspectRatio === ratio.id
-                            ? 'bg-green-600 text-white shadow-lg'
-                            : 'bg-panel/30 border border-border-color text-text-muted hover:border-green-500/50'
-                        }`}
-                      >
-                        {ratio.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* أزرار الإجراءات */}
-          <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-4 mt-4">
             <div className="flex flex-row justify-center items-center gap-6">
               <button onClick={() => router.push('/analyze-product')} className="text-text-muted hover:text-green-400 font-black text-sm flex items-center gap-2 transition-all">
-                <ArrowLeftIcon className="w-4 h-4 rotate-180" /> رجوع للخطوة السابقة
+                <ArrowLeftIcon className="w-4 h-4 rotate-180" /> رجوع لتعديل الخطة
               </button>
               
               <button
                 onClick={handleGenerate}
                 disabled={generating}
-                className="group relative bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-3 rounded-2xl font-black text-sm shadow-lg hover:from-green-700 hover:to-emerald-700 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-50"
+                className="group relative bg-gradient-to-r from-green-600 to-emerald-600 text-white px-10 py-4 rounded-2xl font-black text-lg shadow-lg hover:from-green-700 hover:to-emerald-700 active:scale-[0.98] transition-all flex items-center gap-3 disabled:opacity-50"
               >
-                {generating ? <LoadingSpinner size="sm" /> : (
-                  <>توليد وإطلاق الحملة <RocketLaunchIcon className="w-5 h-5 group-hover:translate-x-[-4px] group-hover:translate-y-[-4px] transition-transform" /></>
-                )}
+                بناء الحملة وتوليد النصوص 
+                <ArrowLeftIcon className="w-6 h-6 group-hover:-translate-x-2 transition-transform" />
               </button>
             </div>
           </div>

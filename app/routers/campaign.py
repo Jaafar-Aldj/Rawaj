@@ -628,36 +628,6 @@ async def edit_video_asset(
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-# ==============================================================================
-# المرحلة 4: الاعتماد النهائي للحملة (Approve)
-# ==============================================================================
-@router.put("/approve", response_model=schemas.AssetResponse)
-def approve_asset(
-    request: schemas.ApproveRequest,
-    db: Session = Depends(get_db),
-    current_user: schemas.UserResponse = Depends(oauth2.get_current_user)
-):
-    asset = db.query(models.CampaignAssets).join(models.Campaigns).filter(models.CampaignAssets.id == request.asset_id).first()
-    if not asset or asset.campaign.product.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-
-    asset.is_approved = True
-    db.commit()
-
-    # التحقق من اكتمال الحملة
-    total_assets = db.query(models.CampaignAssets).filter(models.CampaignAssets.campaign_id == asset.campaign_id).count()
-    approved_assets = db.query(models.CampaignAssets).filter(
-        models.CampaignAssets.campaign_id == asset.campaign_id,
-        models.CampaignAssets.is_approved == True
-    ).count()
-    
-    if total_assets == approved_assets:
-        asset.campaign.status = "COMPLETED"
-        db.commit()
-        
-    db.refresh(asset)
-    return asset
-
 
 # ==============================================================================
 # باقي العمليات: استرجاع الإصدار القديم، حذف الحملة/الأصل، جلب الحملة/الأصول
