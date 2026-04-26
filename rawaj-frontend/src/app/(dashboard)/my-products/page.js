@@ -1,231 +1,185 @@
-// src/app/(dashboard)/my-products/page.js
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingBagIcon,
   TrashIcon,
   SparklesIcon,
   EyeIcon,
   PlusCircleIcon,
-  ExclamationCircleIcon,
-  ArrowPathIcon,
-  NoSymbolIcon
+  MagnifyingGlassIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 
 export default function MyProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [deletingId, setDeletingId] = useState(null);
-  const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [skip, setSkip] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 9; // عدد المنتجات في كل دفعة
 
-  // جلب المنتجات من API
-  const fetchProducts = async () => {
-    setLoading(true);
-    setError('');
+  const router = useRouter();
+  const { isAuthenticated, authLoading } = useAuth();
+
+  const fetchProducts = async (isLoadMore = false) => {
+    if (isLoadMore) setLoadingMore(true);
+    else {
+      setLoading(true);
+      setSkip(0);
+    }
+
     try {
-      const response = await api('/products/', {
-        method: 'GET',
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'فشل في تحميل المنتجات');
-      }
+      const currentSkip = isLoadMore ? skip + LIMIT : 0;
+      const response = await api(`/products/?limit=${LIMIT}&skip=${currentSkip}`);
       const data = await response.json();
-      // نتوقع أن البيانات مصفوفة من المنتجات
-      setProducts(Array.isArray(data) ? data : []);
+      
+      const newProducts = Array.isArray(data) ? data : [];
+      
+      if (isLoadMore) {
+        setProducts(prev => [...prev, ...newProducts]);
+        setSkip(currentSkip);
+      } else {
+        setProducts(newProducts);
+      }
+
+      // إذا رجع عدد أقل من الليميت، يعني مضل في داتا
+      setHasMore(newProducts.length === LIMIT);
     } catch (err) {
-      console.error('خطأ في جلب المنتجات:', err);
-      setError(err.message);
+      console.error("Fetch error:", err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login');
-    } else if (isAuthenticated) {
-      fetchProducts();
-    }
-  }, [authLoading, isAuthenticated, router]);
+    if (!authLoading && isAuthenticated) fetchProducts();
+  }, [authLoading, isAuthenticated]);
 
-  // حذف منتج
-  const handleDelete = async (productId) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
-    setDeletingId(productId);
-    try {
-      const response = await api(`/products/${productId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'فشل في حذف المنتج');
-      }
-      // تحديث القائمة بعد الحذف
-      setProducts(prev => prev.filter(p => p.id !== productId));
-    } catch (err) {
-      console.error('خطأ في الحذف:', err);
-      setError(err.message);
-    } finally {
-      setDeletingId(null);
-    }
-  };
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  // عرض تحليل المنتج (يمكن التوجه لصفحة التحليل مع حفظ ID)
-  const handleAnalyze = (product) => {
-    localStorage.setItem('currentProductId', product.id);
-    router.push('/analyze-product');
-  };
-
-  // عرض تفاصيل المنتج (يمكن إنشاء صفحة تفاصيل لاحقاً)
-  const handleViewDetails = (product) => {
-    // مؤقتاً نوجه للتحليل، أو يمكن عمل صفحة منفصلة
-    router.push(`/products/${product.id}`);
-  };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  if (loading && skip === 0) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-background/95 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">منتجاتي</h1>
-            <p className="text-text-muted">جميع المنتجات التي قمت برفعها وتحليلها</p>
-          </div>
-          <button
-            onClick={() => router.push('/upload-image')}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-l from-accent to-blue-500 text-white rounded-xl font-bold hover:shadow-xl hover:shadow-accent/30 transition-all"
-          >
-            <PlusCircleIcon className="w-5 h-5" />
-            <span>إضافة منتج جديد</span>
-          </button>
+    <div className="max-w-7xl mx-auto p-6 text-right" dir="rtl">
+      {/* Header Area */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+        <div>
+          <h1 className="text-4xl font-black text-white mb-2 tracking-tight">مستودع المنتجات</h1>
+          <p className="text-gray-400 font-medium">أدر منتجاتك وقم بتحليلها لبدء حملات تسويقية ناجحة</p>
         </div>
-
-        {/* زر إعادة تحميل (اختياري) */}
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={fetchProducts}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-panel border border-border-color rounded-lg text-text-muted hover:text-accent transition-all"
-          >
-            <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span>تحديث</span>
-          </button>
-        </div>
-
-        {/* حالة التحميل */}
-        {loading && (
-          <div className="flex justify-center items-center py-20">
-            <LoadingSpinner size="lg" />
-          </div>
-        )}
-
-        {/* حالة الخطأ */}
-        {!loading && error && (
-          <div className="bg-red-500/20 border-2 border-red-500 rounded-xl p-6 text-center">
-            <ExclamationCircleIcon className="w-12 h-12 text-red-500 mx-auto mb-3" />
-            <p className="text-red-500 text-lg">{error}</p>
-            <button
-              onClick={fetchProducts}
-              className="mt-4 px-6 py-2 bg-red-500/30 rounded-lg text-white hover:bg-red-500/50"
-            >
-              إعادة المحاولة
-            </button>
-          </div>
-        )}
-
-        {/* عدم وجود منتجات */}
-        {!loading && !error && products.length === 0 && (
-          <div className="bg-panel/50 backdrop-blur-sm rounded-3xl border border-border-color p-12 text-center">
-            <NoSymbolIcon className="w-20 h-20 text-text-muted mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-white mb-2">لا توجد منتجات</h3>
-            <p className="text-text-muted mb-6">لم تقم بإضافة أي منتج بعد. ابدأ برفع أول منتج لك!</p>
-            <button
-              onClick={() => router.push('/upload-image')}
-              className="px-6 py-3 bg-accent text-white rounded-xl font-bold hover:shadow-lg transition-all"
-            >
-              رفع منتج جديد
-            </button>
-          </div>
-        )}
-
-        {/* شبكة المنتجات */}
-        {!loading && !error && products.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="bg-panel/50 backdrop-blur-sm rounded-2xl border border-border-color overflow-hidden hover:border-accent/50 transition-all hover:shadow-xl group"
-              >
-                {/* صورة المنتج */}
-                <div className="relative h-48 bg-background overflow-hidden">
-                  {product.original_image_url ? (
-                    <img
-                      src={product.original_image_url}
-                      alt={product.name}
-                      className="w-full h-full object-contain transition-transform group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-text-muted">
-                      <ShoppingBagIcon className="w-16 h-16" />
-                    </div>
-                  )}
-                </div>
-
-                {/* محتوى البطاقة */}
-                <div className="p-5">
-                  <h3 className="text-xl font-bold text-white mb-2 line-clamp-1">
-                    {product.name}
-                  </h3>
-                  <p className="text-text-muted text-sm line-clamp-2 mb-4">
-                    {product.description || 'لا يوجد وصف'}
-                  </p>
-
-                  {/* معلومات إضافية (تاريخ الإنشاء مثلاً) */}
-                  {product.created_at && (
-                    <p className=" text-text-muted text-l mb-4">
-                      تاريخ الإضافة: {new Date(product.created_at).toLocaleDateString('ar-EG')}
-                    </p>
-                  )}
-
-                    
-                    <div className="flex flex-wrap gap-2 pt-3 border-t border-border-color">
-                    <button
-                        onClick={() => router.push(`/products/${product.id}`)}
-                        className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-500/10 rounded-lg text-blue-400 hover:bg-blue-500/20 transition-all"
-                    >
-                        <EyeIcon className="w-4 h-4" />
-                        <span>تفاصيل</span>
-                    </button>
-                    <button
-                        onClick={() => handleDelete(product.id)}
-                        disabled={deletingId === product.id}
-                        className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-500/10 rounded-lg text-red-500 hover:bg-red-500/20 transition-all"
-                    >
-                        {deletingId === product.id ? <LoadingSpinner size="sm" /> : <TrashIcon className="w-4 h-4" />}
-                        <span>حذف</span>
-                    </button>
-                    </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <button
+          onClick={() => router.push('/upload-image')}
+          className="flex items-center gap-2 bg-accent hover:bg-accent-dark text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-accent/20 transition-all transform hover:scale-105 active:scale-95"
+        >
+          <PlusCircleIcon className="w-6 h-6" /> إضافة منتج جديد
+        </button>
       </div>
+
+      {/* Toolbar: Search & Refresh */}
+      <div className="flex flex-col md:flex-row gap-4 mb-8">
+        <div className="relative flex-1">
+          <MagnifyingGlassIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+          <input
+            type="text"
+            placeholder="ابحث عن منتج بالاسم..."
+            className="w-full bg-panel border border-gray-800 rounded-2xl pr-12 pl-4 py-4 text-white focus:border-accent outline-none transition-all font-bold placeholder:text-gray-600"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={() => fetchProducts(false)}
+          className="p-4 bg-panel border border-gray-800 rounded-2xl text-gray-400 hover:text-white transition-all shadow-sm"
+        >
+          <ArrowPathIcon className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {/* Products Grid */}
+      {filteredProducts.length === 0 ? (
+        <div className="bg-panel/50 border-2 border-dashed border-gray-800 rounded-[2.5rem] py-32 text-center">
+          <ShoppingBagIcon className="w-20 h-20 text-gray-800 mx-auto mb-6 opacity-50" />
+          <h3 className="text-2xl font-bold text-gray-500">لم نجد أي منتجات تطابق بحثك</h3>
+          <p className="text-gray-600 mt-2">ابدأ برفع أول منتج الآن ليظهر هنا</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <AnimatePresence>
+              {filteredProducts.map((product) => (
+                <motion.div
+                  key={product.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="group bg-panel border border-gray-800 rounded-[2rem] overflow-hidden hover:border-accent/50 transition-all shadow-2xl relative"
+                >
+                  <div className="aspect-square bg-background relative overflow-hidden flex items-center justify-center p-8">
+                    <img 
+                      src={product.original_image_url} 
+                      className="max-w-full max-h-full object-contain transition-transform duration-700 group-hover:scale-110" 
+                      alt={product.name} 
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-panel/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  </div>
+                  
+                  <div className="p-7">
+                    <h3 className="text-xl font-black text-white mb-2 truncate">{product.name}</h3>
+                    <p className="text-gray-500 text-sm line-clamp-2 mb-6 leading-relaxed h-10">{product.description || "لا يوجد وصف متاح لهذا المنتج."}</p>
+                    
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => {
+                          localStorage.setItem('currentProductId', product.id);
+                          router.push('/analyze-product');
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 bg-white text-black py-3.5 rounded-xl font-black text-sm hover:bg-accent hover:text-white transition-all shadow-sm"
+                      >
+                        <SparklesIcon className="w-5 h-5" /> تحليل الجمهور
+                      </button>
+                      <button
+                        onClick={() => router.push(`/products/${product.id}`)}
+                        className="w-14 h-14 flex items-center justify-center bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-all border border-gray-700"
+                      >
+                        <EyeIcon className="w-6 h-6" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {/* Load More Button */}
+          {hasMore && (
+            <div className="mt-16 flex justify-center pb-10">
+              <button
+                onClick={() => fetchProducts(true)}
+                disabled={loadingMore}
+                className="group px-12 py-4 bg-panel border border-gray-800 text-white rounded-2xl font-black hover:border-accent transition-all flex items-center gap-3 shadow-xl disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <LoadingSpinner size="sm" color="white" />
+                ) : (
+                  <>
+                    جلب المزيد من المنتجات
+                    <ArrowPathIcon className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

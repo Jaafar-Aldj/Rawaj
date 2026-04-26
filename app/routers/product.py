@@ -57,7 +57,11 @@ def get_products(
         limit: int = 10,
         skip: int = 0,
     ):
-    products = db.query(models.Products).filter(models.Products.user_id == current_user.id).limit(limit).offset(skip).all()
+    products = db.query(models.Products)\
+        .filter(models.Products.user_id == current_user.id)\
+        .order_by(models.Products.created_at.desc())\
+        .limit(limit)\
+        .offset(skip).all()
     return products
 
 @router.get('/{id}',response_model=schemas.ProductResponse)

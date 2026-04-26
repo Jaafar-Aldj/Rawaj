@@ -141,7 +141,7 @@ export default function UploadImagePage() {
             </div>
             <div>
               <h2 className="text-lg font-black text-gray-900">المعالج الذكي</h2>
-              <p className="text-black text-m font-medium">ارفع صورة واضحة للحصول على أدق تحليل</p>
+              <p className="text-black text-m font-medium">ارفع صورة واضحة للمنتج لنتمكن من معالجتها وتصميمها</p>
             </div>
           </div>
 
@@ -193,19 +193,26 @@ export default function UploadImagePage() {
                       disabled={uploading}
                       className="w-full bg-green-600 text-white py-4 rounded-xl font-black text-lg hover:bg-green-700 shadow-lg shadow-green-100 transition-all disabled:opacity-50 flex items-center justify-center gap-3"
                     >
-                      {uploading ? <LoadingSpinner size="sm" color="white" /> : "تحليل الصورة"}
+                      {uploading ? (
+                        <>
+                          <LoadingSpinner size="sm" color="white" />
+                          <span>جاري رفع الصورة...</span>
+                        </>
+                      ) : (
+                        "رفع الصورة ومعالجتها"
+                      )}
                     </button>
                   ) : (
                     <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="space-y-4">
                       <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-4">
                         <CheckCircleIcon className="w-8 h-8 text-green-600" />
-                        <p className="text-green-800 font-black text-lg">تم التحليل بنجاح!</p>
+                        <p className="text-green-800 font-black text-lg">تم رفع الصورة بنجاح!</p>
                       </div>
                       <button
                         onClick={() => router.push('/create-product')}
                         className="w-full bg-gray-900 text-white py-4 rounded-xl font-black text-lg hover:bg-black transition-all flex items-center justify-center gap-3 shadow-lg"
                       >
-                        الخطوة التالية 
+                        الخطوة التالية (بيانات المنتج)
                         <ArrowLeftIcon className="w-5 h-5" />
                       </button>
                     </motion.div>

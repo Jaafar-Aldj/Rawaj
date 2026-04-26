@@ -647,7 +647,8 @@ def get_user_campaigns(
             joinedload(models.Campaigns.assets).joinedload(models.CampaignAssets.videos)
         )\
         .join(models.Products)\
-        .filter(models.Products.user_id == current_user.id)
+        .filter(models.Products.user_id == current_user.id)\
+        .order_by(models.Campaigns.created_at.desc())
     
     if status:
         query = query.filter(models.Campaigns.status == status.upper())

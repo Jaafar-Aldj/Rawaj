@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import Link from 'next/link';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import GenerationProgressModal from '@/components/GenerationProgressModal';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,589 +11,592 @@ import {
   CheckCircleIcon, ClockIcon, ArrowLeftIcon, CalendarIcon,
   UserGroupIcon, SparklesIcon, ExclamationCircleIcon,
   ArrowDownTrayIcon, EyeIcon, XMarkIcon, ClipboardDocumentIcon,
-  TrashIcon
+  TrashIcon, ChevronLeftIcon, PauseCircleIcon, PlayCircleIcon,
+  DocumentDuplicateIcon
 } from '@heroicons/react/24/outline';
+
+// إعدادات مدد الفيديو لكل نمط
+const durationsConfig = {
+  standard: [
+    { id: 8, name: '8 ثواني (مشهد 1)' },
+    { id: 16, name: '16 ثانية (مشهدين)' },
+    { id: 24, name: '24 ثانية (3 مشاهد)' }
+  ],
+  extended: [
+    { id: 15, name: '15 ثانية (تمديد 1)' },
+    { id: 22, name: '22 ثانية (تمديد 2)' },
+    { id: 29, name: '29 ثانية (تمديد 3)' }
+  ]
+};
+
+const aspectRatios = [
+  { id: '1:1', name: 'مربع 1:1' },
+  { id: '16:9', name: 'أفقي 16:9' },
+  { id: '9:16', name: 'عمودي 9:16' },
+];
 
 export default function CampaignDetailsPage() {
   const params = useParams();
   const campaignId = params.id;
-  
-  const [campaign, setCampaign] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [selectedVideo, setSelectedVideo] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [copiedId, setCopiedId] = useState(null);
-
-  const [deleteModal, setDeleteModal] = useState({
-    isOpen: false,
-    type: null,
-    id: null,
-    assetId: null,
-    targetName: '',
-    loading: false
-  });
-
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
-  const goToSelectPlatforms = () => {
-    if (campaignId) {
-      localStorage.setItem('campaignId', campaignId.toString());
-      router.push('/select-platforms');
-    }
-  };
+  // --- States ---
+  const [campaign, setCampaign] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [copiedId, setCopiedId] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  
+  // Generation Modals
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [currentProgressText, setCurrentProgressText] = useState('');
+  
+  const [imageModal, setImageModal] = useState({ 
+    isOpen: false, assetId: null, ratio: '1:1', eventName: null, eventAngle: null 
+  });
+  
+  const [videoModal, setVideoModal] = useState({ 
+    isOpen: false, assetId: null, duration: 8, ratio: '9:16', voice: 'Auto', 
+    eventName: null, eventAngle: null, mode: 'standard' 
+  });
 
+  // Audio
+  const [voices, setVoices] = useState([]);
+  const [currentAudio, setCurrentAudio] = useState(null); 
+  const [playingVoice, setPlayingVoice] = useState(null);
+
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, type: null, id: null, assetId: null, targetName: '', loading: false });
+
+  // --- Effects ---
   useEffect(() => {
     if (!authLoading && !isAuthenticated) router.push('/login');
-  }, [authLoading, isAuthenticated, router]);
+    if (isAuthenticated && campaignId) {
+      fetchCampaignDetails();
+      fetchVoices();
+    }
+    return () => stopAnyAudio();
+  }, [authLoading, isAuthenticated, campaignId]);
 
-  useEffect(() => {
-    if (isAuthenticated && campaignId) fetchCampaignDetails();
-  }, [isAuthenticated, campaignId]);
-
+  // --- Core Functions ---
   const fetchCampaignDetails = async () => {
     setLoading(true);
-    setError('');
     try {
       const response = await api(`/campaigns/${campaignId}`);
-      if (!response.ok) throw new Error('فشل في جلب تفاصيل الحملة');
-      const data = await response.json();
-      setCampaign(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      if (!response.ok) throw new Error('فشل جلب البيانات');
+      setCampaign(await response.json());
+    } catch (err) { console.error(err); } 
+    finally { setLoading(false); }
   };
 
-  // دوال الحذف
-  const handleDeleteCampaign = async () => {
-    const response = await api(`/campaigns/${campaignId}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('فشل في حذف الحملة');
-    router.push('/camp');
-  };
-
-  const handleDeleteAsset = async (assetId) => {
-    const response = await api(`/campaigns/asset/${assetId}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('فشل في حذف الفئة');
-    await fetchCampaignDetails();
-  };
-
-  const handleDeleteImage = async (imageId) => {
-    const response = await api(`/campaigns/asset/image/${imageId}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('فشل في حذف الصورة');
-    await fetchCampaignDetails();
-  };
-
-  const handleDeleteVideo = async (videoId) => {
-    const response = await api(`/campaigns/asset/video/${videoId}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('فشل في حذف الفيديو');
-    await fetchCampaignDetails();
-  };
-
-  const openDeleteModal = (type, id, assetId, targetName) => {
-    setDeleteModal({
-      isOpen: true,
-      type,
-      id,
-      assetId,
-      targetName,
-      loading: false
-    });
-  };
-
-  const executeDelete = async () => {
-    const { type, id, assetId } = deleteModal;
-    setDeleteModal(prev => ({ ...prev, loading: true }));
+  const fetchVoices = async () => {
     try {
-      if (type === 'campaign') await handleDeleteCampaign();
-      else if (type === 'asset') await handleDeleteAsset(assetId);
-      else if (type === 'image') await handleDeleteImage(id);
-      else if (type === 'video') await handleDeleteVideo(id);
-      setDeleteModal({ isOpen: false, type: null, id: null, assetId: null, targetName: '', loading: false });
-    } catch (err) {
-      alert(err.message);
-      setDeleteModal(prev => ({ ...prev, loading: false }));
+      const res = await api('/campaigns/options/voices');
+      if (res.ok) {
+        const data = await res.json();
+        setVoices(data.voices || []);
+      }
+    } catch (err) {}
+  };
+
+  const stopAnyAudio = () => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setCurrentAudio(null);
+      setPlayingVoice(null);
     }
   };
 
-  const getCampaignStatus = () => {
-    if (!campaign) return { text: '', color: '', bg: '', icon: null };
-    const status = campaign.status || 'DRAFT';
-    switch (status) {
-      case 'DRAFT': return { text: 'مسودة', color: 'text-gray-800', bg: 'bg-gray-100', icon: DocumentTextIcon, borderColor: 'border-gray-300' };
-      case 'PENDING_APPROVAL': return { text: 'قيد المراجعة', color: 'text-yellow-800', bg: 'bg-yellow-100', icon: ClockIcon, borderColor: 'border-yellow-300' };
-      case 'COMPLETED': return { text: 'مكتملة', color: 'text-green-800', bg: 'bg-green-100', icon: CheckCircleIcon, borderColor: 'border-green-300' };
-      default: return { text: status, color: 'text-gray-800', bg: 'bg-gray-100', icon: DocumentTextIcon, borderColor: 'border-gray-300' };
-    }
+  const handleVoicePreview = (v) => {
+    if (playingVoice === v.name) { stopAnyAudio(); return; }
+    stopAnyAudio();
+    let audioPath = v.preview_url.replace(/\\/g, '/'); 
+    const audioUrl = audioPath.startsWith('http') ? audioPath : `${baseUrl}/${audioPath}`;
+    const audio = new Audio(audioUrl);
+    audio.onplay = () => { setPlayingVoice(v.name); setCurrentAudio(audio); };
+    audio.onended = () => { setPlayingVoice(null); setCurrentAudio(null); };
+    audio.play().catch(err => console.error(err));
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'غير محدد';
-    return new Date(dateString).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handleDownload = (url, filename) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleCopy = (text, id) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+  const toggleVideoMode = (newMode) => {
+    setVideoModal({
+      ...videoModal,
+      mode: newMode,
+      duration: newMode === 'standard' ? 8 : 15,
+      ratio: newMode === 'extended' ? '16:9' :videoModal.ratio,
     });
   };
 
-  if (authLoading || loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-white">
-        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-          <LoadingSpinner size="lg" />
-        </motion.div>
-        <p className="mt-4 text-base animate-pulse">جاري تحميل تفاصيل الحملة...</p>
-      </div>
-    );
-  }
+  // --- Generation Handlers ---
+  const handleGenerateImage = async () => {
+    setImageModal({ ...imageModal, isOpen: false });
+    setShowProgressModal(true);
+    setCurrentProgressText('جاري تحضير الاستوديو...');
+    const processId = `image_${imageModal.assetId}`;
+    const eventSource = new EventSource(`${baseUrl}/campaigns/stream/${processId}`);
+    eventSource.onmessage = (e) => { if (e.data !== '[DONE]') setCurrentProgressText(e.data); };
+    try {
+      await api('/campaigns/generate_image', {
+        method: 'POST',
+        body: JSON.stringify({ 
+            asset_id: imageModal.assetId, ratio: imageModal.ratio, 
+            event_name: imageModal.eventName, event_angle: imageModal.eventAngle 
+        })
+      });
+      eventSource.close();
+      setCurrentProgressText('تمت إضافة الصورة بنجاح!');
+      await fetchCampaignDetails();
+    } catch (err) { eventSource.close(); } 
+    finally { setTimeout(() => setShowProgressModal(false), 1500); }
+  };
 
-  if (error || !campaign) {
-    return (
-      <div className="min-h-screen bg-background p-6 flex items-center justify-center">
-        <div className="max-w-md w-full bg-panel/50 backdrop-blur-sm rounded-3xl border border-border-color p-8 text-center">
-          <ExclamationCircleIcon className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">عذراً، حدث خطأ</h2>
-          <p className="text-text-muted mb-6 text-sm">{error || 'الحملة غير موجودة'}</p>
-          <button onClick={() => router.back()} className="bg-accent text-white px-6 py-2 rounded-xl font-bold transition-transform hover:scale-105 text-sm">العودة للخلف</button>
-        </div>
-      </div>
-    );
-  }
+  const handleGenerateVideo = async () => {
+    setVideoModal({ ...videoModal, isOpen: false });
+    stopAnyAudio();
+    setShowProgressModal(true);
+    setCurrentProgressText('جاري بناء المشاهد...');
+    const processId = `video_${videoModal.assetId}`;
+    const eventSource = new EventSource(`${baseUrl}/campaigns/stream/${processId}`);
+    eventSource.onmessage = (e) => { if (e.data !== '[DONE]') setCurrentProgressText(e.data); };
+    try {
+      const endpoint = videoModal.mode === 'extended' ? '/campaigns/generate_extended_video' : '/campaigns/generate_video';
+      await api(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ 
+            asset_id: videoModal.assetId, video_duration: videoModal.duration, 
+            aspect_ratio: videoModal.ratio, voice_preference: videoModal.voice,
+            event_name: videoModal.eventName, event_angle: videoModal.eventAngle 
+        })
+      });
+      eventSource.close();
+      setCurrentProgressText('تم إخراج الفيديو بنجاح!');
+      await fetchCampaignDetails();
+    } catch (err) { eventSource.close(); } 
+    finally { setTimeout(() => setShowProgressModal(false), 1500); }
+  };
 
-  const status = getCampaignStatus();
-  const StatusIcon = status.icon;
-  const assets = campaign.assets || [];
+  if (authLoading || loading) return <div className="min-h-screen flex items-center justify-center bg-background"><LoadingSpinner size="lg" /></div>;
 
-  const allImages = assets.flatMap(asset => 
-    (asset.images || []).map(img => ({ 
-      id: img.id,
-      url: img.image_url || img.url, 
-      audience: asset.target_audience,
-      assetId: asset.id
-    }))
-  );
-
-  const allVideos = assets.flatMap(asset =>
-    (asset.videos || []).map(vid => ({ 
-      id: vid.id,
-      url: vid.video_url || vid.url, 
-      audience: asset.target_audience,
-      assetId: asset.id
-    }))
-  );
-
-  const allCopies = assets.flatMap(asset =>
-    (asset.ad_copy || []).map((copy, idx) => ({
-      text: typeof copy === 'string' ? copy : (copy.ad_copy || copy.text),
-      platform: copy.platform || '',
-      audience: asset.target_audience || 'عام',
-      assetId: asset.id,
-      copyIndex: idx
-    }))
-  );
+  const assets = campaign?.assets || [];
+  const allImages = assets.flatMap(a => (a.images || []).map(img => ({ ...img, audience: a.target_audience })));
+  const allVideos = assets.flatMap(a => (a.videos || []).map(vid => ({ ...vid, audience: a.target_audience })));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-background/95 p-6 text-right" dir="rtl">
-      <div className="max-w-7xl mx-auto">
-        
-        {/* زر الرجوع */}
-        <motion.button 
-          whileHover={{ x: -5 }} 
-          onClick={() => router.back()} 
-          className="flex items-center gap-2 text-text-muted hover:text-accent transition-all mb-6 text-base"
-        >
-          <ArrowLeftIcon className="w-5 h-5" /> رجوع إلى الحملات
-        </motion.button>
+    <>
+      <GenerationProgressModal isOpen={showProgressModal} currentStatus={currentProgressText} />
 
-        {/* الكارت العلوي - معلومات الحملة مع أزرار الإجراءات */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          className="bg-panel/50 backdrop-blur-sm rounded-3xl border border-border-color shadow-2xl overflow-hidden mb-8"
-        >
-          <div className="bg-gradient-to-l from-accent/20 to-transparent p-6 border-b border-border-color">
-            <div className="flex flex-wrap items-start justify-between gap-6">
-              <div className="flex items-center gap-4">
-                <div className="p-4 bg-accent/10 rounded-2xl ring-1 ring-accent/30">
-                  <MegaphoneIcon className="w-8 h-8 text-accent" />
+      <div className="min-h-screen bg-background p-6 text-right" dir="rtl">
+        <div className="max-w-7xl mx-auto">
+          
+          {/* Top Bar */}
+          <div className="flex justify-between items-center mb-8">
+             <button onClick={() => router.push('/camp')} className="flex items-center gap-2 text-gray-500 hover:text-accent font-black transition-all">
+               <ArrowLeftIcon className="w-5 h-5" /> قائمة الحملات
+             </button>
+             <button onClick={() => setDeleteModal({ isOpen: true, type: 'campaign', targetName: campaign.name })} className="text-red-500/50 hover:text-red-500 transition-all font-bold text-xs flex items-center gap-2">
+                <TrashIcon className="w-4 h-4" /> حذف الحملة نهائياً
+             </button>
+          </div>
+
+          {/* Campaign Header Card */}
+          <div className="bg-panel border border-gray-800 rounded-[3rem] p-10 mb-10 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-600 via-accent to-emerald-500"></div>
+            <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+              <div className="flex items-center gap-6">
+                <div className="p-5 bg-accent/10 rounded-[2rem] border border-accent/20 shadow-inner">
+                  <MegaphoneIcon className="w-12 h-12 text-accent" />
                 </div>
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">{campaign.name}</h1>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <span className={`${status.bg} ${status.color} px-3 py-0.5 rounded-full text-sm font-medium flex items-center gap-1 border ${status.borderColor}`}>
-                      {StatusIcon && <StatusIcon className="w-4 h-4" />} {status.text}
+                  <h1 className="text-4xl font-black text-white mb-2 tracking-tight">{campaign.name || 'حملة ذكية'}</h1>
+                  <div className="flex gap-3 items-center">
+                    <span className="bg-green-500/10 text-green-400 px-4 py-1 rounded-full border border-green-500/20 font-black text-[10px] uppercase tracking-widest">
+                      {campaign.status}
                     </span>
-                    <span className="text-text-muted flex items-center gap-1 text-sm">
-                      <CalendarIcon className="w-4 h-4" /> {formatDate(campaign.created_at)}
+                    <span className="text-gray-500 text-xs font-bold flex items-center gap-1">
+                      <CalendarIcon className="w-4 h-4" /> {new Date(campaign.created_at).toLocaleDateString('ar-EG')}
                     </span>
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Link href="/upload-image" className="flex items-center gap-2 bg-gradient-to-r from-accent to-accent-dark text-white font-bold py-2 px-6 rounded-2xl shadow-xl shadow-accent/20 text-sm">
-                    <SparklesIcon className="w-5 h-5" /> حملة جديدة
-                  </Link>
-                </motion.div>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => openDeleteModal('campaign', null, null, campaign.name)}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-2xl shadow-lg text-sm transition-all"
-                >
-                  <TrashIcon className="w-5 h-5" /> حذف الحملة
-                </motion.button>
+              
+              {/* Quick Summary Stats */}
+              <div className="flex gap-4">
+                  <div className="bg-background/40 p-4 rounded-3xl border border-gray-800 text-center min-w-[100px]">
+                      <p className="text-2xl font-black text-white">{assets.length}</p>
+                      <p className="text-[10px] text-gray-500 font-bold">فئات</p>
+                  </div>
+                  <div className="bg-background/40 p-4 rounded-3xl border border-gray-800 text-center min-w-[100px]">
+                      <p className="text-2xl font-black text-emerald-400">{allImages.length}</p>
+                      <p className="text-[10px] text-gray-500 font-bold">صور</p>
+                  </div>
+                  <div className="bg-background/40 p-4 rounded-3xl border border-gray-800 text-center min-w-[100px]">
+                      <p className="text-2xl font-black text-orange-400">{allVideos.length}</p>
+                      <p className="text-[10px] text-gray-500 font-bold">فيديو</p>
+                  </div>
               </div>
             </div>
           </div>
 
-          {/* أرقام سريعة */}
-          <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Navigation Tabs */}
+          <div className="flex gap-2 mb-10 bg-panel p-2 rounded-2xl border border-gray-800 w-fit">
             {[
-              { label: 'الصور', count: allImages.length, icon: PhotoIcon, color: 'text-blue-500' },
-              { label: 'الفيديوهات', count: allVideos.length, icon: VideoCameraIcon, color: 'text-red-500' },
-              { label: 'النصوص', count: allCopies.length, icon: DocumentTextIcon, color: 'text-green-600' },
-              { label: 'الفئات', count: assets.length, icon: UserGroupIcon, color: 'text-purple-500' },
-            ].map((stat, i) => (
-              <motion.div key={i} whileHover={{ y: -5 }} className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <stat.icon className={`w-5 h-5 ${stat.color}`} />
-                  <span className="text-gray-600 text-base font-medium">{stat.label}</span>
-                </div>
-                <p className="text-2xl font-black text-gray-900">{stat.count}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* شريط التبويب (Tabs) */}
-        <div className="bg-panel/50 backdrop-blur-sm rounded-3xl border border-border-color shadow-2xl overflow-hidden mb-10">
-          <div className="border-b border-border-color flex gap-4 p-4 overflow-x-auto scrollbar-hide">
-            {['overview', 'images', 'videos', 'copies'].map(tab => (
-              <button 
-                key={tab} onClick={() => setActiveTab(tab)} 
-                className={`relative px-6 py-2 rounded-xl font-bold transition-all text-base whitespace-nowrap ${activeTab === tab ? 'text-white' : 'text-text-muted hover:text-accent hover:bg-accent/10'}`}
-              >
-                {activeTab === tab && <motion.div layoutId="activeTab" className="absolute inset-0 bg-accent rounded-xl -z-10" />}
-                {tab === 'overview' ? 'نظرة عامة' : tab === 'images' ? 'الصور' : tab === 'videos' ? 'الفيديوهات' : 'النصوص'}
+              { id: 'overview', label: 'الاستراتيجية والإنتاج', icon: SparklesIcon },
+              { id: 'images', label: 'معرض الصور', icon: PhotoIcon },
+              { id: 'videos', label: 'معرض الفيديو', icon: VideoCameraIcon },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-8 py-3 rounded-xl font-black text-sm transition-all ${activeTab === tab.id ? 'bg-accent text-white shadow-xl shadow-accent/20 scale-105' : 'text-gray-500 hover:text-gray-300'}`}>
+                <tab.icon className="w-5 h-5" /> {tab.label}
               </button>
             ))}
           </div>
 
-          <div className="p-6">
-            <AnimatePresence mode="wait">
-              <motion.div 
-                key={activeTab} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}
-              >
-                
-                {/* تبويب النظرة العامة */}
-                {activeTab === 'overview' && (
-                  <div className="space-y-6">
-                    {campaign.objective && (
-                      <div className="bg-white/5 p-5 rounded-2xl border border-white/10">
-                        <h3 className="text-lg font-bold text-accent mb-3 flex items-center gap-2"> الهدف الإستراتيجي</h3>
-                        <p className="text-white text-base leading-relaxed">{campaign.objective}</p>
-                      </div>
-                    )}
-
-                    {/* الفئات المستهدفة */}
-                    {campaign.suggested_audiences?.suggestions?.length > 0 && (
-                      <div>
-                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                          <UserGroupIcon className="w-5 h-5 text-accent" />
-                          الفئات المستهدفة
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {campaign.suggested_audiences.suggestions.map((suggestion, idx) => (
-                            <div key={idx} className="bg-white/5 rounded-xl p-4 border border-white/10">
-                              <h4 className="font-bold text-accent mb-2">{suggestion.audience}</h4>
-                              <p className="text-text-muted text-sm">{suggestion.reason}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {campaign.posting_strategy && (
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                          <h4 className="text-green-700 font-bold text-lg mb-3 flex items-center gap-2"><ClockIcon className="w-5 h-5"/> المواعيد المقترحة</h4>
-                          <div className="flex flex-wrap gap-2 mb-4">
-                            {campaign.posting_strategy.best_days?.map((d, i) => <span key={i} className="bg-green-100 text-green-800 px-3 py-0.5 rounded-lg text-sm font-bold">{d}</span>)}
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {campaign.posting_strategy.best_times?.map((t, i) => <span key={i} className="bg-blue-100 text-blue-800 px-3 py-0.5 rounded-lg text-sm font-bold">{t}</span>)}
-                          </div>
-                        </div>
-                        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                          <h4 className="text-green-700 font-bold text-lg mb-3 flex items-center gap-2"> <ClockIcon className="w-5 h-5"/>لماذا هذه المواعيد؟</h4>
-                          <p className="text-gray-800 text-base leading-relaxed">{campaign.posting_strategy.reason}</p>
-                        </div>
-                      </div>
-                    )}
+          <AnimatePresence mode="wait">
+            <motion.div key={activeTab} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+              
+              {activeTab === 'overview' && (
+                <div className="space-y-10">
+                  {/* Strategic Goal */}
+                  <div className="bg-gradient-to-l from-blue-600/10 to-transparent border-r-4 border-accent p-8 rounded-2xl">
+                     <h3 className="text-accent font-black mb-3 flex items-center gap-2 text-xl"><EyeIcon className="w-6 h-6"/> الهدف الإستراتيجي المعتمد</h3>
+                     <p className="text-white text-2xl font-medium leading-relaxed italic">"{campaign.objective || 'توليد محتوى إبداعي مخصص.'}"</p>
                   </div>
-                )}
 
-                {/* تبويب الصور */}
-                {activeTab === 'images' && (
-                  allImages.length === 0 ? (
-                    <div className="text-center py-16 bg-white/5 rounded-2xl">
-                      <PhotoIcon className="w-20 h-20 text-text-muted mx-auto mb-4 opacity-50" />
-                      <p className="text-text-muted text-lg mb-4">لا توجد صور في هذه الحملة</p>
-                      <button
-                        onClick={goToSelectPlatforms}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold transition"
-                      >
-                        توليد صورة الآن
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {allImages.map((img, idx) => (
-                        <motion.div 
-                          key={idx} whileHover={{ y: -5 }} 
-                          className="group relative bg-white rounded-xl overflow-hidden border-2 border-gray-100 shadow-md cursor-pointer"
-                          onClick={() => setSelectedImage(img.url)}
-                        >
-                          <div className="aspect-square overflow-hidden bg-gray-100">
-                            <img src={img.url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="" />
-                          </div>
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <button className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-accent transition-colors"><EyeIcon className="w-5 h-5" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDownload(img.url, `img-${idx}.png`); }} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-green-600 transition-colors"><ArrowDownTrayIcon className="w-5 h-5" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); openDeleteModal('image', img.id, null, `صورة ${img.audience}`); }} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-red-600 transition-colors"><TrashIcon className="w-5 h-5" /></button>
-                          </div>
-                          <div className="p-2 bg-white text-center border-t flex justify-between items-center">
-                            <p className="text-gray-900 font-bold text-sm truncate">{img.audience}</p>
-                            <button onClick={() => openDeleteModal('image', img.id, null, `صورة ${img.audience}`)} className="text-red-500 hover:text-red-700 transition-colors"><TrashIcon className="w-4 h-4" /></button>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )
-                )}
-
-                {/* تبويب الفيديوهات */}
-                {activeTab === 'videos' && (
-                  allVideos.length === 0 ? (
-                    <div className="text-center py-16 bg-white/5 rounded-2xl">
-                      <VideoCameraIcon className="w-20 h-20 text-text-muted mx-auto mb-4 opacity-50" />
-                      <p className="text-text-muted text-lg mb-4">لا توجد فيديوهات في هذه الحملة</p>
-                      <button
-                        onClick={goToSelectPlatforms}
-                        className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-xl font-bold transition"
-                      >
-                        توليد فيديو الآن
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {allVideos.map((vid, idx) => (
-                        <motion.div 
-                          key={idx} whileHover={{ y: -5 }} 
-                          className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-md cursor-pointer"
-                          onClick={() => setSelectedVideo(vid.url)}
-                        >
-                          <div className="relative aspect-video bg-black">
-                            <video 
-                              src={vid.url} 
-                              className="w-full h-full object-cover"
-                              poster={vid.thumbnail || ''}
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedVideo(vid.url); }} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-accent transition-colors"><EyeIcon className="w-5 h-5" /></button>
-                              <button onClick={(e) => { e.stopPropagation(); handleDownload(vid.url, `video-${idx}.mp4`); }} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-green-600 transition-colors"><ArrowDownTrayIcon className="w-5 h-5" /></button>
-                              <button onClick={(e) => { e.stopPropagation(); openDeleteModal('video', vid.id, null, `فيديو ${vid.audience}`); }} className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-red-600 transition-colors"><TrashIcon className="w-5 h-5" /></button>
+                  {/* Audience Cards */}
+                  <div className="grid grid-cols-1 gap-10">
+                    {assets.map((asset) => (
+                      <div key={asset.id} className="bg-panel border border-gray-800 rounded-[3rem] p-10 shadow-2xl relative group">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-6 border-b border-gray-800/50 pb-8">
+                          <div>
+                            <div className="flex items-center gap-3 mb-2">
+                               <div className="w-3 h-3 bg-accent rounded-full animate-pulse"></div>
+                               <h4 className="text-3xl font-black text-white">{asset.target_audience}</h4>
+                            </div>
+                            <div className="flex gap-4">
+                               <span className="text-xs font-bold text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">الصور: {asset.images?.length || 0}</span>
+                               <span className="text-xs font-bold text-orange-400 bg-orange-400/10 px-3 py-1 rounded-full border border-orange-400/20">الفيديوهات: {asset.videos?.length || 0}</span>
                             </div>
                           </div>
-                          <div className="p-3 flex justify-between items-center">
-                            <p className="text-gray-900 font-bold text-sm truncate">{vid.audience}</p>
-                            <div className="flex gap-2">
-                              <button onClick={(e) => { e.stopPropagation(); handleDownload(vid.url, `video-${idx}.mp4`); }} className="p-2 bg-gray-100 rounded-lg text-gray-600 hover:bg-green-100 hover:text-green-600 transition-colors"><ArrowDownTrayIcon className="w-4 h-4" /></button>
-                              <button onClick={() => openDeleteModal('video', vid.id, null, `فيديو ${vid.audience}`)} className="p-2 bg-gray-100 rounded-lg text-red-500 hover:bg-red-100 transition-colors"><TrashIcon className="w-4 h-4" /></button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )
-                )}
-
-                {/* تبويب النصوص */}
-                {activeTab === 'copies' && (
-                  allCopies.length === 0 ? (
-                    <div className="text-center py-16 bg-white/5 rounded-2xl">
-                      <DocumentTextIcon className="w-20 h-20 text-text-muted mx-auto mb-4 opacity-50" />
-                      <p className="text-text-muted text-lg mb-4">لا توجد نصوص إعلانية في هذه الحملة</p>
-                      <button
-                        onClick={goToSelectPlatforms}
-                        className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-xl font-bold transition"
-                      >
-                        توليد نصوص الآن
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-8">
-                      {Object.entries(
-                        allCopies.reduce((acc, copy) => {
-                          const group = copy.audience;
-                          if (!acc[group]) acc[group] = [];
-                          acc[group].push(copy);
-                          return acc;
-                        }, {})
-                      ).map(([audienceName, texts]) => (
-                        <div key={audienceName} className="space-y-4">
-                          <div className="flex items-center justify-between border-r-4 border-accent pr-3">
-                            <div className="flex items-center gap-2">
-                              <UserGroupIcon className="w-6 h-6 text-accent" />
-                              <h3 className="text-xl font-black text-white">{audienceName}</h3>
-                            </div>
-                            <button
-                              onClick={() => openDeleteModal('asset', null, texts[0].assetId, `فئة ${audienceName}`)}
-                              className="text-red-400 hover:text-red-300 text-sm flex items-center gap-1 bg-red-500/10 px-3 py-1 rounded-full transition-colors"
+                          
+                          {/* Direct Production Buttons */}
+                          <div className="flex gap-4">
+                            <button 
+                              onClick={() => setImageModal({ ...imageModal, isOpen: true, assetId: asset.id })}
+                              className="group flex items-center gap-3 bg-white text-black px-8 py-4 rounded-2xl font-black text-sm transition-all hover:bg-accent hover:text-white shadow-lg"
                             >
-                              <TrashIcon className="w-4 h-4" /> حذف الفئة
+                              <PhotoIcon className="w-5 h-5 group-hover:rotate-12 transition-transform"/> توليد صورة 🎨
+                            </button>
+                            <button 
+                              onClick={() => setVideoModal({ ...videoModal, isOpen: true, assetId: asset.id })}
+                              className="group flex items-center gap-3 bg-accent text-white px-8 py-4 rounded-2xl font-black text-sm transition-all hover:bg-orange-500 shadow-lg shadow-accent/20"
+                            >
+                              <VideoCameraIcon className="w-5 h-5 group-hover:scale-110 transition-transform"/> إنتاج فيديو 🎬
                             </button>
                           </div>
-                          <div className="grid gap-5">
-                            {texts.map((copy, idx) => {
-                              const uniqueId = `copy-${audienceName}-${idx}`;
-                              return (
-                                <motion.div key={idx} whileHover={{ x: -8 }} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative transition-all">
-                                  <div className="flex justify-between items-center mb-3">
-                                    <span className="bg-accent/10 text-black px-3 py-0.5 rounded-full text-xs font-black uppercase tracking-widest">
-                                      {copy.platform || 'منصة عامة'}
-                                    </span>
+                        </div>
+
+                        {/* Ad Copies Display */}
+                        <div className="space-y-6">
+                           <div className="flex items-center justify-between">
+                              <h5 className="text-gray-400 font-black text-xs uppercase tracking-[0.2em] flex items-center gap-2">
+                                <DocumentTextIcon className="w-5 h-5 text-accent"/> مقترحات كاتب المحتوى
+                              </h5>
+                           </div>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {asset.ad_copy?.map((copy, i) => (
+                                <div key={i} className="bg-background/50 border border-gray-800 p-6 rounded-[2rem] relative hover:border-gray-600 transition-colors">
+                                  <div className="flex justify-between items-center mb-4">
+                                    <span className="text-[10px] font-black text-accent uppercase tracking-widest bg-accent/10 px-3 py-1 rounded-lg border border-accent/20">{copy.platform}</span>
                                     <button 
-                                      onClick={() => handleCopy(copy.text, uniqueId)}
-                                      className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                                        copiedId === uniqueId ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-accent hover:text-white'
-                                      }`}
+                                      onClick={() => handleCopy(copy.ad_copy || copy.text, `${asset.id}-${i}`)} 
+                                      className={`p-2 rounded-xl transition-all ${copiedId === `${asset.id}-${i}` ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
                                     >
-                                      {copiedId === uniqueId ? <><CheckCircleIcon className="w-4 h-4" /> تم النسخ</> : <><ClipboardDocumentIcon className="w-4 h-4" /> نسخ النص</>}
+                                      {copiedId === `${asset.id}-${i}` ? <CheckCircleIcon className="w-5 h-5"/> : <DocumentDuplicateIcon className="w-5 h-5"/>}
                                     </button>
                                   </div>
-                                  <p className="text-gray-900 text-lg leading-relaxed whitespace-pre-line font-medium">{copy.text}</p>
-                                </motion.div>
-                              );
-                            })}
-                          </div>
+                                  <p className="text-gray-200 text-sm leading-loose font-medium">{copy.ad_copy || copy.text}</p>
+                                </div>
+                              ))}
+                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )
-                )}
 
-              </motion.div>
-            </AnimatePresence>
+                        <button onClick={() => openDeleteModal('asset', null, asset.id, asset.target_audience)} className="absolute bottom-6 left-10 text-gray-700 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                           <TrashIcon className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Image Gallery Tab (Horizontal Scroll Style) */}
+              {activeTab === 'images' && (
+                allImages.length === 0 ? <div className="text-center py-32 bg-panel border-2 border-dashed border-gray-800 rounded-[3rem]"><PhotoIcon className="w-20 mx-auto mb-4 opacity-10" /><p className="text-gray-500 font-black">لا توجد صور في المعرض حالياً</p></div> : 
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                  {allImages.map((img, i) => (
+                    <div key={img.id} className="group relative bg-panel rounded-[2rem] border border-gray-800 overflow-hidden aspect-square shadow-2xl">
+                      <img src={img.image_url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="" />
+                      <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-4">
+                         <div className="flex gap-2">
+                            <button onClick={() => setSelectedImage(img.image_url)} className="p-4 bg-white/10 hover:bg-accent rounded-full text-white backdrop-blur-md"><EyeIcon className="w-6 h-6"/></button>
+                            <button onClick={() => window.open(img.image_url)} className="p-4 bg-white/10 hover:bg-green-600 rounded-full text-white backdrop-blur-md"><ArrowDownTrayIcon className="w-6 h-6"/></button>
+                         </div>
+                         <p className="text-[10px] text-white/50 font-bold uppercase">{img.audience}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Video Gallery Tab */}
+              {activeTab === 'videos' && (
+                allVideos.length === 0 ? <div className="text-center py-32 bg-panel border-2 border-dashed border-gray-800 rounded-[3rem]"><VideoCameraIcon className="w-20 mx-auto mb-4 opacity-10" /><p className="text-gray-500 font-black">المعرض السينمائي فارغ حالياً</p></div> :
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {allVideos.map((vid, i) => (
+                    <div key={vid.id} className="group bg-panel rounded-[2.5rem] border border-gray-800 overflow-hidden shadow-2xl relative">
+                      <div className="relative aspect-video bg-black">
+                        <video src={vid.video_url} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-6">
+                           <button onClick={() => setSelectedVideo(vid.video_url)} className="p-5 bg-accent text-white rounded-full shadow-xl"><PlayCircleIcon className="w-10 h-10"/></button>
+                           <button onClick={() => window.open(vid.video_url)} className="p-5 bg-green-600 text-white rounded-full shadow-xl"><ArrowDownTrayIcon className="w-10 h-10"/></button>
+                        </div>
+                      </div>
+                      <div className="p-8 flex justify-between items-center bg-panel">
+                        <div>
+                           <p className="text-white text-xl font-black">{vid.audience}</p>
+                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">إصدار سينمائي فائق الدقة</p>
+                        </div>
+                        <button onClick={() => openDeleteModal('video', vid.id, null, 'هذا الفيديو')} className="p-3 text-gray-700 hover:text-red-500 transition-colors">
+                           <TrashIcon className="w-6 h-6" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </div>
+      {/* --- Intelligent Video Modal (Square/Wide Layout) --- */}
+      {videoModal.isOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" dir="rtl">
+          <div className="bg-[#0f172a] border border-gray-800 rounded-[3rem] p-0 max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            {/* Header الثابت */}
+            <div className="p-6 border-b border-gray-800/50 flex items-center justify-between bg-[#1e293b]/30">
+              <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-orange-500/10 rounded-xl border border-orange-500/20">
+                    <VideoCameraIcon className="w-6 h-6 text-orange-500" />
+                  </div>
+                  <h3 className="text-xl font-black text-white">إعدادات الإنتاج السينمائي</h3>
+              </div>
+              <div className="text-[10px] font-black text-gray-500 bg-background px-3 py-1 rounded-full border border-gray-800 uppercase tracking-widest">
+                  AI Video Engine v3.0
+              </div>
+            </div>
+
+            {/* المحتوى مقسم لعمودين */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-0 overflow-y-auto custom-scrollbar">
+              
+              {/* العمود الأول: الإعدادات التقنية */}
+              <div className="p-8 border-l border-gray-800/50 space-y-8 bg-background/20">
+                
+                {/* 1. نمط الإخراج */}
+                <div>
+                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <SparklesIcon className="w-3 h-3"/> 1. نمط الإخراج
+                  </p>
+                  <div className="flex bg-background p-1.5 rounded-2xl border border-gray-800 shadow-inner">
+                    <button 
+                      onClick={() => toggleVideoMode('standard')}
+                      className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${videoModal.mode === 'standard' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                      مشاهد متنوعة
+                    </button>
+                    <button 
+                      onClick={() => toggleVideoMode('extended')}
+                      className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${videoModal.mode === 'extended' ? 'bg-orange-500 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                      لقطة ممتدة
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. مدة الفيديو */}
+                <motion.div layout>
+                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">2. مدة الفيديو المختارة</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {durationsConfig[videoModal.mode].map(d => (
+                      <button 
+                        key={d.id} 
+                        onClick={() => setVideoModal({...videoModal, duration: d.id})} 
+                        className={`p-3.5 rounded-2xl border-2 text-right transition-all flex justify-between items-center ${
+                          videoModal.duration === d.id 
+                            ? (videoModal.mode === 'standard' ? 'border-accent bg-accent/10' : 'border-orange-500 bg-orange-500/10') 
+                            : 'border-gray-800 bg-background/50 text-gray-500 hover:border-gray-700'
+                        }`}
+                      >
+                        <span className={`font-bold text-sm ${videoModal.duration === d.id ? 'text-white' : ''}`}>{d.name}</span>
+                        {videoModal.duration === d.id && <CheckCircleIcon className={`w-5 h-5 ${videoModal.mode === 'standard' ? 'text-accent' : 'text-orange-500'}`} />}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+
+                {/* 3. مقاس الفيديو (المنطق الجديد) */}
+                <div className={`${videoModal.mode === 'extended' ? 'opacity-50 pointer-events-none' : ''} transition-all`}>
+                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">3. مقاس وأبعاد الفيديو</p>
+                  <div className="flex gap-3">
+                    {aspectRatios.slice(1).map(r => (
+                      <button 
+                        key={r.id} 
+                        disabled={videoModal.mode === 'extended' && r.id === '9:16'}
+                        onClick={() => setVideoModal({...videoModal, ratio: r.id})} 
+                        className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${
+                          videoModal.ratio === r.id 
+                            ? 'border-accent bg-accent text-white shadow-lg' 
+                            : 'border-gray-800 bg-background text-gray-500'
+                        }`}
+                      >
+                        {r.name}
+                      </button>
+                    ))}
+                  </div>
+                  {videoModal.mode === 'extended' && (
+                    <p className="text-[10px] text-orange-400 font-bold mt-2 mr-1">⚠️ اللقطة الممتدة تدعم المقاس الأفقي فقط حالياً.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* العمود الثاني: الإخراج الفني والصوتي */}
+              <div className="p-8 bg-background/40 space-y-8">
+                
+                {/* 4. المعلق الصوتي */}
+                <div>
+                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">4. نبرة المعلق الصوتي</p>
+                  <div className="max-h-[220px] overflow-y-auto bg-background/80 border border-gray-800 rounded-3xl p-3 space-y-2 custom-scrollbar shadow-inner">
+                    <button onClick={() => setVideoModal({...videoModal, voice: 'Auto'})} className={`w-full flex justify-between items-center p-4 rounded-2xl text-xs font-bold transition-all ${videoModal.voice === 'Auto' ? 'bg-accent text-white shadow-lg' : 'text-gray-500 hover:bg-gray-800'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">🤖</div>
+                        <span>اختيار ذكي (تلقائي)</span>
+                      </div>
+                      {videoModal.voice === 'Auto' && <CheckCircleIcon className="w-5 h-5" />}
+                    </button>
+                    {voices.map((v) => (
+                      <div key={v.name} className={`flex items-center justify-between p-3 rounded-2xl transition-colors ${videoModal.voice === v.name ? 'bg-[#1e293b] border border-gray-700 text-white' : 'text-gray-500 hover:bg-gray-800/50'}`}>
+                        <div onClick={() => setVideoModal({...videoModal, voice: v.name})} className="cursor-pointer flex-1 text-sm font-bold flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center text-[10px] font-black">{v.name[0]}</div>
+                          {v.name}
+                        </div>
+                        {v.preview_url && (
+                          <button onClick={() => handleVoicePreview(v)} className={`p-2 rounded-xl transition-all ${playingVoice === v.name ? 'bg-red-500 text-white' : 'bg-gray-800 hover:bg-green-600 text-white'}`}>
+                            {playingVoice === v.name ? <PauseCircleIcon className="w-5 h-5" /> : <PlayCircleIcon className="w-5 h-5" />}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5. ربط المناسبة */}
+                {campaign?.trending_events?.length > 0 && (
+                  <div>
+                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">5. ربط الإعلان بمناسبة</p>
+                    <div className="max-h-[160px] overflow-y-auto space-y-2 custom-scrollbar pr-1">
+                        <button onClick={() => setVideoModal({...videoModal, eventName: null, eventAngle: null})} className={`w-full p-4 rounded-2xl border-2 text-right text-xs font-bold transition-all ${!videoModal.eventName ? 'border-accent bg-accent/10 text-white shadow-lg' : 'border-gray-800 text-gray-500'}`}>إعلان عام (تصميم دائم)</button>
+                        {campaign.trending_events.map((ev, i) => (
+                          <button key={i} onClick={() => setVideoModal({...videoModal, eventName: ev.event, eventAngle: ev.angle})} className={`w-full p-4 rounded-2xl border-2 text-right transition-all ${videoModal.eventName === ev.event ? 'border-green-500 bg-green-500/10 text-white shadow-lg' : 'border-gray-800 text-gray-500 hover:border-gray-700'}`}>
+                            <p className="font-black text-sm">{ev.event}</p>
+                            <p className="text-[10px] opacity-50 mt-1">{ev.angle}</p>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer الأزرار */}
+            <div className="p-6 bg-[#1e293b]/30 border-t border-gray-800 flex gap-4">
+              <button onClick={() => { stopAnyAudio(); setVideoModal({...videoModal, isOpen: false}); }} className="px-8 py-4 text-gray-400 font-bold hover:text-white transition-all">إلغاء</button>
+              <button 
+                onClick={handleGenerateVideo} 
+                className={`flex-1 py-4 rounded-2xl font-black text-lg shadow-2xl transition-all transform active:scale-95 flex items-center justify-center gap-3 ${
+                  videoModal.mode === 'standard' ? 'bg-accent text-white shadow-accent/20' : 'bg-orange-500 text-white shadow-orange-500/20'
+                }`}
+              >
+                {videoModal.mode === 'standard' ? <SparklesIcon className="w-6 h-6"/> : <VideoCameraIcon className="w-6 h-6"/>}
+                ابدأ الإنتاج السينمائي الذكي
+              </button>
+            </div>
+
           </div>
         </div>
+      )}
 
-        {/* مودال معاينة الصورة */}
-        <AnimatePresence>
-          {selectedImage && (
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[100] p-4"
-              onClick={() => setSelectedImage(null)}
-            >
-              <motion.div 
-                initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
-                className="relative max-w-5xl w-full flex flex-col items-center" onClick={e => e.stopPropagation()}
-              >
-                <button onClick={() => setSelectedImage(null)} className="absolute -top-16 right-0 p-2 text-white hover:bg-accent rounded-full transition-colors"><XMarkIcon className="w-8 h-8" /></button>
-                <img src={selectedImage} className="w-full h-auto max-h-[75vh] object-contain rounded-2xl shadow-2xl" alt="Preview" />
-                <button onClick={() => handleDownload(selectedImage, 'campaign-image.png')} className="mt-6 flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-xl font-bold text-base shadow-xl hover:bg-green-700 transition-all active:scale-95">
-                  <ArrowDownTrayIcon className="w-5 h-5" /> تحميل الصورة الآن
-                </button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* مودال معاينة الفيديو */}
-        <AnimatePresence>
-          {selectedVideo && (
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[100] p-4"
-              onClick={() => setSelectedVideo(null)}
-            >
-              <motion.div 
-                initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
-                className="relative max-w-5xl w-full flex flex-col items-center" onClick={e => e.stopPropagation()}
-              >
-                <button onClick={() => setSelectedVideo(null)} className="absolute -top-16 right-0 p-2 text-white hover:bg-accent rounded-full transition-colors"><XMarkIcon className="w-8 h-8" /></button>
-                <video src={selectedVideo} controls autoPlay className="w-full h-auto max-h-[75vh] rounded-2xl shadow-2xl" />
-                <button onClick={() => handleDownload(selectedVideo, 'campaign-video.mp4')} className="mt-6 flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-xl font-bold text-base shadow-xl hover:bg-green-700 transition-all active:scale-95">
-                  <ArrowDownTrayIcon className="w-5 h-5" /> تحميل الفيديو الآن
-                </button>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* مودال تأكيد الحذف الموحد */}
-        <AnimatePresence>
-          {deleteModal.isOpen && (
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[200] p-4"
-            >
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl text-center"
-              >
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <TrashIcon className="w-8 h-8 text-red-600" />
+      {/* --- Image Modal --- */}
+      {imageModal.isOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" dir="rtl">
+          <div className="bg-panel border border-gray-800 rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black text-white mb-8">تصميم الصورة الإعلانية</h3>
+            
+            <div className="space-y-8">
+                <div>
+                   <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-4">مقاس الصورة</p>
+                   <div className="flex flex-wrap gap-3">
+                    {aspectRatios.map(r => (
+                        <button key={r.id} onClick={() => setImageModal({...imageModal, ratio: r.id})} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${imageModal.ratio === r.id ? 'bg-accent text-white shadow-lg shadow-accent/20 border-accent' : 'bg-background text-gray-500 border border-gray-800'}`}>{r.name}</button>
+                    ))}
+                   </div>
                 </div>
-                <h3 className="text-xl font-black text-gray-900 mb-2">تأكيد الحذف</h3>
-                <p className="text-gray-600 mb-6">
-                  هل أنت متأكد من حذف {deleteModal.targetName}؟
-                  {deleteModal.type === 'campaign' && (
-                    <><br /><span className="text-red-500 font-bold">سيتم حذف جميع المحتويات (الفئات، الصور، الفيديوهات، النصوص) المرتبطة بهذه الحملة.</span></>
-                  )}
-                  {deleteModal.type === 'asset' && (
-                    <><br /><span className="text-red-500 font-bold">سيتم حذف جميع النصوص والصور والفيديوهات التابعة لهذه الفئة.</span></>
-                  )}
-                  <br />
-                  هذا الإجراء لا يمكن التراجع عنه.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setDeleteModal({ isOpen: false, type: null, id: null, assetId: null, targetName: '', loading: false })}
-                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors"
-                  >
-                    إلغاء
-                  </button>
-                  <button
-                    onClick={executeDelete}
-                    disabled={deleteModal.loading}
-                    className="flex-1 bg-red-600 text-white py-2 rounded-xl font-bold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {deleteModal.loading ? <LoadingSpinner size="sm" /> : 'حذف'}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
-      </div>
-    </div>
+                {campaign?.trending_events?.length > 0 && (
+                <div className="space-y-4">
+                    <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">اختيار المناسبة</p>
+                    <div className="max-h-[150px] overflow-y-auto space-y-2 custom-scrollbar">
+                    <button onClick={() => setImageModal({...imageModal, eventName: null, eventAngle: null})} className={`w-full p-4 rounded-2xl border-2 text-right text-xs font-bold transition-all ${!imageModal.eventName ? 'border-accent bg-accent/10 text-white shadow-lg' : 'border-gray-800 text-gray-500 hover:border-gray-600'}`}>إعلان عام (تصميم أساسي)</button>
+                    {campaign.trending_events.map((ev, i) => (
+                        <button key={i} onClick={() => setImageModal({...imageModal, eventName: ev.event, eventAngle: ev.angle})} className={`w-full p-4 rounded-2xl border-2 text-right transition-all ${imageModal.eventName === ev.event ? 'border-green-500 bg-green-500/10 text-white shadow-lg' : 'border-gray-800 text-gray-500 hover:border-gray-600'}`}>
+                        <p className="font-black text-sm mb-1">{ev.event}</p>
+                        <p className="text-[10px] opacity-50 font-medium leading-relaxed">{ev.angle}</p>
+                        </button>
+                    ))}
+                    </div>
+                </div>
+                )}
+            </div>
+
+            <div className="flex gap-4 mt-10">
+              <button onClick={() => setImageModal({...imageModal, isOpen: false})} className="flex-1 py-4 text-gray-500 font-bold hover:text-white transition-all">إلغاء</button>
+              <button onClick={handleGenerateImage} className="flex-1 py-4 bg-white text-black rounded-2xl font-black shadow-xl hover:bg-accent hover:text-white transition-all transform active:scale-95">توليد الآن 🎨</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modals for media preview & delete confirmation as in previous logic... */}
+      {selectedImage && <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4" onClick={() => setSelectedImage(null)}><img src={selectedImage} className="max-w-full max-h-[90vh] rounded-[2rem] shadow-2xl border border-white/5" /><XMarkIcon className="absolute top-8 right-8 w-12 h-12 text-white/50 hover:text-white cursor-pointer transition-all" /></div>}
+      {selectedVideo && <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4" onClick={() => setSelectedVideo(null)}><video src={selectedVideo} controls autoPlay className="max-w-full max-h-[90vh] rounded-[2rem] shadow-2xl border border-white/5" /><XMarkIcon className="absolute top-8 right-8 w-12 h-12 text-white/50 hover:text-white cursor-pointer transition-all" /></div>}
+      
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-[250] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-panel border border-gray-800 rounded-[3rem] p-12 max-w-md w-full text-center shadow-2xl">
+            <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner"><ExclamationCircleIcon className="w-14 h-14 text-red-500" /></div>
+            <h3 className="text-3xl font-black text-white mb-3">تأكيد الحذف</h3>
+            <p className="text-gray-400 mb-10 font-medium leading-relaxed text-lg">هل أنت متأكد من حذف <span className="text-white font-black underline decoration-red-500">"{deleteModal.targetName}"</span>؟ لا يمكن التراجع عن هذا الإجراء.</p>
+            <div className="flex gap-4">
+                <button onClick={() => setDeleteModal({...deleteModal, isOpen: false})} className="flex-1 py-4 bg-background text-gray-500 rounded-2xl font-black hover:text-white transition-all">تراجع</button>
+                <button onClick={executeDelete} disabled={deleteModal.loading} className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black shadow-lg shadow-red-600/20 disabled:opacity-50">
+                  {deleteModal.loading ? <LoadingSpinner size="sm" color="white" /> : 'نعم، احذف'}
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
