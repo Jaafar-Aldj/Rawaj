@@ -2,6 +2,13 @@ import json
 
 from app.services.audio_gen import AVAILABLE_VOICES
 
+def _get_dynamic_voices_list() -> str:
+    """تبني قائمة الأصوات مع الشرح تلقائياً من القاموس لتغذية البرومبت"""
+    voices_str = ""
+    for name, data in AVAILABLE_VOICES.items():
+        voices_str += f"    - \"{name}\": {data['description']}\n"
+    return voices_str
+
 # ==============================================================================
 # 1. Strategy Prompts (مرحلة الاستراتيجية)
 # ==============================================================================
@@ -96,6 +103,9 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
         USER SELECTED VOICE: AUTO (You Decide).
         You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
         """
+
+    dynamic_voices_list = _get_dynamic_voices_list()
+    
     return f"""
     Product: {product_name}
     Audience: {audience}
@@ -104,18 +114,7 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     Target Aspect Ratio: {aspect_ratio}
     
     AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
-    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
-    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
-    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
-    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
-    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
-    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
-    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
-    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
-    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
-    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
-    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
-    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+    {dynamic_voices_list}
 
     {voice_instruction}
 
@@ -138,10 +137,10 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
                 "scene_number": 1,
                 "image_prompt": "Cinematic visual setup...",
                 "motion_prompt": "Camera movement...",
-                "voiceover_text": "Short Arabic text (max 12 words)",
                 "audio_prompt": "Cinematic music..."
             }}
-        ]
+        ],
+        voiceover_text: "For the entire video, write a single cohesive Arabic voiceover script that matches the total duration. Keep it extremely concise (max 10-12 words per scene). Do not include this in the scene objects, but provide it as a separate field in the JSON output."
     }}
     """
 
@@ -162,6 +161,7 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
         USER SELECTED VOICE: AUTO (You Decide).
         You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
         """
+    dynamic_voices_list = _get_dynamic_voices_list()
     return f"""
     Product: {product_name}
     Audience: {audience}
@@ -171,18 +171,8 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
     
     
     AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
-    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
-    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
-    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
-    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
-    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
-    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
-    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
-    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
-    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
-    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
-    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
-    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+    {dynamic_voices_list}
+    
 
     {voice_instruction}
 
@@ -207,10 +197,10 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
                 "scene_number": 1,
                 "image_prompt": "Cinematic visual setup...",
                 "motion_prompt": "Camera movement...",
-                "voiceover_text": "Short Arabic text (max 12 words)",
                 "audio_prompt": "Cinematic music..."
             }}
-        ]
+        ],
+        voiceover_text: "For the entire video, write a single cohesive Arabic voiceover script that matches the total duration. Do not include this in the scene objects, but provide it as a separate field in the JSON output."
     }}
     """
 

@@ -39,7 +39,7 @@ def analyze_image_content(image_url):
         
         # 4. الإرسال باستخدام المكتبة الجديدة (generate_content)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=[prompt, img]
         )
         

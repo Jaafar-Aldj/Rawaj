@@ -13,7 +13,7 @@ IMAGE_DIR = "rawaj-frontend/assets/image"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 # الموديل الداعم للبصمة
-IMAGE_MODEL = "gemini-2.5-flash-image"
+IMAGE_MODEL = "gemini-3-pro-image-preview"
 
 def generate_image(prompt, reference_image_path=None, aspect_ratio="16:9", thought_signature=None):
     """

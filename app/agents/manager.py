@@ -103,6 +103,7 @@ def json_match_extractor(content):
 def normalize_prompts_data(data):
     image_prompt = None
     video_storyboard = []
+    voiceover_text = None
     if not data: return None, []
 
     if isinstance(data, dict):
@@ -116,12 +117,13 @@ def normalize_prompts_data(data):
         elif not storyboard:
             fallback = data.get("video_prompt")
             if fallback and isinstance(fallback, str):
-                video_storyboard = [{"scene_number": 1, "image_prompt": image_prompt, "motion_prompt": fallback, "voiceover_text": ""}]
+                video_storyboard = [{"scene_number": 1, "image_prompt": image_prompt, "motion_prompt": fallback}]
+        voiceover_text = data.get("voiceover_text") or data.get("voiceover") or ""
 
     if isinstance(image_prompt, list) and len(image_prompt) > 0: image_prompt = str(image_prompt[0])
     if isinstance(image_prompt, dict): image_prompt = str(image_prompt)
 
-    return image_prompt, video_storyboard
+    return image_prompt, video_storyboard, voiceover_text
 
 def extract_country_code(text: str) -> str:
     """يبحث في نص المستخدم عن أي اسم دولة ويرجع الكود الخاص بها"""
@@ -478,8 +480,8 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
     )
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
-    _, vid_storyboard = normalize_prompts_data(data)
-    selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Auto"
+    _, vid_storyboard, voiceover_text = normalize_prompts_data(data)
+    selected_voice = data.get("selected_voice_profile", "Farah") if isinstance(data, dict) else "Farah"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
@@ -494,6 +496,8 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
             vid_storyboard, 
             base_image_path=local_ref_path,
             aspect_ratio=aspect_ratio, 
+            voice_profile_name=selected_voice,
+            voiceover_text=voiceover_text,
             notify_callback=notify_callback
         )
         
@@ -539,7 +543,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     )
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
-    _, vid_storyboard = normalize_prompts_data(data)
+    _, vid_storyboard, voiceover_text = normalize_prompts_data(data)
     selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Farah"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
@@ -549,7 +553,6 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
 
     scene = vid_storyboard[0]
     motion_p = scene.get("motion_prompt", "")
-    voice_p = scene.get("voiceover_text", "")
     audio_p = scene.get("audio_prompt", "")
     scene_img_prompt = scene.get("image_prompt", "")
 
@@ -607,9 +610,9 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
             break 
 
     # 5. توليد الصوت ودمجه
-    if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
+    if voiceover_text and voiceover_text.lower() != "none" and voiceover_text.strip() != "":
         if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي...")
-        voice_path = generate_voiceover(voice_p, voice_profile_name=selected_voice)
+        voice_path = generate_voiceover(voiceover_text, voice_profile_name=selected_voice)
         final_video_with_audio = merge_video_audio(final_video_path, voice_path)
     else:
         final_video_with_audio = final_video_path # إذا لم يكن هناك تعليق صوتي
@@ -638,7 +641,6 @@ def refine_text(current_copy, feedback):
 
     
     return extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
-
 
 def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature=None):
     prompter = get_prompter()
@@ -725,11 +727,10 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
         )
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
 
-
 # ==============================================================================
 # التنفيذ المتوازي لتوليد الفيديوهات من الستوري بورد (Parallel Video Generation)
 # ==============================================================================
-def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_callback=None):
+def process_single_scene(scene, valid_image_path, aspect_ratio="16:9",  notify_callback=None):
     """
     دالة مساعدة لمعالجة مشهد واحد (توليد صورة ثم توليد فيديو).
     صُممت لتعمل داخل Thread.
@@ -782,24 +783,11 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
         if notify_callback: notify_callback(f"❌ فشل تحريك المشهد {scene_num}.")
         return {"scene_number": scene_num, "path": None}
     
-     # 5. 🎙️ السحر الجديد: توليد ودمج الصوت (ElevenLabs + MoviePy)
-    if scene_video_path and os.path.exists(scene_video_path):
-        if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي والمؤثرات للمشهد {scene_num}...")
-        
-        # توليد صوت المعلق
-        voice_path = generate_voiceover(voice_p)
-        
-        # دمج الفيديو الصامت مع الأصوات
-        final_scene_path = merge_video_audio(scene_video_path, voice_path)
-        
-        # تحديث مسار الفيديو ليكون الفيديو الناطق الجديد
-        scene_video_path = final_scene_path
-        
-        if notify_callback: notify_callback(f"✅ اكتمل الإخراج الصوتي للمشهد {scene_num}!")
+    
 
     return {"scene_number": scene_num, "path": scene_video_path}
 
-def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", notify_callback=None):
+def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", voiceover_text=None, voice_profile_name="Farah", notify_callback=None):
     """
     تقرأ الستوري بورد، تولد كل مشهد بالتوازي (Parallel)، ثم تدمجها بالترتيب.
     """
@@ -856,7 +844,18 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     else:
         if notify_callback:
             notify_callback("🎞️ جاري دمج المشاهد وإخراج الفيديو النهائي...")
-        final_video = concatenate_veo_videos(ordered_video_paths)
+        merged_silent_video = concatenate_veo_videos(ordered_video_paths)
         if notify_callback:
             notify_callback("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
-        return final_video     
+        # الخطوة 4: الدمج النهائي مع الصوت الكامل
+    full_voice_path = None
+    if voiceover_text and voiceover_text.strip() != "":
+        if notify_callback: notify_callback("🎙️ جاري تسجيل التعليق الصوتي الكامل للحملة...")
+        full_voice_path = generate_voiceover(voiceover_text, voice_profile_name=voice_profile_name)
+        
+    if full_voice_path and merged_silent_video:
+        if notify_callback: notify_callback("🎵 تركيب الهندسة الصوتية النهائية...")
+        final_video = merge_video_audio(merged_silent_video, full_voice_path)
+        return final_video
+    
+    return merged_silent_video
