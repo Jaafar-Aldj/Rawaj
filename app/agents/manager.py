@@ -133,6 +133,38 @@ def extract_country_code(text: str) -> str:
             return code
     return None
 
+def trim_voiceover_via_ai(text, target_duration):
+    """
+    استخدام الذكاء الاصطناعي لتقليص النص ليتناسب مع مدة محددة
+    """
+    words = text.split()
+    # الحسبة: كلمتان في الثانية هي سرعة طبيعية ومريحة
+    estimated_duration = len(words) / 2.0 
+    
+    if estimated_duration <= target_duration:
+        return text
+
+    print(f"✂️ Text is too long ({len(words)} words). Asking AI to trim for {target_duration}s...")
+    
+    try:
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        prompt = f"""
+        You are a professional ad script editor. 
+        The following Arabic text is too long for a {target_duration}-second video. 
+        Shorten it significantly to be spoken clearly within EXACTLY {target_duration} seconds.
+        Keep the core marketing message and the brand tone.
+        
+        TEXT: {text}
+        
+        OUTPUT ONLY THE SHORTENED TEXT. NO EXPLANATIONS.
+        """
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"⚠️ AI Trimming failed: {e}")
+        # Fallback: قص النص يدوياً كحل أخير
+        return " ".join(words[:int(target_duration * 2)])
+
 #===============================================================================
 #  Vision QA
 #===============================================================================
@@ -290,6 +322,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         product_analysis, 
         current_date, 
         user_message, 
+        real_events_context,
         history_text
     )
 
@@ -847,12 +880,19 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
         merged_silent_video = concatenate_veo_videos(ordered_video_paths)
         if notify_callback:
             notify_callback("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
-        # الخطوة 4: الدمج النهائي مع الصوت الكامل
+
+    
+    total_video_duration = len(storyboard_json) * 8  
+    final_script = voiceover_text
+    if voiceover_text:
+        if notify_callback: notify_callback("📝 جاري ضبط طول التعليق الصوتي ليتناسب مع المشاهد...")
+        final_script = trim_voiceover_via_ai(voiceover_text, total_video_duration)
+
     full_voice_path = None
-    if voiceover_text and voiceover_text.strip() != "":
+    if final_script and final_script.strip() != "":
         if notify_callback: notify_callback("🎙️ جاري تسجيل التعليق الصوتي الكامل للحملة...")
-        full_voice_path = generate_voiceover(voiceover_text, voice_profile_name=voice_profile_name)
-        
+        full_voice_path = generate_voiceover(final_script, voice_profile_name=voice_profile_name)
+
     if full_voice_path and merged_silent_video:
         if notify_callback: notify_callback("🎵 تركيب الهندسة الصوتية النهائية...")
         final_video = merge_video_audio(merged_silent_video, full_voice_path)

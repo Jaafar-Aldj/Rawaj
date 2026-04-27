@@ -148,31 +148,27 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
             voice_clip = AudioFileClip(voice_path)
             # رفع مستوى الصوت ليكون المعلق هو الأوضح
             voice_clip = voice_clip.with_volume_scaled(1.2) 
-            
-            ###  تسريع الصوت
+        
+            # ### تكرار الفيديو
             # if voice_clip.duration > video.duration:
-            #     speed_factor = voice_clip.duration / (video.duration - 0.1)
-            #     print(f"⚠️ Voiceover is longer than video. Speeding up by {speed_factor:.2f}x to fit...")
-            #     voice_clip = voice_clip.time_transform(lambda t: t * speed_factor)
-            #     voice_clip = voice_clip.with_duration(video.duration - 0.1)
-
-            ### تكرار الفيديو
+            #     print(f"⚠️ Voiceover ({voice_clip.duration:.1f}s) is longer than video ({video.duration:.1f}s). Extending video to fit...")
+                
+            #     # حساب كم مرة نحتاج تكرار الفيديو ليغطي الصوت
+            #     repeats = math.ceil(voice_clip.duration / video.duration)
+                
+            #     # تكرار الفيديو
+            #     video = concatenate_videoclips([video] * repeats)
+                
+            #     # قص الفيديو المكرر ليطابق طول الصوت بالملي ثانية
+            #     video = video.with_duration(voice_clip.duration)
+                
+            #     # تحديث مسار الموسيقى القديمة لكي تتكرر أيضاً مع الفيديو
+            #     if video.audio:
+            #         veo_audio = video.audio.with_volume_scaled(0.6)
+            #         audio_tracks[0] = veo_audio # تحديث مسار الموسيقى
             if voice_clip.duration > video.duration:
-                print(f"⚠️ Voiceover ({voice_clip.duration:.1f}s) is longer than video ({video.duration:.1f}s). Extending video to fit...")
-                
-                # حساب كم مرة نحتاج تكرار الفيديو ليغطي الصوت
-                repeats = math.ceil(voice_clip.duration / video.duration)
-                
-                # تكرار الفيديو
-                video = concatenate_videoclips([video] * repeats)
-                
-                # قص الفيديو المكرر ليطابق طول الصوت بالملي ثانية
-                video = video.with_duration(voice_clip.duration)
-                
-                # تحديث مسار الموسيقى القديمة لكي تتكرر أيضاً مع الفيديو
-                if video.audio:
-                    veo_audio = video.audio.with_volume_scaled(0.6)
-                    audio_tracks[0] = veo_audio # تحديث مسار الموسيقى
+                print(f"⚠️ Voiceover ({voice_clip.duration}s) still slightly longer than video ({video.duration}s). Trimming audio...")
+                voice_clip = voice_clip.with_duration(video.duration)
 
             audio_tracks.append(voice_clip)
 

@@ -6,15 +6,14 @@ import glob
 from google import genai
 from google.genai import types
 from moviepy import AudioFileClip, VideoFileClip
-from google.oauth2 import service_account
 from ..config import settings 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-PROJECT_ID = settings.project_id
-LOCATION = settings.location
-MODEL_ID = settings.model_id
-SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
+# PROJECT_ID = settings.project_id
+# LOCATION = settings.location
+# MODEL_ID = settings.model_id
+# SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
 
 VIDEO_DIR = "rawaj-frontend/assets/video"
 os.makedirs(VIDEO_DIR, exist_ok=True)
