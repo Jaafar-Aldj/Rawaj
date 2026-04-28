@@ -182,6 +182,11 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
        - Write a single, cohesive `voiceover` script. The word count MUST match the {total_duration} seconds duration (assume 2 words per second. E.g., for 15 seconds, write about 30 Arabic words).
     2. Prompt_Engineer: Output the JSON `video_storyboard` containing ONLY ONE scene object.
     🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
+    For this EXTENDED one-shot video, you must provide a 'motion_sequence'.
+    This is a list of prompts. Each prompt describes the NEXT ACTION in the sequence.
+    - Prompt 1 (Base): Describes the start.
+    - Prompt 2 (Extension 1): Describes the progression of movement.
+    - Prompt 3 (Extension 2): Describes the climax/end of the shot.
 
     ⛔ NEGATIVE CONSTRAINTS:
     - NO Text, Typography, Labels on screen.

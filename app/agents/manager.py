@@ -585,7 +585,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
         return {"video_storyboard": [], "video_url": None}
 
     scene = vid_storyboard[0]
-    motion_p = scene.get("motion_prompt", "")
+    raw_sequence = scene.get("motion_sequence") or scene.get("motion_prompt") or []
     audio_p = scene.get("audio_prompt", "")
     scene_img_prompt = scene.get("image_prompt", "")
 
@@ -606,24 +606,48 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
         except Exception as e:
             print(f"⚠️ Image Gen failed, using base image. Error: {e}")
 
+
+    def flatten(items):
+        flat_list = []
+        if isinstance(items, list):
+            for item in items:
+                flat_list.extend(flatten(item))
+        else:
+            flat_list.append(str(items))
+        return [i for i in flat_list if i.strip()]
+
+    motion_sequence = flatten(raw_sequence)
+
+
+    extensions_needed = max(0, (duration - 8) // 7)
+    total_segments = 1 + extensions_needed
     
-    scene_prompt = f"{motion_p}"
+    if not motion_sequence:
+        fallback_p = scene.get("motion_prompt") or scene.get("action_description") or ""
+        # إذا كان الـ fallback نفسه قائمة، نأخذ أول عنصر منه
+        if isinstance(fallback_p, list): fallback_p = flatten(fallback_p)[0]
+        motion_sequence = [str(fallback_p)] * total_segments
+    while len(motion_sequence) < total_segments:
+        motion_sequence.append(motion_sequence[-1])
+    print(f"🧩 Motion sequence for video: {motion_sequence} (Total segments: {total_segments})")
+
+    first_prompt = str(motion_sequence[0])
     if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
-        scene_prompt += f". Audio context: {audio_p}"
-    scene_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting. No voiceover. "
+        first_prompt = f"{first_prompt}. Audio context: {audio_p}"
+    first_prompt = f"{first_prompt}. CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting. No voiceover. "
 
 
     if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
     
     # 2. توليد أول 8 ثواني (ملاحظة: يجب أن تتأكد أن generate_veo_video ترجع مسار الفيديو + اسم الملف على جوجل)
     # سنستخدم الدالة المعدلة التي ترجع القيمتين
-    first_video_path, google_video_name = generate_veo_video(scene_prompt, scene_image_path, aspect_ratio)
+    first_video_path, google_video_name = generate_veo_video(first_prompt, scene_image_path, aspect_ratio)
 
     if not first_video_path or not google_video_name:
         return {"video_storyboard": vid_storyboard, "video_url": None}
 
     # 3. حساب عدد التمديدات المطلوبة (كل تمديد يضيف حوالي 7 ثواني)
-    extensions_needed = max(0, (duration - 8) // 7)
+    
     
     current_google_name = google_video_name
     final_video_path = first_video_path
@@ -632,8 +656,11 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     for i in range(extensions_needed):
         if notify_callback: notify_callback(f"🔄 جاري تمديد الفيديو (الجزء {i+2})...")
         
+        next_prompt_index = min(i + 1, len(motion_sequence) - 1)
+        next_prompt = str(motion_sequence[next_prompt_index])
+        next_prompt = f"{next_prompt} . CRITICAL: Characters must NOT speak. NO lip-syncing. Silent acting."
         # نرسل نفس البرومبت، مع مرجع الفيديو السابق
-        ext_path, new_google_name = extend_veo_video(scene_prompt, current_google_name, aspect_ratio)
+        ext_path, new_google_name = extend_veo_video(next_prompt, current_google_name, aspect_ratio)
         
         if ext_path:
             final_video_path = ext_path # الفيديو الجديد يحتوي المقطع الأول مدمجاً مع الثاني
