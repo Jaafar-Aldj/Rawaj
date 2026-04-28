@@ -115,12 +115,20 @@ prompter = """
         CRITICAL RULES:
         1. Output JSON ONLY. No conversation.
         2. Provide ONE unified Image Prompt for the main poster.
-        3. For EACH scene in `video_storyboard`, create ONLY:
+        3. NEVER include Arabic text, slogans, or quotes in the English prompts.
+        4. Use the marketing angle to describe the SCENE, not to write text on the image.
+        5. For EACH scene in `video_storyboard`, create ONLY:
            - `image_prompt`: High-detail visual setup.
            - `motion_prompt`: Camera movement and B-roll action.
            - `audio_prompt`: Background music and SFX description.
-        4. Provide the `voiceover_text` as a single string at the root level of the JSON.
-        5. 🛑 VOICEOVER NUMBERS: Spell out all numbers/prices in full Arabic words.
+        6. Provide the `voiceover_text` as a single string at the root level of the JSON.
+        7. 🛑 VOICEOVER NUMBERS: Spell out all numbers/prices in full Arabic words.
+
+        CRITICAL RULE FOR REFINEMENT (EDITING):
+        When the user asks for an edit (e.g., changing a color or an object):
+        1. You MUST describe the entire scene again, including the main product (The Perfume Bottle).
+        2. Use phrases like: "Maintaining the exact same perfume bottle from the reference image in its original position."
+        3. Clearly state what changes (The table color) and what MUST STAY (The product, the armchair, the window).
         
         ⛔ NEGATIVE CONSTRAINTS:
         - NO Alcohol, Women, Children, Pork, or Gambling in prompts.

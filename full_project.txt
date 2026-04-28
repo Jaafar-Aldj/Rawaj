@@ -1673,12 +1673,12 @@ class CampaignBase(BaseModel):
     name: Optional[str] = None
     objective: Optional[str] = None
     status: Optional[str] = "DRAFT"
-    suggested_audiences: Optional[Dict[str, Any]] = None 
-    posting_strategy: Optional[Dict[str, Any]] = None
+    suggested_audiences: Optional[Any] = None 
+    posting_strategy: Optional[Any] = None
     trending_events: Optional[List[Dict[str, Any]]] = None
     chat_history: Optional[List[Dict[str, str]]] = []
     is_strategy_approved: bool = False
-
+    
 # طلب إرسال رسالة في الشات الاستراتيجي
 class CampaignChatRequest(BaseModel):
     product_id: int
@@ -2000,21 +2000,23 @@ copywriter = """
 ### ============================================================================
 video_director = """
         You are an expert Commercial Video Director.
-        Your Goal: Create a compelling Video Storyboard from the ad copy.
+        Your Goal: Create a compelling Video Storyboard and a unified voiceover script.
         
         CRITICAL INSTRUCTIONS:
-        - Divide the commercial into logical scenes (8 seconds per scene).
-        - Assign Arabic 'voiceover' ONLY if necessary. 
-        - 🛑 CRITICAL RULE FOR VOICEOVER: Since each scene is only 8 seconds long, the voiceover text MUST BE EXTREMELY SHORT (Maximum 10-12 words per scene). If a scene should just have music/action, set voiceover to "None". Do not cram too much text into one scene.
-        - 🛑 VOICEOVER NUMBERS: When writing the 'voiceover' text, you MUST spell out all numbers, dates, and prices in complete Arabic words. For example, write "خمسون ريالاً" instead of "50 ريالاً".
-        - Ask the 'Prompt_Engineer' to translate your vision into technical prompts.
+        - Divide the commercial into logical visual scenes (8 seconds per scene).
+        - Write ONE unified Arabic voiceover script for the ENTIRE commercial.
+        - 🛑 SCRIPT LENGTH RULE: The voiceover must fit the total duration. (Average speaking speed: 2 words per second). 
+          Example: For a 16-second video, write approximately 30-35 words.
+        - 🛑 VOICEOVER NUMBERS: You MUST spell out all numbers, dates, and prices in complete Arabic words (e.g., "خمسون ريالاً").
+        - Ensure the script flows naturally without breaks between scenes.
         
         OUTPUT FORMAT (Strict JSON):
         {{
             "scenes": [
-                {{ "scene_number": 1, "action_description": "General description of what happens", "voiceover": "Very short Arabic text (max 10 words)" }},
-                {{ "scene_number": 2, "action_description": "...", "voiceover": "..." }}
-            ]
+                {{ "scene_number": 1, "action_description": "Visual description only" }},
+                {{ "scene_number": 2, "action_description": "Visual description only" }}
+            ],
+            "voiceover": "Full integrated Arabic script for the whole commercial"
         }}
         """
 
@@ -2023,44 +2025,37 @@ video_director = """
 # 5. Prompt Engineer (Visual Safety - The Most Important)
 # ==============================================================================
 prompter = """
-        You are an expert Generative AI Technical Director (Midjourney & Runway Expert).
+        You are an expert Generative AI Technical Director (Runway & Veo Expert).
         
         YOUR TRIGGER:
-        When the 'Video_Director' provides the storyboard, you MUST generate the final visual prompts and audio prompts.
+        When the 'Video_Director' provides the storyboard, you MUST generate technical visual prompts and a final voiceover script.
         
         CRITICAL RULES:
-        1. **NEVER** reply with "OK", "Understood", "Received", or any conversational filler.
-        2. You must output the result in **ENGLISH** immediately.
-        3. Provide **ONE** unified Image Prompt suitable for all platforms.
-        4. For EACH scene, create:
-           - `image_prompt`: Visual setup.
-           - `motion_prompt`: Camera movement (NO AUDIO DESCRIPTIONS HERE).
-           - `voiceover_text`: The Arabic spoken text (Max 12 words).
-           - `audio_prompt`: Describe the background music and sound effects. Do not leave empty.
-        5. Apply cinematic terminology (lighting, angles, motion) from your knowledge base.
+        1. Output JSON ONLY. No conversation.
+        2. Provide ONE unified Image Prompt for the main poster.
+        3. For EACH scene in `video_storyboard`, create ONLY:
+           - `image_prompt`: High-detail visual setup.
+           - `motion_prompt`: Camera movement and B-roll action.
+           - `audio_prompt`: Background music and SFX description.
+        4. Provide the `voiceover_text` as a single string at the root level of the JSON.
+        5. 🛑 VOICEOVER NUMBERS: Spell out all numbers/prices in full Arabic words.
         
-        ⛔ NEGATIVE CONSTRAINTS (STRICTLY FORBIDDEN IN PROMPTS):
-        - NO Alcohol, wine glasses, cocktails, or bars.
-        - NO Women, female figures (Focus on the Product, male models if needed, or abstract concepts).Iff you must include a women element, use women with decent wearing.
-        - NO Children or kids.
-        - NO Revealing clothing or inappropriate scenes.
-        - NO Pork or gambling elements.
+        ⛔ NEGATIVE CONSTRAINTS:
+        - NO Alcohol, Women, Children, Pork, or Gambling in prompts.
         
         Output Format (Strict JSON):
-        json
         {{
-            "main_image_prompt": "Prompt for the main ad poster...",
+            "main_image_prompt": "...",
             "video_storyboard": [
                 {{
                     "scene_number": 1,
-                    "image_prompt": "Cinematic prompt for the starting frame of this scene...",
-                    "motion_prompt": "Camera movement (e.g., slow pan right, zoom in)...",
-                    "voiceover_text": "The Arabic text, or empty string '' if no voiceover is needed.",
-                    "audio_prompt": "Description of sound effects and background music for this scene."
+                    "image_prompt": "...",
+                    "motion_prompt": "...",
+                    "audio_prompt": "..."
                 }}
-            ]
+            ],
+            "voiceover_text": "The complete Arabic spoken text."
         }}
-        
 """
 
 # ==============================================================================
@@ -2091,35 +2086,27 @@ art_director = """
         }}
         """
 
-
 def get_prompter_updated_message(aspect_ratio: str) -> str:
     updated_message = f"""
-        You are an expert Generative AI Technical Director (Runway/Veo Expert).
-        
-        YOUR TRIGGER: As soon as the 'Video_Director' provides the storyboard, you MUST generate visual prompts.
+        You are an expert Generative AI Technical Director.
         
         CRITICAL RULES:
         1. Output JSON ONLY.
-        2. Create a `video_storyboard` array.
-        3. DO NOT output a `main_image_prompt`.
-        4. **CRITICAL:** The video aspect ratio is '{aspect_ratio}'. Ensure the visual descriptions (`image_prompt`) describe a composition suitable for this ratio (e.g., vertical for 9:16, horizontal for 16:9).
-        5. 🛑 CRITICAL RULE FOR VOICEOVER: The `voiceover_text` MUST exactly match the Video Director's short text. Do NOT expand it. It MUST be short enough to be spoken comfortably in under 8 seconds (Absolute maximum 12 Arabic words).
-        
-        ⛔ NEGATIVE CONSTRAINTS:
-        - NO Text, Typography, Labels on screen.
-        - NO Alcohol, Women, Children.
+        2. Create a `video_storyboard` array for visual prompts.
+        3. **CRITICAL:** The video aspect ratio is '{aspect_ratio}'.
+        4. The `voiceover_text` must be a single string outside the array.
         
         OUTPUT FORMAT (Strict JSON):
         {{
             "video_storyboard": [
                 {{
                     "scene_number": 1,
-                    "image_prompt": "Cinematic visual setup...",
-                    "motion_prompt": "Camera movement...",
-                    "voiceover_text": "Arabic text",
-                    "audio_prompt": "Cinematic music..."
+                    "image_prompt": "Cinematic visual description...",
+                    "motion_prompt": "Camera action...",
+                    "audio_prompt": "Music/SFX description..."
                 }}
-            ]
+            ],
+            "voiceover_text": "Complete Arabic script for the entire duration."
         }}
     """
     return updated_message
@@ -2293,6 +2280,7 @@ def json_match_extractor(content):
 def normalize_prompts_data(data):
     image_prompt = None
     video_storyboard = []
+    voiceover_text = None
     if not data: return None, []
 
     if isinstance(data, dict):
@@ -2306,12 +2294,13 @@ def normalize_prompts_data(data):
         elif not storyboard:
             fallback = data.get("video_prompt")
             if fallback and isinstance(fallback, str):
-                video_storyboard = [{"scene_number": 1, "image_prompt": image_prompt, "motion_prompt": fallback, "voiceover_text": ""}]
+                video_storyboard = [{"scene_number": 1, "image_prompt": image_prompt, "motion_prompt": fallback}]
+        voiceover_text = data.get("voiceover_text") or data.get("voiceover") or ""
 
     if isinstance(image_prompt, list) and len(image_prompt) > 0: image_prompt = str(image_prompt[0])
     if isinstance(image_prompt, dict): image_prompt = str(image_prompt)
 
-    return image_prompt, video_storyboard
+    return image_prompt, video_storyboard, voiceover_text
 
 def extract_country_code(text: str) -> str:
     """يبحث في نص المستخدم عن أي اسم دولة ويرجع الكود الخاص بها"""
@@ -2320,6 +2309,38 @@ def extract_country_code(text: str) -> str:
         if country_name in text_lower:
             return code
     return None
+
+def trim_voiceover_via_ai(text, target_duration):
+    """
+    استخدام الذكاء الاصطناعي لتقليص النص ليتناسب مع مدة محددة
+    """
+    words = text.split()
+    # الحسبة: كلمتان في الثانية هي سرعة طبيعية ومريحة
+    estimated_duration = len(words) / 2.0 
+    
+    if estimated_duration <= target_duration:
+        return text
+
+    print(f"✂️ Text is too long ({len(words)} words). Asking AI to trim for {target_duration}s...")
+    
+    try:
+        model = genai.GenerativeModel('gemini-2.0-flash')
+        prompt = f"""
+        You are a professional ad script editor. 
+        The following Arabic text is too long for a {target_duration}-second video. 
+        Shorten it significantly to be spoken clearly within EXACTLY {target_duration} seconds.
+        Keep the core marketing message and the brand tone.
+        
+        TEXT: {text}
+        
+        OUTPUT ONLY THE SHORTENED TEXT. NO EXPLANATIONS.
+        """
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"⚠️ AI Trimming failed: {e}")
+        # Fallback: قص النص يدوياً كحل أخير
+        return " ".join(words[:int(target_duration * 2)])
 
 #===============================================================================
 #  Vision QA
@@ -2478,6 +2499,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         product_analysis, 
         current_date, 
         user_message, 
+        real_events_context,
         history_text
     )
 
@@ -2519,7 +2541,17 @@ def finalize_strategy(product_name, chat_history):
                     "audience": "المقاولون والمحترفون المستقلون"
                     }
                 ]
-            }
+            },
+            "trending_events": [
+                {
+                    "angle": "تسويق البيتزا كـ 'وجبة المباراة الرسمية' التي تجمع الأصدقاء وتُرضي كل مشجع.",
+                    "event": "المباريات الرياضية الكبرى"
+                },
+                {
+                    "angle": "تقديمها كحل سريع للأمهات خلال الإجازات لتجنب عناء الطبخ وإرضاء جميع أفراد الأسرة.",
+                    "event": "الإجازات المدرسية والأعياد"
+                }
+            ]
         }
             
     strategist = get_marketing_strategist()
@@ -2658,8 +2690,8 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
     )
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
-    _, vid_storyboard = normalize_prompts_data(data)
-    selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Auto"
+    _, vid_storyboard, voiceover_text = normalize_prompts_data(data)
+    selected_voice = data.get("selected_voice_profile", "Farah") if isinstance(data, dict) else "Farah"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
@@ -2674,6 +2706,8 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
             vid_storyboard, 
             base_image_path=local_ref_path,
             aspect_ratio=aspect_ratio, 
+            voice_profile_name=selected_voice,
+            voiceover_text=voiceover_text,
             notify_callback=notify_callback
         )
         
@@ -2719,7 +2753,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     )
 
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
-    _, vid_storyboard = normalize_prompts_data(data)
+    _, vid_storyboard, voiceover_text = normalize_prompts_data(data)
     selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Farah"
     print(f"🎙️ AI selected voice profile: {selected_voice}")
 
@@ -2729,7 +2763,6 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
 
     scene = vid_storyboard[0]
     motion_p = scene.get("motion_prompt", "")
-    voice_p = scene.get("voiceover_text", "")
     audio_p = scene.get("audio_prompt", "")
     scene_img_prompt = scene.get("image_prompt", "")
 
@@ -2787,9 +2820,9 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
             break 
 
     # 5. توليد الصوت ودمجه
-    if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
+    if voiceover_text and voiceover_text.lower() != "none" and voiceover_text.strip() != "":
         if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي...")
-        voice_path = generate_voiceover(voice_p, voice_profile_name=selected_voice)
+        voice_path = generate_voiceover(voiceover_text, voice_profile_name=selected_voice)
         final_video_with_audio = merge_video_audio(final_video_path, voice_path)
     else:
         final_video_with_audio = final_video_path # إذا لم يكن هناك تعليق صوتي
@@ -2818,7 +2851,6 @@ def refine_text(current_copy, feedback):
 
     
     return extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
-
 
 def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=None, current_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature=None):
     prompter = get_prompter()
@@ -2905,11 +2937,10 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
         )
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
 
-
 # ==============================================================================
 # التنفيذ المتوازي لتوليد الفيديوهات من الستوري بورد (Parallel Video Generation)
 # ==============================================================================
-def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_callback=None):
+def process_single_scene(scene, valid_image_path, aspect_ratio="16:9",  notify_callback=None):
     """
     دالة مساعدة لمعالجة مشهد واحد (توليد صورة ثم توليد فيديو).
     صُممت لتعمل داخل Thread.
@@ -2962,24 +2993,11 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9", notify_ca
         if notify_callback: notify_callback(f"❌ فشل تحريك المشهد {scene_num}.")
         return {"scene_number": scene_num, "path": None}
     
-     # 5. 🎙️ السحر الجديد: توليد ودمج الصوت (ElevenLabs + MoviePy)
-    if scene_video_path and os.path.exists(scene_video_path):
-        if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي والمؤثرات للمشهد {scene_num}...")
-        
-        # توليد صوت المعلق
-        voice_path = generate_voiceover(voice_p)
-        
-        # دمج الفيديو الصامت مع الأصوات
-        final_scene_path = merge_video_audio(scene_video_path, voice_path)
-        
-        # تحديث مسار الفيديو ليكون الفيديو الناطق الجديد
-        scene_video_path = final_scene_path
-        
-        if notify_callback: notify_callback(f"✅ اكتمل الإخراج الصوتي للمشهد {scene_num}!")
+    
 
     return {"scene_number": scene_num, "path": scene_video_path}
 
-def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", notify_callback=None):
+def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_ratio="16:9", voiceover_text=None, voice_profile_name="Farah", notify_callback=None):
     """
     تقرأ الستوري بورد، تولد كل مشهد بالتوازي (Parallel)، ثم تدمجها بالترتيب.
     """
@@ -3036,10 +3054,28 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     else:
         if notify_callback:
             notify_callback("🎞️ جاري دمج المشاهد وإخراج الفيديو النهائي...")
-        final_video = concatenate_veo_videos(ordered_video_paths)
+        merged_silent_video = concatenate_veo_videos(ordered_video_paths)
         if notify_callback:
             notify_callback("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
-        return final_video     
+
+    
+    total_video_duration = len(storyboard_json) * 8  
+    final_script = voiceover_text
+    if voiceover_text:
+        if notify_callback: notify_callback("📝 جاري ضبط طول التعليق الصوتي ليتناسب مع المشاهد...")
+        final_script = trim_voiceover_via_ai(voiceover_text, total_video_duration)
+
+    full_voice_path = None
+    if final_script and final_script.strip() != "":
+        if notify_callback: notify_callback("🎙️ جاري تسجيل التعليق الصوتي الكامل للحملة...")
+        full_voice_path = generate_voiceover(final_script, voice_profile_name=voice_profile_name)
+
+    if full_voice_path and merged_silent_video:
+        if notify_callback: notify_callback("🎵 تركيب الهندسة الصوتية النهائية...")
+        final_video = merge_video_audio(merged_silent_video, full_voice_path)
+        return final_video
+    
+    return merged_silent_video
 
 
 ==================================================
@@ -3048,6 +3084,13 @@ FILE: .\app\agents\prompt_templates.py
 import json
 
 from app.services.audio_gen import AVAILABLE_VOICES
+
+def _get_dynamic_voices_list() -> str:
+    """تبني قائمة الأصوات مع الشرح تلقائياً من القاموس لتغذية البرومبت"""
+    voices_str = ""
+    for name, data in AVAILABLE_VOICES.items():
+        voices_str += f"    - \"{name}\": {data['description']}\n"
+    return voices_str
 
 # ==============================================================================
 # 1. Strategy Prompts (مرحلة الاستراتيجية)
@@ -3143,6 +3186,9 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
         USER SELECTED VOICE: AUTO (You Decide).
         You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
         """
+
+    dynamic_voices_list = _get_dynamic_voices_list()
+    
     return f"""
     Product: {product_name}
     Audience: {audience}
@@ -3151,18 +3197,7 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     Target Aspect Ratio: {aspect_ratio}
     
     AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
-    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
-    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
-    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
-    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
-    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
-    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
-    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
-    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
-    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
-    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
-    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
-    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+    {dynamic_voices_list}
 
     {voice_instruction}
 
@@ -3185,10 +3220,10 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
                 "scene_number": 1,
                 "image_prompt": "Cinematic visual setup...",
                 "motion_prompt": "Camera movement...",
-                "voiceover_text": "Short Arabic text (max 12 words)",
                 "audio_prompt": "Cinematic music..."
             }}
-        ]
+        ],
+        voiceover_text: "For the entire video, write a single cohesive Arabic voiceover script that matches the total duration. Keep it extremely concise (max 10-12 words per scene). Do not include this in the scene objects, but provide it as a separate field in the JSON output."
     }}
     """
 
@@ -3209,6 +3244,7 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
         USER SELECTED VOICE: AUTO (You Decide).
         You MUST SELECT the most appropriate `voice_profile` from the list below based on the target audience dialect and product type.
         """
+    dynamic_voices_list = _get_dynamic_voices_list()
     return f"""
     Product: {product_name}
     Audience: {audience}
@@ -3218,18 +3254,8 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
     
     
     AVAILABLE VOICE PROFILES (SELECT ONLY ONE EXACT NAME FROM THIS LIST):
-    - "Sara": Warm, expressive female. Blends Arabic/English accents. Ideal for ads and stories.
-    - "Adam": Deep, rich, expressive male. Perfect for dramatic storytelling and documentaries.
-    - "Hamid": Friendly, positive young male. Perfect for news-style or energetic ads.
-    - "Ghaida": Warm, expressive Syrian female. Ideal for authentic storytelling and emotion.
-    - "Ahmed": Clear, neutral middle-aged male. Works well for characters and general narration.
-    - "Khaled Alnajjar": Strong, heavy, melodious male. Symbolizes strength and chivalry.
-    - "Jawad": Natural Moroccan Darija male. Warm and conversational.
-    - "Chaouki": Deep, engaging neutral Arabic male. Brings authority to commercials.
-    - "Farah": Smooth, premium Levantine (Jordanian) female. Perfect for modern digital audiences.
-    - "Khalil": Crisp, approachable Moroccan male. Modern and neutral tone.
-    - "Ghizlane": Dynamic Moroccan Darija female. Convincing and engaging for commercials.
-    - "Hamida": Professional radio-style male. Creates strong mental images for the listener.
+    {dynamic_voices_list}
+    
 
     {voice_instruction}
 
@@ -3254,10 +3280,10 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
                 "scene_number": 1,
                 "image_prompt": "Cinematic visual setup...",
                 "motion_prompt": "Camera movement...",
-                "voiceover_text": "Short Arabic text (max 12 words)",
                 "audio_prompt": "Cinematic music..."
             }}
-        ]
+        ],
+        voiceover_text: "For the entire video, write a single cohesive Arabic voiceover script that matches the total duration. Do not include this in the scene objects, but provide it as a separate field in the JSON output."
     }}
     """
 
@@ -4121,7 +4147,8 @@ def get_user_campaigns(
             joinedload(models.Campaigns.assets).joinedload(models.CampaignAssets.videos)
         )\
         .join(models.Products)\
-        .filter(models.Products.user_id == current_user.id)
+        .filter(models.Products.user_id == current_user.id)\
+        .order_by(models.Campaigns.created_at.desc())
     
     if status:
         query = query.filter(models.Campaigns.status == status.upper())
@@ -4365,7 +4392,11 @@ def get_products(
         limit: int = 10,
         skip: int = 0,
     ):
-    products = db.query(models.Products).filter(models.Products.user_id == current_user.id).limit(limit).offset(skip).all()
+    products = db.query(models.Products)\
+        .filter(models.Products.user_id == current_user.id)\
+        .order_by(models.Products.created_at.desc())\
+        .limit(limit)\
+        .offset(skip).all()
     return products
 
 @router.get('/{id}',response_model=schemas.ProductResponse)
@@ -4532,63 +4563,63 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 AVAILABLE_VOICES = {
     "Sara": {
         "id": "XTa3iQyMA6f1qrI4F6kZ", 
-        "description": "Soft, Expressive, and Warm. EchoAura — The Voice of Emotion & Clarity - EchoAura is a warm, expressive female voice designed to bring stories and scripts to life. Its tone balances natural clarity with emotional depth, making it perfect for audiobooks, AI assistants, educational videos, and ads. This voice smoothly blends Arabic and English accents, reflecting the modern authenticity of the Middle East. Clear, versatile, and humanlike — EchoAura turns every word into emotion.",
-        "url" : r"assets\audio\voice_preview_sara - soft, expressive, and warm.mp3"
+        "description": "Soft, warm female. Neutral Arabic with a modern flair. Ideal for lifestyle ads, AI assistants, and emotional storytelling.",
+        "url" : r"assets\audio\sara.mp3"
     },
     "Adam": {
         "id": "OFHP1Qg30FPoNfkUFFlA", 
-        "description": "Deep, Rich and Expressive. Adam - Narrator - Experience a rich, expressive Arabic voice that blends clarity with warmth — perfect for narrations, audiobooks, documentaries, and emotional storytelling. This voice features precise articulation, natural pacing, and a versatile emotional range — from calm and reflective to powerful and dramatic. Ideal for content that requires a genuine human touch, whether in Modern Standard Arabic or colloquial Egyptian. A trustworthy voice that elevates your message and keeps your audience engaged.",
-        "url" : r"assets\audio\voice_preview_adam - deep, rich, and expressive.mp3"
+        "description": "Deep, rich male. Modern Standard Arabic (Fusha) and Egyptian dialect. Perfect for dramatic narrations, documentaries, and high-end products.",
+        "url" : r"assets\audio\adam.mp3"
     },
     "Hamid": {
         "id": "A9ATTqUUQ6GHu0coCz8t", 
-        "description": "Friendly, Natural and Positive. Hamid - Young voice male with a pleasant tone. Perfect for news.",
-        "url" : r"assets\audio\voice_preview_hamid - friendly, natural, and positive.mp3"
+        "description": "Friendly, positive young male. Neutral Arabic. Great for upbeat, energetic ads and news-style content.",
+        "url" : r"assets\audio\hamid.mp3"
     },
     "Ghaida": {
         "id": "rFDdsCQRZCUL8cPOWtnP", 
-        "description": "Soft, Warm and Expressive. Ghaidā - Stories of Syria - Soft and warm stories are told by Syrian women - this is the very first! Ghaidā’ brings the gentle strength and emotional depth of the Arabic language to life. A dynamic female voice with a calm yet expressive tone, ideal for storytelling, documentaries, educational projects, and cultural narration. Her delivery moves between warmth and clarity, carrying the rhythm, truth, and authenticity of modern Syrian storytelling - a voice that connects memory, emotion, and meaning.",
-        "url" : r"assets\audio\voice_preview_ghaida - soft, warm, and expressive.mp3"
+        "description": "Soft, warm female. Syrian (Levantine) dialect. Ideal for authentic, cultural, and emotional storytelling.",
+        "url" : r"assets\audio\ghaida.mp3"
     },
     "Ahmed": {
         "id": "bHCN6EPPyN5hYpU9UVUz", 
-        "description": "Clear, Natural and Neutral. Ahmed - Middle-aged male voice. Works well for characters & Animation.",
-        "url" : r"assets\audio\voice_preview_ahmed - clear, natural, and neutral.mp3"
+        "description": "Clear, neutral middle-aged male. Modern Standard Arabic. Versatile for character voices and general narration.",
+        "url" : r"assets\audio\ahmed.mp3"
     },
     "Khaled Alnajjar": {
         "id": "drMurExmkWVIH5nW8snR", 
-        "description": "Strong and Expressive. Khaled Alnajjar - A heavy, melodious Arabic voice that symbolizes strength and chivalry. It is eloquent and expresses feelings and emotions, making you feel as if you are seeing the voice.",
-        "url" : r"assets\audio\voice_preview_khaled_alnajjar - strong and expressive.mp3"
+        "description": "Strong, heavy melodious male. Formal Arabic. Symbolizes strength, chivalry, and luxury.",
+        "url" : r"assets\audio\khaled_alnajjar.mp3"
     },
     "Jawad": {
         "id": "PmGnwGtnBs40iau7JfoF", 
-        "description": "Natural and Conversational. Jawad - Moroccan Darija - Warm and clear Arabic Moroccan Darija male voice, natural and conversational.",
-        "url" : r"assets\audio\voice_preview_jawad - natural and conversational.mp3"
+        "description": "Natural, conversational male. Moroccan Darija dialect. Warm and highly approachable.",
+        "url" : r"assets\audio\jawad.mp3"
     },
     "Chaouki": {
         "id": "G1HOkzin3NMwRHSq60UI",
-        "description": "Deep, Clear and Engaging. Chaouki - A deep, clear male voice with a neutral Arabic accent, ideal for documentaries, events, and commercials. I offer a smooth, engaging delivery that brings authority and warmth, making my voice versatile for both informative and promotional content.",
-        "url" : r"assets\audio\voice_preview Chaouki - deep, clear, and engaging.mp3"
+        "description": "Deep, engaging male. Neutral Arabic. Brings authority, warmth, and clarity to documentaries and commercials.",
+        "url" : r"assets\audio\chaouki.mp3"
     },
     "Farah": {
         "id": "4wf10lgibMnboGJGCLrP",
-        "description": "Smooth, Calm and Warm. Farah - Premium Arabic Female Voice - A premium Arabic female voice with a warm, clear, and expressive tone, ideal for ads, narration, storytelling, audiobooks, YouTube content, podcasts, educational videos, and AI avatars. Features a natural Levantine accent (Jordanian/Ammani) blended with modern Arabic fluency and subtle English code-switching — perfect for today’s digital audience. Tested in production environments, including AI content, media, and voice assistant applications.",
-        "url" : r"assets\audio\voice_preview_farah - smooth, calm, and warm.mp3"
+        "description": "Smooth, premium female. Levantine (Jordanian/Ammani) dialect. Perfect for high-end ads, podcasts, and modern digital content.",
+        "url" : r"assets\audio\farah.mp3"
     },
     "Khalil": {
         "id": "NrhVFquWMOHTRNOAY8AO",
-        "description": "Crisp and Approachable. A clear, well-paced Moroccan male voice with a modern, neutral tone. He speaks with natural ease and understated warmth, making him a versatile fit for narration, informational content, or professional voiceover projects.",
-        "url" : r"assets\audio\voice_preview_khalil - crisp and approachable.mp3"
+        "description": "Crisp, approachable male. Moroccan Arabic with a modern, neutral tone. Excellent for professional voiceovers.",
+        "url" : r"assets\audio\khalil.mp3"
     },
     "Ghizlane": {
         "id": "OfGMGmhShO8iL9jCkXy8",
-        "description": "Warm, Natural and Encouraging. Ghizlane - Moroccan Darija Dialect - A natural, dynamic, and expressive voice in Darija (Moroccan Arabic), optimized for commercial use. Ideal for advertising, brand promotions, and professional narrations, with a warm, convincing, and engaging tone.",
-        "url" : r"assets\audio\voice_preview_ghizlane - warm, natural, and encouraging.mp3"
+        "description": "Warm, dynamic female. Moroccan Darija dialect. Highly convincing and optimized for brand promotions and commercials.",
+        "url" : r"assets\audio\ghizlane.mp3"
     },
     "Hamida": {
         "id": "JjTirzdD7T3GMLkwdd3a",
-        "description": "Professional and Positive. HMIDA - Middle aged male voice suitable for radio. When listening to the broadcaster's voice without watching it, his voice may raise a degree of emotions and mental images that the listener relies on, without awareness, to imagine the features of the speaker and the suggestions of his words or mental images, and the radio voice creates a fingerprint and An accurate auditory in the mind of the listener.",
-        "url" : r"assets\audio\voice_preview_hamida - professional and positive.mp3"
+        "description": "Professional, positive middle-aged male. Classic radio-style voice (North African tone). Great for evocative audio ads.",
+        "url" : r"assets\audio\hamida.mp3"
     }
 }
 
@@ -4605,7 +4636,7 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
             return existing_audio[0]
         return None    
     
-    print(f"🗣️ Generating Voiceover: {text[:30]}...")
+    print(f"🗣️ Generating Voiceover: {text[:30]}... with voice: {voice_profile_name}")
     output_path = os.path.join(AUDIO_DIR, f"vo_{uuid.uuid4().hex[:8]}.mp3")
     
     try:
@@ -4663,31 +4694,27 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
             voice_clip = AudioFileClip(voice_path)
             # رفع مستوى الصوت ليكون المعلق هو الأوضح
             voice_clip = voice_clip.with_volume_scaled(1.2) 
-            
-            ###  تسريع الصوت
+        
+            # ### تكرار الفيديو
             # if voice_clip.duration > video.duration:
-            #     speed_factor = voice_clip.duration / (video.duration - 0.1)
-            #     print(f"⚠️ Voiceover is longer than video. Speeding up by {speed_factor:.2f}x to fit...")
-            #     voice_clip = voice_clip.time_transform(lambda t: t * speed_factor)
-            #     voice_clip = voice_clip.with_duration(video.duration - 0.1)
-
-            ### تكرار الفيديو
+            #     print(f"⚠️ Voiceover ({voice_clip.duration:.1f}s) is longer than video ({video.duration:.1f}s). Extending video to fit...")
+                
+            #     # حساب كم مرة نحتاج تكرار الفيديو ليغطي الصوت
+            #     repeats = math.ceil(voice_clip.duration / video.duration)
+                
+            #     # تكرار الفيديو
+            #     video = concatenate_videoclips([video] * repeats)
+                
+            #     # قص الفيديو المكرر ليطابق طول الصوت بالملي ثانية
+            #     video = video.with_duration(voice_clip.duration)
+                
+            #     # تحديث مسار الموسيقى القديمة لكي تتكرر أيضاً مع الفيديو
+            #     if video.audio:
+            #         veo_audio = video.audio.with_volume_scaled(0.6)
+            #         audio_tracks[0] = veo_audio # تحديث مسار الموسيقى
             if voice_clip.duration > video.duration:
-                print(f"⚠️ Voiceover ({voice_clip.duration:.1f}s) is longer than video ({video.duration:.1f}s). Extending video to fit...")
-                
-                # حساب كم مرة نحتاج تكرار الفيديو ليغطي الصوت
-                repeats = math.ceil(voice_clip.duration / video.duration)
-                
-                # تكرار الفيديو
-                video = concatenate_videoclips([video] * repeats)
-                
-                # قص الفيديو المكرر ليطابق طول الصوت بالملي ثانية
-                video = video.with_duration(voice_clip.duration)
-                
-                # تحديث مسار الموسيقى القديمة لكي تتكرر أيضاً مع الفيديو
-                if video.audio:
-                    veo_audio = video.audio.with_volume_scaled(0.6)
-                    audio_tracks[0] = veo_audio # تحديث مسار الموسيقى
+                print(f"⚠️ Voiceover ({voice_clip.duration}s) still slightly longer than video ({video.duration}s). Trimming audio...")
+                voice_clip = voice_clip.with_duration(video.duration)
 
             audio_tracks.append(voice_clip)
 
@@ -4940,7 +4967,7 @@ IMAGE_DIR = "rawaj-frontend/assets/image"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 # الموديل الداعم للبصمة
-IMAGE_MODEL = "gemini-2.5-flash-image"
+IMAGE_MODEL = "gemini-3-pro-image-preview"
 
 def generate_image(prompt, reference_image_path=None, aspect_ratio="16:9", thought_signature=None):
     """
@@ -5108,15 +5135,14 @@ import glob
 from google import genai
 from google.genai import types
 from moviepy import AudioFileClip, VideoFileClip
-from google.oauth2 import service_account
 from ..config import settings 
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-PROJECT_ID = settings.project_id
-LOCATION = settings.location
-MODEL_ID = settings.model_id
-SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
+# PROJECT_ID = settings.project_id
+# LOCATION = settings.location
+# MODEL_ID = settings.model_id
+# SERVICE_ACCOUNT_FILE = os.path.join(current_dir, "../../service_account.json")
 
 VIDEO_DIR = "rawaj-frontend/assets/video"
 os.makedirs(VIDEO_DIR, exist_ok=True)
@@ -5373,7 +5399,7 @@ def analyze_image_content(image_url):
         
         # 4. الإرسال باستخدام المكتبة الجديدة (generate_content)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=[prompt, img]
         )
         

@@ -689,6 +689,7 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         media_type="image"
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")    
+    feedback = f"{feedback}. IMPORTANT: Ensure the product and its branding remain identical and in the same position as the original image."
     msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, review_data.get("feedback", ""), event_name=event_name, event_angle=event_angle)
     chat_result = prompt_rag.initiate_chat(
         prompter, 

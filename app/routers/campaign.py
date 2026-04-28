@@ -222,7 +222,7 @@ async def generate_image_asset(
     if not asset or asset.campaign.product.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found or unauthorized")
     process_id = f"image_{request.asset_id}"
-    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة لمنصة {request.platform}...")
+    await send_notification(process_id, f"🎨 جاري رسم وتوليد الصورة ...")
 
     main_loop = asyncio.get_running_loop()
     def sync_notify(message: str):
@@ -250,6 +250,10 @@ async def generate_image_asset(
         signature = ai_result.get("thought_signature")
         if not image_path:
              raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Image generation failed")
+        if signature:
+            # التأكد من تحويل البصمة إلى Hex إذا كانت Bytes لحفظها في حقل النص
+            if isinstance(signature, bytes):
+                signature = signature.hex()
              
         filename = os.path.basename(image_path)
         public_image_url = f"{req.base_url}assets/image/{filename}"
