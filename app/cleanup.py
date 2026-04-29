@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 from .database import SessionLocal
 from . import models
 
+from app.logger import get_logger
+logger = get_logger(__name__)
+
 # مسارات المجلدات التي تحتوي على الملفات
 UPLOAD_DIR = "rawaj-frontend/assets/upload"
 IMAGE_DIR = "rawaj-frontend/assets/image"
@@ -38,7 +41,7 @@ def cleanup_orphaned_files():
     تقوم بمسح المجلدات، وحذف أي ملف غير موجود في قاعدة البيانات، 
     أو أي ملفات مؤقتة (تبدأ بـ temp_).
     """
-    print("🧹 Starting Garbage Collection...")
+    logger.info("Starting Garbage Collection...")
     db = SessionLocal()
     try:
         active_files = get_all_active_files_from_db(db)
@@ -59,11 +62,11 @@ def cleanup_orphaned_files():
                 if filename.startswith("temp_"):
                     try:
                         os.remove(file_path)
-                        print(f"🗑️ Deleted temp file: {filename}")
+                        logger.info(f"Deleted temp file: {filename}")
                         deleted_count += 1
                     
                     except Exception as e:
-                        print(f"❌ Error deleting temp file {filename}: {e}")
+                        logger.error(f"Error deleting temp file {filename}: {e}")
                     continue
 
                 # 2. حذف الملفات "اليتيمة" (التي ليس لها قيود في الداتا بيز)
@@ -71,15 +74,15 @@ def cleanup_orphaned_files():
                 if filename not in active_files and filename != "placeholder.png":
                     try:
                         os.remove(file_path)
-                        print(f"🗑️ Deleted orphaned file: {filename}")
+                        logger.info(f"Deleted orphaned file: {filename}")
                         deleted_count += 1
                     except Exception as e:
-                        print(f"❌ Error deleting orphaned file {filename}: {e}")
+                        logger.error(f"Error deleting orphaned file {filename}: {e}")
 
-        print(f"✨ Cleanup Complete! Total files deleted: {deleted_count}")
+        logger.info(f"Cleanup Complete! Total files deleted: {deleted_count}")
     
     except Exception as e:
-        print(f"❌ Cleanup Error: {e}")
+        logger.error(f"Cleanup Error: {e}")
     finally:
         db.close()
 

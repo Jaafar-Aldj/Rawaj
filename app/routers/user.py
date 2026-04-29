@@ -9,6 +9,8 @@ router = APIRouter(
     prefix='/users',
     tags=['User'],
 )
+from app.logger import get_logger
+logger = get_logger(__name__)
 
 @router.get('/me', response_model=schemas.UserResponse)
 def get_current_user_data(current_user: schemas.UserResponse = Depends(oauth2.get_current_user)):
@@ -23,6 +25,7 @@ async def create_user(new_user: schemas.UserCreate, db: Session = Depends(get_db
     new_user_db = models.Users(**user_dict,verification_code=code)
     email_check = db.query(models.Users).filter(models.Users.email == new_user.email).first()
     if email_check :
+        logger.warning(f"Attempted to create user with existing email: {new_user.email}")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Email ({new_user.email}) already exists")
     db.add(new_user_db)
     try :
@@ -31,7 +34,7 @@ async def create_user(new_user: schemas.UserCreate, db: Session = Depends(get_db
         db.refresh(new_user_db)
         return new_user_db
     except Exception as e:
-        print(e)
+        logger.error(f"Failed to send verification email to {new_user.email}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
 
 
@@ -43,6 +46,7 @@ def delete_user(
     user_query = db.query(models.Users).filter(models.Users.id == current_user.id)
     user = user_query.first()
     if not user:
+        logger.warning(f"Attempted to delete non-existent user: {current_user.id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({current_user.id}) was not found')
     user_query.delete(synchronize_session=False)
     db.commit()
@@ -57,14 +61,15 @@ def update_user(
     user_query = db.query(models.Users).filter(models.Users.id == current_user.id)
     user = user_query.first()
     if not user:
+        logger.warning(f"Attempted to update non-existent user: {current_user.id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({current_user.id}) was not found')
     user_data = updated_user.model_dump()
-    if 'password' in user_data and user_data['password'] is not None:
-        user_data['password_hash'] = utils.hash_function(user_data.pop('password'))
     if 'name' in user_data and user_data['name'].strip() == "":
         user_data.pop('name')
-    if 'password' in user_data and user_data['password'].strip() == "":
-        user_data.pop('password')
+
+    if len(user_data) == 0:
+        logger.info(f"No valid fields provided for update for user: {current_user.id}")
+        return user  
     user_query.update(user_data, synchronize_session=False)
     db.commit()
     return user_query.first()

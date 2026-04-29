@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from app.config import settings
 from typing_extensions import Annotated
 
+from app.logger import get_logger
+logger = get_logger(__name__)
 
 # Calendarific API configuration
 CALENDARIFIC_API_KEY = settings.calendarific_api_key
@@ -31,13 +33,16 @@ class RegionalEvent:
 def _get_countries_for_region(region: str) -> list[str]:
     # 1. إذا كان المدخل كود دولة من حرفين (مثل sy, ye, eg)، نقبله فوراً!
     if len(region) == 2 and region.isalpha():
+        logger.info(f"Received direct country code: {region}")
         return [region.lower()]
         
+    logger.info(f"Received region input: {region}") 
     # 2. البحث في القواميس للمناطق الأكبر (مثل GCC أو Middle East)
     if region in REGION_TO_COUNTRIES: return REGION_TO_COUNTRIES[region]
     if region in DIRECT_COUNTRY_MAP: return [DIRECT_COUNTRY_MAP[region]]
     if region.title() in REGION_TO_COUNTRIES: return REGION_TO_COUNTRIES[region.title()]
     
+    logger.warning(f"Region '{region}' not recognized. Defaulting to Saudi Arabia (sa).")
     # 3. الافتراضي فقط إذا كان النص غير مفهوم أبداً
     return ["sa"]
 
@@ -45,7 +50,9 @@ def _fetch_events_for_country_month(target_date: date, country_code: str) -> lis
     """
     نسخة متزامنة (Sync) صاروخية تجلب أحداث الشهر كاملاً بطلب واحد فقط!
     """
-    if not CALENDARIFIC_API_KEY: return []
+    if not CALENDARIFIC_API_KEY: 
+        logger.error("Calendarific API key is missing. Cannot fetch events.")
+        return []
     
     params = {
         "api_key": CALENDARIFIC_API_KEY,
@@ -59,7 +66,9 @@ def _fetch_events_for_country_month(target_date: date, country_code: str) -> lis
         # استخدام httpx.Client المتزامن لمنع تجمد السيرفر
         with httpx.Client(timeout=10.0) as client:
             response = client.get(CALENDARIFIC_BASE_URL, params=params)
-            if response.status_code != 200: return []
+            if response.status_code != 200: 
+                logger.error(f"Error fetching events for {country_code}: {response.status_code}")
+                return []
             data = response.json()
         
         response_obj = data.get("response", {})
@@ -79,11 +88,11 @@ def _fetch_events_for_country_month(target_date: date, country_code: str) -> lis
                 date=event_iso,
                 country=country_code
             ))
-        print(f"[EventsEngine] Fetched {len(events)} events for {country_code} in {target_date.strftime('%B %Y')}")
-        print(events[:3])  # طباعة أول 3 أحداث للتأكد من البيانات
+        logger.info(f"[EventsEngine] Fetched {len(events)} events for {country_code} in {target_date.strftime('%B %Y')}")
+        logger.info(f"Events: {events[:3]}")  # طباعة أول 3 أحداث للتأكد من البيانات
         return events
     except Exception as e:
-        print(f"[EventsEngine] Error fetching {country_code}: {e}")
+        logger.error(f"[EventsEngine] Error fetching {country_code}: {e}")
         return []
 
 def should_create_event_content(event: RegionalEvent) -> bool:
@@ -97,6 +106,7 @@ def get_upcoming_events_for_strategy(region: str = "GCC", days_ahead: int = 30) 
     الآن أصبحت سريعة جداً لأنها تقوم بـ (عدد الدول) طلبات فقط بدلاً من 180 طلب!
     """
     if not settings.calendarific_api_key:
+        logger.error("Calendarific API key is missing. Cannot fetch events.")
         return "No real-time events available (API key missing)."
         
     start_date = date.today()
@@ -106,7 +116,7 @@ def get_upcoming_events_for_strategy(region: str = "GCC", days_ahead: int = 30) 
     upcoming_events = []
     seen_names = set()
     
-    print(f"🌍 Fetching events for {len(countries)} countries in {region}...")
+    logger.info(f"Fetching events for {len(countries)} countries in {region}...")
 
     for country_code in countries:
         # جلب أحداث الشهر الحالي لهذه الدولة
@@ -154,7 +164,7 @@ def fetch_country_events_tool(
     start_date = date.today()
     end_date = start_date + timedelta(days=30)
     
-    print(f"🤖 AI requested events for country: {country_code.upper()}...")
+    logger.info(f"AI requested events for country: {country_code.upper()}...")
     
     upcoming_events = []
     seen_names = set()
@@ -174,8 +184,9 @@ def fetch_country_events_tool(
                 if should_create_event_content(event) and event.name not in seen_names:
                     seen_names.add(event.name)
                     upcoming_events.append(event)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Skipping event with invalid date: {event.name}, error: {e}")
+            continue
 
     upcoming_events.sort(key=lambda x: x.date)
 

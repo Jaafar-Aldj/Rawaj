@@ -4,6 +4,7 @@ import AuthLayout from "@/components/AuthLayout";
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 export default function LoginPage() {
@@ -97,8 +98,11 @@ export default function LoginPage() {
           </button>
         </div>
 
+        {/* ✅ هون التعديل */}
         <div className="flex justify-between items-center text-sm">
-          <a href="#" className="text-blue-400 hover:underline transition">نسيت كلمة المرور؟</a>
+          <Link href="/forgot-password" className="text-blue-400 hover:underline transition">
+            نسيت كلمة المرور؟
+          </Link>
         </div>
 
         <button

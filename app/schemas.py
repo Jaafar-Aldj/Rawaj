@@ -12,7 +12,6 @@ class UserCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
-    password: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: int

@@ -2,6 +2,10 @@ from rembg import remove
 from PIL import Image
 import os
 
+from app.logger import get_logger
+logger = get_logger(__name__)
+
+
 def remove_background(input_path):
     """
     تقوم بقص المنتج من الصورة وإزالة الخلفية.
@@ -12,7 +16,7 @@ def remove_background(input_path):
     else:
         local_path = input_path
     try:
-        print(f"✂️ Removing background from: {local_path}")
+        logger.info(f"Removing background from: {local_path}")
         
         # فتح الصورة
         input_image = Image.open(local_path)
@@ -25,11 +29,11 @@ def remove_background(input_path):
         
         # الحفظ
         output_image.save(output_path)
-        print(f"✅ Background removed. Saved at: {output_path}")
+        logger.info(f"Background removed. Saved at: {output_path}")
         return output_path
 
     except Exception as e:
-        print(f"❌ Background Removal Failed: {e}")
+        logger.error(f"Background Removal Failed: {e}")
         return None
     
 if __name__ == "__main__":

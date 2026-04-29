@@ -21,10 +21,8 @@ import {
   PencilSquareIcon,
   DocumentTextIcon,
   CalendarIcon,
-  ChevronLeftIcon
 } from '@heroicons/react/24/outline';
 
-// إعدادات مدد الفيديو لكل نمط
 const durationsConfig = {
   standard: [
     { id: 8, name: '8 ثواني (مشهد 1)' },
@@ -38,8 +36,14 @@ const durationsConfig = {
   ]
 };
 
+// استخدام نفس خيارات الملف الأول (مربع، أفقي، عمودي) لتطابق الصورة
 const aspectRatios = [
   { id: '1:1', name: 'مربع 1:1' },
+  { id: '16:9', name: 'أفقي 16:9' },
+  { id: '9:16', name: 'عمودي 9:16' },
+];
+
+const videoRatios = [
   { id: '16:9', name: 'أفقي 16:9' },
   { id: '9:16', name: 'عمودي 9:16' },
 ];
@@ -56,10 +60,8 @@ export default function CampaignResultPage() {
   
   const [previewImage, setPreviewImage] = useState(null);
   const [previewVideo, setPreviewVideo] = useState(null);
-
   const [currentAudio, setCurrentAudio] = useState(null); 
   const [playingVoice, setPlayingVoice] = useState(null);
-
   const [voices, setVoices] = useState([]);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [currentProgressText, setCurrentProgressText] = useState('');
@@ -216,9 +218,9 @@ export default function CampaignResultPage() {
 
   const getEditModalConfig = () => {
     switch (editModal.type) {
-      case 'text': return { icon: DocumentTextIcon, title: 'تعديل النصوص', desc: 'أخبر كاتب المحتوى بما تريد تغييره.', color: 'text-blue-400', bg: 'bg-blue-600', hoverBg: 'hover:bg-blue-500' };
-      case 'image': return { icon: PhotoIcon, title: 'تعديل الصورة', desc: 'أخبر المخرج الفني بما تريد تعديله.', color: 'text-purple-400', bg: 'bg-purple-600', hoverBg: 'hover:bg-purple-500' };
-      case 'video': return { icon: VideoCameraIcon, title: 'تعديل الفيديو', desc: 'أخبر مخرج الفيديو بما تريد تغييره.', color: 'text-orange-400', bg: 'bg-orange-600', hoverBg: 'hover:bg-orange-500' };
+      case 'text': return { icon: DocumentTextIcon, title: 'تعديل النصوص', desc: 'أخبر كاتب المحتوى بما تريد تغييره.', color: 'text-green-600', bg: 'bg-green-600', hoverBg: 'hover:bg-green-700' };
+      case 'image': return { icon: PhotoIcon, title: 'تعديل الصورة', desc: 'أخبر المخرج الفني بما تريد تعديله.', color: 'text-green-600', bg: 'bg-green-600', hoverBg: 'hover:bg-green-700' };
+      case 'video': return { icon: VideoCameraIcon, title: 'تعديل الفيديو', desc: 'أخبر مخرج الفيديو بما تريد تغييره.', color: 'text-green-600', bg: 'bg-green-600', hoverBg: 'hover:bg-green-700' };
       default: return { icon: PencilSquareIcon, title: 'تعديل', desc: '', color: 'text-white', bg: 'bg-gray-600', hoverBg: '' };
     }
   };
@@ -234,10 +236,11 @@ export default function CampaignResultPage() {
     <>
       <GenerationProgressModal isOpen={showProgressModal} currentStatus={currentProgressText} />
 
-      <div className="min-h-screen bg-background p-6 text-right" dir="rtl">
-        <div className="max-w-6xl mx-auto flex flex-col gap-8">
+      <div className="min-h-screen bg-gray-900 p-6 text-right" dir="rtl">
+        <div className="max-w-7xl mx-auto flex flex-col gap-8">
           
-          <div className="flex items-center justify-between bg-panel p-5 rounded-3xl shadow-lg border border-border-color">
+          {/* شريط الخطوات - أبيض */}
+          <div className="flex items-center justify-between bg-white p-5 rounded-3xl shadow-lg border border-gray-100">
             {[
               { id: 1, name: 'رفع الصورة', status: 'done' },
               { id: 2, name: 'بيانات المنتج', status: 'done' },
@@ -248,23 +251,27 @@ export default function CampaignResultPage() {
               <div key={step.id} className="flex items-center flex-1 last:flex-none">
                 <div className="flex flex-col items-center gap-1.5 min-w-[70px]">
                   <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black transition-all duration-500 ${
-                    step.status === 'active' ? 'bg-green-600 text-white shadow-md shadow-green-500/20' : 
-                    step.status === 'done' ? 'bg-green-500/20 text-green-400' : 'bg-gray-800 text-gray-500'
+                    step.status === 'active' ? 'bg-green-600 text-white shadow-md shadow-gray-200' : 
+                    step.status === 'done' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
                   }`}>
                     {step.status === 'done' ? <CheckCircleIcon className="w-5 h-5" /> : step.id}
                   </div>
-                  <span className={`text-[10px] font-bold whitespace-nowrap ${step.status !== 'pending' ? 'text-gray-200' : 'text-gray-500'}`}>{step.name}</span>
+                  <span className={`text-[10px] font-bold whitespace-nowrap ${step.status !== 'pending' ? 'text-gray-900' : 'text-gray-400'}`}>{step.name}</span>
                 </div>
                 {idx < arr.length - 1 && (
-                  <div className={`flex-1 h-[2px] mx-2 rounded-full ${step.status === 'done' ? 'bg-green-500/30' : 'bg-gray-800'}`} />
+                  <div className={`flex-1 h-[2px] mx-2 rounded-full ${
+                    step.id < 5 ? 'bg-green-100' : 'bg-gray-100'
+                  }`} />
                 )}
               </div>
             ))}
           </div>
 
-          <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 text-center shadow-xl">
-            <h2 className="text-2xl font-black text-white flex items-center justify-center gap-3"><SparklesIcon className="w-8 h-8 text-green-400"/> استوديو الإنتاج الذكي جاهز!</h2>
-            <p className="text-gray-400 text-md mt-2 font-medium">ابدأ الآن بتوليد الصور والفيديوهات لكل فئة مستهدفة.</p>
+          {/* بطاقة الترحيب */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 text-center shadow-lg">
+            <h2 className="text-2xl font-black text-gray-800 flex items-center justify-center gap-3">
+             اختر الفئة المستهدفة وابدأ بتوليد الصور والفيديوهات والنصوص الإبداعية
+            </h2>
           </div>
 
           {assets.map((asset) => {
@@ -273,102 +280,117 @@ export default function CampaignResultPage() {
             const copies = asset.ad_copy || [];
 
             return (
-              <div key={asset.id} className="bg-panel rounded-[2.5rem] border border-gray-800 p-8 shadow-2xl space-y-10">
+              <div key={asset.id} className="bg-white rounded-[2.5rem] border border-gray-200 p-8 shadow-2xl space-y-10">
                 
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-gray-800 pb-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-gray-100 pb-8">
                   <div className="flex items-center gap-4">
-                    <div className="p-3 bg-accent/10 rounded-2xl border border-accent/20"><UsersIcon className="w-7 h-7 text-accent" /></div>
-                    <h3 className="text-2xl font-black text-white">{asset.target_audience}</h3>
+                    <div className="p-3 bg-gray-100 rounded-2xl border border-gray-200"><UsersIcon className="w-7 h-7 text-gray-700" /></div>
+                    <h3 className="text-2xl font-black text-gray-800">{asset.target_audience}</h3>
                   </div>
-                  
                   <div className="flex flex-wrap gap-3">
-                    <button onClick={() => setImageModal({ ...imageModal, isOpen: true, assetId: asset.id })} className="bg-white text-black px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 hover:bg-accent hover:text-white transition-all shadow-lg shadow-white/5 active:scale-95">
+                    <button onClick={() => setImageModal({ ...imageModal, isOpen: true, assetId: asset.id })} className="bg-gray-900 text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95">
                       <PhotoIcon className="w-5 h-5" /> توليد صورة
                     </button>
-                    <button onClick={() => setVideoModal({ ...videoModal, isOpen: true, assetId: asset.id })} className="bg-accent text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 hover:bg-orange-500 transition-all shadow-lg shadow-accent/20 active:scale-95">
+                    <button onClick={() => setVideoModal({ ...videoModal, isOpen: true, assetId: asset.id })} className="bg-green-600 text-white px-6 py-3 rounded-2xl text-sm font-black flex items-center gap-2 hover:bg-green-700 transition-all shadow-md active:scale-95">
                       <VideoCameraIcon className="w-5 h-5" /> إنتاج فيديو
                     </button>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                  {/* قسم المعرض الإبداعي - Horizontal Scroll */}
-                  <div className="space-y-6">
-                    <h4 className="text-gray-400 text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                       <SparklesIcon className="w-4 h-4 text-accent" /> المعرض البصري (إصدارات الفئة)
-                    </h4>
-                    
+                <div className="flex flex-col lg:flex-row gap-8 lg:gap-10">
+                  
+                  <div className="flex-1 space-y-6">
                     {images.length === 0 && videos.length === 0 ? (
-                      <div className="bg-background border border-dashed border-gray-800 rounded-3xl p-16 text-center flex flex-col items-center justify-center h-[280px]">
-                        <PhotoIcon className="w-12 h-12 text-gray-700 mb-4 opacity-20" />
-                        <p className="text-gray-600 text-sm font-bold">لم يتم إنتاج وسائط لهذه الفئة بعد.</p>
+                      <div className="bg-gray-50 border border-dashed border-gray-200 rounded-3xl p-16 text-center flex flex-col items-center justify-center h-[320px]">
+                        <PhotoIcon className="w-16 h-16 text-gray-400 mb-4 opacity-50" />
+                        <p className="text-gray-500 text-sm font-bold">لم يتم إنتاج وسائط لهذه الفئة بعد.</p>
                       </div>
                     ) : (
                       <div className="space-y-8">
                         {images.length > 0 && (
                           <div className="space-y-3">
-                             <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mr-1">الصور المصممة</p>
-                             <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
-                                {images.map((img, i) => (
-                                  <div key={img.id} className="flex-none w-[200px] snap-start group relative bg-background rounded-2xl border border-gray-800 overflow-hidden shadow-xl aspect-square">
-                                    <img src={img.image_url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt=""/>
-                                    <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
-                                       <div className="flex gap-2">
-                                          <button onClick={() => setPreviewImage(img.image_url)} className="p-2 bg-white/10 hover:bg-accent rounded-full text-white backdrop-blur-md"><EyeIcon className="w-5 h-5"/></button>
-                                          <button onClick={() => downloadFile(img.image_url, `img-${i}.png`)} className="p-2 bg-white/10 hover:bg-green-600 rounded-full text-white backdrop-blur-md"><ArrowDownTrayIcon className="w-5 h-5"/></button>
-                                       </div>
-                                       <button onClick={() => setEditModal({ isOpen: true, type: 'image', id: img.id, assetId: asset.id, platform: img.platform, feedback: '' })} className="text-[10px] text-accent font-black hover:underline uppercase tracking-tighter">طلب تعديل</button>
-                                    </div>
+                            <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
+                              {images.map((img, i) => (
+                                <div key={img.id} className="flex-none w-[220px] sm:w-[280px] h-[220px] sm:h-[280px] snap-start group relative bg-gray-100 rounded-2xl border border-gray-200 overflow-hidden shadow-md">
+                                  <img src={img.image_url} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" alt=""/>
+                                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
+                                    <button onClick={() => setPreviewImage(img.image_url)} className="p-2 sm:p-3 bg-white/20 hover:bg-white/40 rounded-full text-white transition-all">
+                                      <EyeIcon className="w-6 h-6 sm:w-7 sm:h-7"/>
+                                    </button>
+                                    <button onClick={() => downloadFile(img.image_url, `image-${i}.png`)} className="p-2 sm:p-3 bg-white/20 hover:bg-white/40 rounded-full text-white transition-all">
+                                      <ArrowDownTrayIcon className="w-6 h-6 sm:w-7 sm:h-7"/>
+                                    </button>
+                                    <button 
+                                      onClick={() => setEditModal({ isOpen: true, type: 'image', id: img.id, assetId: asset.id, platform: img.platform, feedback: '' })} 
+                                      className="p-2 sm:p-3 bg-green-600 hover:bg-green-700 rounded-full text-white transition-all shadow-lg"
+                                    >
+                                      <PencilSquareIcon className="w-6 h-6 sm:w-7 sm:h-7"/>
+                                    </button>
                                   </div>
-                                ))}
-                             </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                         {videos.length > 0 && (
                           <div className="space-y-3">
-                             <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest mr-1">الفيديوهات السينمائية</p>
-                             <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
-                                {videos.map((vid, i) => (
-                                  <div key={vid.id} className="flex-none w-[280px] snap-start group relative bg-background rounded-2xl border border-gray-800 overflow-hidden shadow-xl aspect-video">
-                                    <video src={vid.video_url} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-3">
-                                       <div className="flex gap-2">
-                                          <button onClick={() => setPreviewVideo(vid.video_url)} className="p-3 bg-accent text-white rounded-full"><PlayCircleIcon className="w-6 h-6"/></button>
-                                          <button onClick={() => downloadFile(vid.video_url, `vid-${i}.mp4`)} className="p-3 bg-green-600 text-white rounded-full"><ArrowDownTrayIcon className="w-6 h-6"/></button>
-                                       </div>
-                                       <button onClick={() => setEditModal({ isOpen: true, type: 'video', id: vid.id, assetId: asset.id, platform: null, feedback: '' })} className="text-[10px] text-orange-400 font-black hover:underline uppercase tracking-tighter">تعديل السيناريو</button>
-                                    </div>
+                            <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
+                              {videos.map((vid, i) => (
+                                <div key={vid.id} className="flex-none w-[220px] sm:w-[280px] h-[220px] sm:h-[280px] snap-start group relative bg-gray-100 rounded-2xl border border-gray-200 overflow-hidden shadow-md">
+                                  <video 
+                                    src={vid.video_url} 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                                    muted 
+                                    loop 
+                                    controls
+                                  />
+                                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
+                                    <button onClick={() => setPreviewVideo(vid.video_url)} className="p-2 sm:p-3 bg-white/20 hover:bg-green-600 rounded-full text-white transition-all">
+                                      <PlayCircleIcon className="w-6 h-6 sm:w-7 sm:h-7"/>
+                                    </button>
+                                    <button onClick={() => downloadFile(vid.video_url, `video-${i}.mp4`)} className="p-2 sm:p-3 bg-white/20 hover:bg-white/40 rounded-full text-white transition-all">
+                                      <ArrowDownTrayIcon className="w-6 h-6 sm:w-7 sm:h-7"/>
+                                    </button>
+                                    <button 
+                                      onClick={() => setEditModal({ isOpen: true, type: 'video', id: vid.id, assetId: asset.id, platform: null, feedback: '' })} 
+                                      className="p-2 sm:p-3 bg-green-600 hover:bg-green-700 rounded-full text-white transition-all shadow-lg"
+                                    >
+                                      <PencilSquareIcon className="w-6 h-6 sm:w-7 sm:h-7"/>
+                                    </button>
                                   </div>
-                                ))}
-                             </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
                     )}
                   </div>
 
-                  {/* قسم النصوص الإعلانية */}
-                  <div className="space-y-6">
+                  <div className="flex-1 space-y-6">
                     <div className="flex justify-between items-center">
-                      <h4 className="text-gray-400 text-xs font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                        <DocumentTextIcon className="w-4 h-4 text-accent" /> مقترحات كاتب المحتوى ({copies.length})
-                      </h4>
-                      <button onClick={() => setEditModal({ isOpen: true, type: 'text', id: null, assetId: asset.id, platform: null, feedback: '' })} className="text-blue-400 hover:underline text-[10px] font-black">تحسين النصوص</button>
+                      <button 
+                        onClick={() => setEditModal({ isOpen: true, type: 'text', id: null, assetId: asset.id, platform: null, feedback: '' })} 
+                        className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md transition-all flex items-center gap-2"
+                      >
+                        <PencilSquareIcon className="w-4 h-4" />
+                        تحسين النصوص
+                      </button>
                     </div>
-                    <div className="space-y-4 max-h-[450px] overflow-y-auto pr-3 custom-scrollbar">
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-3 custom-scrollbar">
                       {copies.map((copy, copyIndex) => {
                         const text = typeof copy === 'string' ? copy : (copy.ad_copy || copy.text || '');
                         const platform = copy.platform || 'عام';
                         const uid = `${asset.id}-${copyIndex}`;
                         return (
-                          <div key={uid} className="bg-background/50 rounded-3xl p-6 border border-gray-800 hover:border-gray-600 transition-colors relative group">
+                          <div key={uid} className="bg-gray-50 rounded-3xl p-6 border border-gray-100 hover:border-gray-300 transition-colors shadow-sm">
                             <div className="flex justify-between items-start mb-4">
-                              <span className="bg-accent/10 text-accent text-[10px] font-black px-3 py-1 rounded-lg border border-accent/20 uppercase tracking-widest">{platform}</span>
-                              <button onClick={() => handleCopy(text, uid)} className={`p-2 rounded-xl transition-all ${copiedIndex === uid ? 'bg-green-500 text-white shadow-lg' : 'bg-gray-800 text-gray-500 hover:text-white'}`}>
+                              <span className="bg-green-100 text-green-700 text-[10px] font-black px-3 py-1 rounded-lg border border-green-200 uppercase tracking-widest">{platform}</span>
+                              <button onClick={() => handleCopy(text, uid)} className={`p-2 rounded-xl transition-all ${copiedIndex === uid ? 'bg-green-500 text-white shadow-md' : 'bg-gray-200 text-gray-600 hover:text-gray-900'}`}>
                                 {copiedIndex === uid ? <CheckCircleIcon className="w-5 h-5" /> : <DocumentDuplicateIcon className="w-5 h-5" />}
                               </button>
                             </div>
-                            <p className="text-gray-200 text-sm leading-loose font-medium">{text}</p>
+                            <p className="text-gray-700 text-sm leading-relaxed font-medium">{text}</p>
                           </div>
                         );
                       })}
@@ -381,144 +403,185 @@ export default function CampaignResultPage() {
         </div>
       </div>
 
-      {/* --- Intelligent Wide Video Modal --- */}
-      {videoModal.isOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" dir="rtl">
-          <div className="bg-[#0f172a] border border-gray-800 rounded-[3rem] p-0 max-w-4xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            <div className="p-6 border-b border-gray-800/50 flex items-center justify-between bg-[#1e293b]/30">
-               <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-orange-500/10 rounded-xl border border-orange-500/20">
-                     <VideoCameraIcon className="w-6 h-6 text-orange-500" />
-                  </div>
-                  <h3 className="text-xl font-black text-white">إعدادات الإنتاج السينمائي</h3>
-               </div>
-               <div className="text-[10px] font-black text-gray-500 bg-background px-3 py-1 rounded-full border border-gray-800 uppercase tracking-widest">
-                  AI Video Engine v3.1
-               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-0 overflow-y-auto custom-scrollbar">
-              <div className="p-8 border-l border-gray-800/50 space-y-8 bg-background/20">
-                <div>
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">1. نمط الإخراج</p>
-                  <div className="flex bg-background p-1.5 rounded-2xl border border-gray-800">
-                    <button onClick={() => toggleVideoMode('standard')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${videoModal.mode === 'standard' ? 'bg-accent text-white shadow-lg' : 'text-gray-500'}`}>مشاهد متنوعة</button>
-                    <button onClick={() => toggleVideoMode('extended')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${videoModal.mode === 'extended' ? 'bg-orange-500 text-white shadow-lg' : 'text-gray-500'}`}>لقطة ممتدة</button>
-                  </div>
-                </div>
-
-                <motion.div layout>
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">2. مدة الفيديو المختارة</p>
-                  <div className="grid grid-cols-1 gap-2">
-                    {durationsConfig[videoModal.mode].map(d => (
-                      <button key={d.id} onClick={() => setVideoModal({...videoModal, duration: d.id})} className={`p-4 rounded-2xl border-2 text-right transition-all flex justify-between items-center ${videoModal.duration === d.id ? (videoModal.mode === 'standard' ? 'border-accent bg-accent/10' : 'border-orange-500 bg-orange-500/10') : 'border-gray-800 bg-background/50 text-gray-500'}`}>
-                        <span className={`font-bold text-sm ${videoModal.duration === d.id ? 'text-white' : ''}`}>{d.name}</span>
-                        {videoModal.duration === d.id && <CheckCircleIcon className={`w-5 h-5 ${videoModal.mode === 'standard' ? 'text-accent' : 'text-orange-500'}`} />}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-
-                <div className={`${videoModal.mode === 'extended' ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">3. مقاس وأبعاد الفيديو</p>
-                  <div className="flex gap-3">
-                    {aspectRatios.slice(1).map(r => (
-                      <button key={r.id} onClick={() => setVideoModal({...videoModal, ratio: r.id})} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${videoModal.ratio === r.id ? 'border-accent bg-accent text-white' : 'border-gray-800 bg-background text-gray-500'}`}>{r.name}</button>
-                    ))}
-                  </div>
-                  {videoModal.mode === 'extended' && <p className="text-[10px] text-orange-400 font-bold mt-2">⚠️ اللقطة الممتدة تدعم المقاس الأفقي فقط حالياً.</p>}
-                </div>
-              </div>
-
-              <div className="p-8 bg-background/40 space-y-8">
-                <div>
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">4. نبرة المعلق الصوتي</p>
-                  <div className="max-h-[220px] overflow-y-auto bg-background/80 border border-gray-800 rounded-3xl p-3 space-y-2 custom-scrollbar">
-                    <button onClick={() => setVideoModal({...videoModal, voice: 'Auto'})} className={`w-full flex justify-between p-4 rounded-2xl text-xs font-bold transition-all ${videoModal.voice === 'Auto' ? 'bg-accent text-white shadow-lg' : 'text-gray-500'}`}>🤖 اختيار ذكي (تلقائي)</button>
-                    {voices.map((v) => (
-                      <div key={v.name} className={`flex items-center justify-between p-3 rounded-2xl ${videoModal.voice === v.name ? 'bg-[#1e293b] border border-gray-700 text-white' : 'text-gray-500 hover:bg-gray-800/50'}`}>
-                        <div onClick={() => setVideoModal({...videoModal, voice: v.name})} className="cursor-pointer flex-1 text-sm font-bold">{v.name}</div>
-                        {v.preview_url && <button onClick={() => handleVoicePreview(v)} className={`p-2 rounded-xl ${playingVoice === v.name ? 'bg-red-500 text-white' : 'bg-gray-800'}`}>{playingVoice === v.name ? <PauseCircleIcon className="w-5 h-5" /> : <PlayCircleIcon className="w-5 h-5" />}</button>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {campaignData?.trending_events?.length > 0 && (
-                  <div>
-                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">5. ربط المناسبة</p>
-                    <div className="max-h-[160px] overflow-y-auto space-y-2 custom-scrollbar">
-                       <button onClick={() => setVideoModal({...videoModal, eventName: null, eventAngle: null})} className={`w-full p-4 rounded-2xl border-2 text-right text-xs font-bold transition-all ${!videoModal.eventName ? 'border-accent bg-accent/10 text-white shadow-lg' : 'border-gray-800 text-gray-500'}`}>إعلان عام (تصميم دائم)</button>
-                       {campaignData.trending_events.map((ev, i) => (
-                         <button key={i} onClick={() => setVideoModal({...videoModal, eventName: ev.event, eventAngle: ev.angle})} className={`w-full p-4 rounded-2xl border-2 text-right transition-all ${videoModal.eventName === ev.event ? 'border-green-500 bg-green-500/10 text-white' : 'border-gray-800 text-gray-500'}`}>
-                           <p className="font-black text-sm">{ev.event}</p>
-                           <p className="text-[10px] opacity-50 mt-1">{ev.angle}</p>
-                         </button>
-                       ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="p-6 bg-[#1e293b]/30 border-t border-gray-800 flex gap-4">
-              <button onClick={() => { stopAnyAudio(); setVideoModal({...videoModal, isOpen: false}); }} className="px-8 py-4 text-gray-400 font-bold hover:text-white transition-all">إلغاء</button>
-              <button onClick={handleGenerateVideo} className={`flex-1 py-4 rounded-2xl font-black text-lg shadow-2xl transition-all transform active:scale-95 ${videoModal.mode === 'standard' ? 'bg-accent text-white' : 'bg-orange-500 text-white'}`}>بدء الإنتاج السينمائي</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- Image Generation Modal --- */}
+      {/* ---------- مودال الصورة - بنفس تنسيق الملف الأول (أبيض) ---------- */}
       {imageModal.isOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" dir="rtl">
-          <div className="bg-panel border border-gray-800 rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl">
-            <h3 className="text-2xl font-black text-white mb-8 flex items-center gap-3"><PhotoIcon className="w-8 h-8 text-blue-400"/> تصميم الصورة</h3>
-            <div className="space-y-8">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-5 rounded-t-3xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="bg-blue-50 p-2 rounded-xl">
+                    <PhotoIcon className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <h3 className="text-xl font-black text-gray-800">AI IMAGE STUDIO</h3>
+                </div>
+                <button onClick={() => setImageModal({ ...imageModal, isOpen: false })} className="text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-8">
               <div>
-                <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">مقاس الصورة</p>
-                <div className="flex gap-3">
-                  {aspectRatios.map(r => (
-                    <button key={r.id} onClick={() => setImageModal({...imageModal, ratio: r.id})} className={`flex-1 py-3 rounded-xl text-xs font-black border-2 transition-all ${imageModal.ratio === r.id ? 'bg-accent text-white shadow-lg border-accent' : 'bg-background text-gray-500 border-gray-800'}`}>{r.name}</button>
+                <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">1. مقاس الصورة</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {aspectRatios.map((r) => (
+                    <button key={r.id} onClick={() => setImageModal({ ...imageModal, ratio: r.id })} className={`py-3 px-2 rounded-xl text-sm font-bold border transition-all text-center ${imageModal.ratio === r.id ? 'border-green-500 bg-green-50 text-green-700 shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300'}`}>
+                      {r.name}
+                    </button>
                   ))}
                 </div>
               </div>
               {campaignData?.trending_events?.length > 0 && (
-                <div className="space-y-4">
-                  <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">ربط المناسبة</p>
-                  <div className="max-h-[150px] overflow-y-auto space-y-2 custom-scrollbar">
-                    <button onClick={() => setImageModal({...imageModal, eventName: null, eventAngle: null})} className={`w-full p-4 rounded-2xl border-2 text-right text-xs font-bold transition-all ${!imageModal.eventName ? 'border-accent bg-accent/10 text-white' : 'border-gray-800 text-gray-500'}`}>إعلان عام (تصميم أساسي)</button>
+                <div>
+                  <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">2. ربط المناسبة</p>
+                  <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
+                    <button onClick={() => setImageModal({ ...imageModal, eventName: null, eventAngle: null })} className={`w-full text-right p-4 rounded-2xl border-2 transition-all ${!imageModal.eventName ? 'border-green-500 bg-green-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
+                      <p className="font-black text-md text-gray-800">إعلان عام (تصميم أساسي)</p>
+                      <p className="text-[15px] text-gray-500 mt-1">بدون ربط بمناسبة محددة</p>
+                    </button>
                     {campaignData.trending_events.map((ev, i) => (
-                      <button key={i} onClick={() => setImageModal({...imageModal, eventName: ev.event, eventAngle: ev.angle})} className={`w-full p-4 rounded-2xl border-2 text-right transition-all ${imageModal.eventName === ev.event ? 'border-green-500 bg-green-500/10 text-white' : 'border-gray-800 text-gray-500'}`}>
-                        <p className="font-black text-sm mb-1">{ev.event}</p>
-                        <p className="text-[10px] opacity-50">{ev.angle}</p>
+                      <button key={i} onClick={() => setImageModal({ ...imageModal, eventName: ev.event, eventAngle: ev.angle })} className={`w-full text-right p-4 rounded-2xl border-2 transition-all ${imageModal.eventName === ev.event ? 'border-green-500 bg-green-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
+                        <p className="font-black text-md text-gray-800 mb-1">{ev.event}</p>
+                        <p className="text-[15px] text-gray-600 leading-relaxed line-clamp-2">{ev.angle}</p>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-            </div>
-            <div className="flex gap-4 mt-10">
-              <button onClick={() => setImageModal({...imageModal, isOpen: false})} className="flex-1 py-4 text-gray-500 font-bold hover:text-white">إلغاء</button>
-              <button onClick={handleGenerateImage} className="flex-1 py-4 bg-white text-black rounded-2xl font-black shadow-xl hover:bg-accent hover:text-white transform active:scale-95 transition-all">توليد الآن 🎨</button>
+              <div className="flex gap-4 pt-4 border-t border-gray-100">
+                <button onClick={() => setImageModal({ ...imageModal, isOpen: false })} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200">إلغاء</button>
+                <button onClick={handleGenerateImage} className="flex-1 py-3 rounded-xl font-black text-white bg-green-600 hover:bg-green-700 shadow-md flex items-center justify-center gap-2">
+                 توليد الآن
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Previews */}
+      {/* ---------- مودال الفيديو - بنفس تنسيق الملف الأول (أبيض) ---------- */}
+      {videoModal.isOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-5 rounded-t-3xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="bg-green-50 p-2 rounded-xl">
+                    <VideoCameraIcon className="w-5 h-5 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-black text-gray-800">AI VIDEO STUDIO</h3>
+                </div>
+                <button onClick={() => { stopAnyAudio(); setVideoModal({ ...videoModal, isOpen: false }); }} className="text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-8">
+              {/* 1. نمط الإخراج */}
+              <div>
+                <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">1. نمط الإخراج</p>
+                <div className="flex gap-3 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+                  <button onClick={() => toggleVideoMode('standard')} className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${videoModal.mode === 'standard' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>مشاهد متنوعة</button>
+                  <button onClick={() => toggleVideoMode('extended')} className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${videoModal.mode === 'extended' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>لقطة ممتدة</button>
+                </div>
+              </div>
+              {/* 2. المدة */}
+              <motion.div layout>
+                <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">2. مدة الفيديو</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {durationsConfig[videoModal.mode].map(d => (
+                    <button key={d.id} onClick={() => setVideoModal({...videoModal, duration: d.id})} className={`w-full text-right p-4 rounded-2xl border-2 transition-all flex justify-between items-center ${videoModal.duration === d.id ? 'border-green-500 bg-green-50 text-green-700 shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300'}`}>
+                      <span className="font-bold text-sm">{d.name}</span>
+                      {videoModal.duration === d.id && <CheckCircleIcon className="w-5 h-5 text-green-500" />}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+              {/* 3. نسبة الأبعاد */}
+              {videoModal.mode === 'standard' && (
+                <div>
+                  <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">3. مقاس الفيديو</p>
+                  <div className="flex gap-3">
+                    {videoRatios.map(r => (
+                      <button key={r.id} onClick={() => setVideoModal({...videoModal, ratio: r.id})} className={`flex-1 py-3 rounded-xl text-sm font-bold border transition-all text-center ${videoModal.ratio === r.id ? 'border-green-500 bg-green-50 text-green-700 shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300'}`}>
+                        {r.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {videoModal.mode === 'extended' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-xs font-bold">
+                  ⚠️ اللقطة الممتدة تدعم المقاس الأفقي (16:9) فقط.
+                </div>
+              )}
+              {/* 4. الصوت */}
+              <div>
+                <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">4. نبرة المعلق الصوتي</p>
+                <div className="max-h-[240px] overflow-y-auto border border-gray-200 rounded-2xl p-2 custom-scrollbar">
+                  <button onClick={() => setVideoModal({...videoModal, voice: 'Auto'})} className={`w-full text-right p-3 rounded-xl text-sm font-bold transition-all mb-1 ${videoModal.voice === 'Auto' ? 'bg-green-50 text-green-700 border border-green-200' : 'text-gray-600 hover:bg-gray-50'}`}>🤖 اختيار ذكي (تلقائي)</button>
+                  {voices.map((v) => (
+                    <div key={v.name} className={`flex items-center justify-between p-2 rounded-xl transition-all ${videoModal.voice === v.name ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
+                      <div onClick={() => setVideoModal({...videoModal, voice: v.name})} className="cursor-pointer flex-1 text-sm font-bold text-gray-700">{v.name}</div>
+                      {v.preview_url && (
+                        <button onClick={() => handleVoicePreview(v)} className={`p-1.5 rounded-lg transition-all ${playingVoice === v.name ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                          {playingVoice === v.name ? <PauseCircleIcon className="w-5 h-5" /> : <PlayCircleIcon className="w-5 h-5" />}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* 5. ربط المناسبة */}
+              {campaignData?.trending_events?.length > 0 && (
+                <div>
+                  <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">5. ربط المناسبة</p>
+                  <div className="space-y-3 max-h-[200px] overflow-y-auto custom-scrollbar">
+                    <button onClick={() => setVideoModal({...videoModal, eventName: null, eventAngle: null})} className={`w-full text-right p-4 rounded-2xl border-2 transition-all ${!videoModal.eventName ? 'border-green-500 bg-green-50 shadow-sm' : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-300'}`}>
+                      <p className="font-black text-md text-gray-800 mb-1">إعلان عام (تصميم دائم)</p>
+                      <p className="text-[15px] text-gray-500 mt-1">بدون ربط بمناسبة محددة</p>
+                    </button>
+                    {campaignData.trending_events.map((ev, i) => (
+                      <button key={i} onClick={() => setVideoModal({...videoModal, eventName: ev.event, eventAngle: ev.angle})} className={`w-full text-right p-4 rounded-2xl border-2 transition-all ${videoModal.eventName === ev.event ? 'border-green-500 bg-green-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-gray-300'}`}>
+                        <p className="font-black text-md text-gray-800 mb-1">{ev.event}</p>
+                        <p className="text-[15px] text-gray-600 leading-relaxed line-clamp-2">{ev.angle}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-4 pt-4 border-t border-gray-100">
+                <button onClick={() => { stopAnyAudio(); setVideoModal({ ...videoModal, isOpen: false }); }} className="flex-1 py-3 rounded-xl font-bold text-gray-600 bg-gray-100 hover:bg-gray-200">إلغاء</button>
+                <button onClick={handleGenerateVideo} className="flex-1 py-3 rounded-xl font-black text-white bg-green-600 hover:bg-green-700 shadow-md flex items-center justify-center gap-2">
+                   بدء الإنتاج
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewImage && <div className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}><img src={previewImage} className="max-w-full max-h-[90vh] rounded-[2rem] shadow-2xl" /><XMarkIcon className="absolute top-8 right-8 w-12 h-12 text-white/50 cursor-pointer" /></div>}
       {previewVideo && <div className="fixed inset-0 z-[300] bg-black/95 flex items-center justify-center p-4" onClick={() => setPreviewVideo(null)}><video src={previewVideo} controls autoPlay className="max-w-full max-h-[90vh] rounded-[2rem] shadow-2xl" /><XMarkIcon className="absolute top-8 right-8 w-12 h-12 text-white/50 cursor-pointer" /></div>}
 
-      {/* Edit Modal */}
+      {/* مودال التعديل - أيضاً تم تنسيقه بنفس الطريقة البيضاء */}
       {editModal.isOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" dir="rtl">
-          <div className="bg-panel border border-border-color rounded-3xl p-10 max-w-md w-full shadow-2xl">
-            <div className="flex items-center gap-3 mb-4"><editConfig.icon className={`w-8 h-8 ${editConfig.color}`}/><h3 className="text-2xl font-black text-white">{editConfig.title}</h3></div>
-            <p className="text-gray-400 text-sm mb-8">{editConfig.desc}</p>
-            <textarea value={editModal.feedback} onChange={(e) => setEditModal({...editModal, feedback: e.target.value})} placeholder="اكتب ملاحظاتك بدقة..." rows="4" className="w-full bg-background border border-gray-700 text-white rounded-2xl p-5 outline-none mb-8 focus:border-accent transition-all"></textarea>
-            <div className="flex gap-4">
-              <button onClick={() => setEditModal({...editModal, isOpen: false})} className="flex-1 py-4 bg-background text-gray-500 rounded-2xl font-bold">إلغاء</button>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+            <div className="flex items-center gap-3 mb-4">
+              <editConfig.icon className={`w-8 h-8 ${editConfig.color}`} />
+              <h3 className="text-2xl font-black text-gray-800">{editConfig.title}</h3>
+            </div>
+            <p className="text-gray-500 text-sm mb-6">{editConfig.desc}</p>
+            <textarea 
+              value={editModal.feedback} 
+              onChange={(e) => setEditModal({ ...editModal, feedback: e.target.value })} 
+              placeholder="اكتب ملاحظاتك بدقة..." 
+              rows="4" 
+              className="w-full bg-gray-50 border border-gray-200 text-gray-800 rounded-2xl p-5 outline-none mb-8 focus:border-green-500 transition-all" 
+            />
+            <div className="flex flex-row gap-4">
+              <button onClick={() => setEditModal({ ...editModal, isOpen: false })} className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-bold hover:text-gray-800 transition-all">إلغاء</button>
               <button onClick={submitEdit} className={`flex-1 py-4 rounded-2xl font-black text-white shadow-lg ${editConfig.bg} ${editConfig.hoverBg}`}>إرسال الملاحظات</button>
             </div>
           </div>

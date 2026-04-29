@@ -3,6 +3,10 @@ from google import genai
 from PIL import Image
 from ..config import settings
 
+
+from app.logger import get_logger
+logger = get_logger(__name__)
+
 # إعداد العميل باستخدام المكتبة الجديدة
 client = genai.Client(api_key=settings.google_api_key)
 
@@ -11,6 +15,7 @@ def analyze_image_content(image_url):
     تحليل الصورة المخزنة محلياً باستخدام google.genai و Gemini 2.0 Flash
     """
     if not image_url:
+        logger.error("Invalid image URL provided.")
         return None
     
     try:
@@ -21,10 +26,10 @@ def analyze_image_content(image_url):
             local_path = os.path.join("rawaj-frontend", "assets", "upload", filename)
             
         if not os.path.exists(local_path):
-            print(f"⚠️ Image file not found for analysis: {local_path}")
+            logger.warning(f"Image file not found for analysis: {local_path}")
             return None
 
-        print(f"👁️ Analyzing Product Image: {local_path}...")
+        logger.info(f"Analyzing Product Image: {local_path}...")
         
         # 2. فتح الصورة
         img = Image.open(local_path)
@@ -45,10 +50,12 @@ def analyze_image_content(image_url):
         
         # 5. استخراج النص
         if response.text:
+            logger.info(f"Visual Analysis Result: {response.text}")
             return f"\n[AI Visual Analysis of the Product Image]: {response.text}"
         else:
+            logger.warning("No text generated from image analysis.")
             return ""
 
     except Exception as e:
-        print(f"❌ Vision Analysis Failed: {e}")
-        return None
+        logger.error(f"Vision Analysis Failed: {e}")
+        return ""

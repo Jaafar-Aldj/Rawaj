@@ -1,11 +1,13 @@
 from glob import glob
-import math
 import os
 from time import time
 import uuid
 from elevenlabs.client import ElevenLabs
 from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip, concatenate_videoclips
 from app.config import settings 
+
+from app.logger import get_logger
+logger = get_logger(__name__)
 
 # إعداد العميل
 client = ElevenLabs(api_key=settings.elevenlabs_api_key) 
@@ -83,14 +85,14 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
         return None
 
     if getattr(settings, "use_mock_api", False):
-        print(f"💰 [SAVED $] MOCKING ELEVENLABS TTS...")
+        logger.info(f"MOCKING ELEVENLABS TTS...")
         time.sleep(1)
         existing_audio = glob.glob(os.path.join(AUDIO_DIR, "vo_*.mp3"))
         if existing_audio:
             return existing_audio[0]
         return None    
     
-    print(f"🗣️ Generating Voiceover: {text[:30]}... with voice: {voice_profile_name}")
+    logger.info(f"🗣️ Generating Voiceover: {text[:30]}... with voice: {voice_profile_name}")
     output_path = os.path.join(AUDIO_DIR, f"vo_{uuid.uuid4().hex[:8]}.mp3")
     
     try:
@@ -109,11 +111,11 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
                 if chunk:
                     f.write(chunk)
         
-        print("✅ Voiceover saved successfully.")
+        logger.info("✅ Voiceover saved successfully.")
         return output_path
 
     except Exception as e:
-        print(f"❌ ElevenLabs TTS Failed: {e}")
+        logger.error(f"❌ ElevenLabs TTS Failed: {e}")
         return None
 
 
@@ -127,7 +129,7 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
     if not voice_path :
         return video_path
 
-    print("🎬 Merging Voiceover & Video using MoviePy...")
+    logger.info("🎬 Merging Voiceover & Video using MoviePy...")
     output_path = video_path.replace(".mp4", f"_audio_{uuid.uuid4().hex[:4]}.mp4")
 
     video = None
@@ -139,7 +141,6 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
         audio_tracks = []
 
         if video.audio:
-            # نخفض صوت فيديو Veo لكي لا يطغى على صوت المعلق
             veo_audio = video.audio.with_volume_scaled(0.6)
             audio_tracks.append(veo_audio)
 
@@ -149,25 +150,8 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
             # رفع مستوى الصوت ليكون المعلق هو الأوضح
             voice_clip = voice_clip.with_volume_scaled(1.2) 
         
-            # ### تكرار الفيديو
-            # if voice_clip.duration > video.duration:
-            #     print(f"⚠️ Voiceover ({voice_clip.duration:.1f}s) is longer than video ({video.duration:.1f}s). Extending video to fit...")
-                
-            #     # حساب كم مرة نحتاج تكرار الفيديو ليغطي الصوت
-            #     repeats = math.ceil(voice_clip.duration / video.duration)
-                
-            #     # تكرار الفيديو
-            #     video = concatenate_videoclips([video] * repeats)
-                
-            #     # قص الفيديو المكرر ليطابق طول الصوت بالملي ثانية
-            #     video = video.with_duration(voice_clip.duration)
-                
-            #     # تحديث مسار الموسيقى القديمة لكي تتكرر أيضاً مع الفيديو
-            #     if video.audio:
-            #         veo_audio = video.audio.with_volume_scaled(0.6)
-            #         audio_tracks[0] = veo_audio # تحديث مسار الموسيقى
             if voice_clip.duration > video.duration:
-                print(f"⚠️ Voiceover ({voice_clip.duration}s) still slightly longer than video ({video.duration}s). Trimming audio...")
+                logger.info(f"⚠️ Voiceover ({voice_clip.duration}s) still slightly longer than video ({video.duration}s). Trimming audio...")
                 voice_clip = voice_clip.with_duration(video.duration)
 
             audio_tracks.append(voice_clip)
@@ -184,22 +168,24 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
                 preset="ultrafast",
                 logger=None 
             )
-            print(f"✅ Final video with audio saved: {output_path}")
+            logger.info(f"✅ Final video with audio saved: {output_path}")
             return output_path
         
         return video_path
 
     except Exception as e:
-        print(f"❌ Audio Merge Failed: {e}")
+        logger.error(f"❌ Audio Merge Failed: {e}")
         return video_path 
         
     finally:
-        # 🧹 تنظيف الذاكرة (Memory Leak Prevention)
+
         if video: video.close()
         if voice_clip: voice_clip.close()
         if final_audio: final_audio.close()
         
-        # حذف الملفات الصوتية المؤقتة لتوفير المساحة
         try:
-            if voice_path and os.path.exists(voice_path): os.remove(voice_path)
-        except: pass
+            if voice_path and os.path.exists(voice_path): 
+                os.remove(voice_path)
+                logger.info(f"✅ Temporary audio file removed: {voice_path}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to remove temporary audio file: {e}")

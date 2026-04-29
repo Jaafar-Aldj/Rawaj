@@ -1,8 +1,9 @@
 import asyncio
-from typing import Dict, List
+from typing import Dict
 
-# قاموس لحفظ قوائم الانتظار (Queues) لكل حملة أو مستخدم
-# المفتاح هو campaign_id (أو أي ID فريد للعملية)
+from app.logger import get_logger
+logger = get_logger(__name__)
+
 active_connections: Dict[str, asyncio.Queue] = {}
 
 def get_queue(process_id: str) -> asyncio.Queue:
@@ -15,10 +16,10 @@ async def send_notification(process_id: str, message: str):
     """إرسال إشعار للفرونت إند"""
     if process_id in active_connections:
         await active_connections[process_id].put(message)
-    print(f"📢 [Notification -> {process_id}]: {message}")
+    logger.info(f"[Notification -> {process_id}]: {message}")
 
 async def close_connection(process_id: str):
     """إغلاق الاتصال عند انتهاء العملية"""
     if process_id in active_connections:
         await active_connections[process_id].put("[DONE]") # رسالة خاصة لإنهاء الاستماع
-        # نتركها قليلاً لتصل ثم نحذفها (يمكن تنظيفها لاحقاً)
+        

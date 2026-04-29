@@ -57,12 +57,6 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
         with open(reference_image_path, "rb") as f:
             prev_image_bytes = f.read()
         
-
-        # prev_model_part = types.Part(
-        #     inline_data=types.Blob(mime_type="image/png", data=prev_image_bytes),
-        #     thought_signature=signature_bytes # حرج جداً: حقن البصمة هنا
-        # )
-        # contents.append(types.Content(role="model", parts=[prev_model_part]))
         model_history = types.Content(role="model", parts=[
             types.Part(
                 inline_data = types.Blob(mime_type="image/png", data=prev_image_bytes),
@@ -79,14 +73,11 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
         ])
 
         contents = [model_history, user_request]
-        # طلب المستخدم الجديد
-        # user_parts = [types.Part(text=f"Update the image based on the reference. {final_prompt}")]
-        # contents.append(types.Content(role="user", parts=user_parts))
     else:
         # وضع التوليد الأول
         user_parts = [types.Part(text=final_prompt)]
         if reference_image_path and os.path.exists(reference_image_path):
-            print(f"   🔗 Using reference image: {reference_image_path}")
+            logger.info(f"🔗 Using reference image: {reference_image_path}")
             ref_img = Image.open(reference_image_path).convert("RGB")
             img_byte_arr = BytesIO()
             ref_img.save(img_byte_arr, format='PNG')
@@ -96,13 +87,12 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
     for model_id in MODELS_TO_TRY:
         logger.info(f"🎨 Generating {aspect_ratio} Image via {model_id}...")
         try:
-            # 4. استدعاء الـ API مع تفعيل TEXT و IMAGE في الـ modalities
             response = client.models.generate_content(
                 model=model_id,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
-                    response_modalities=['TEXT', 'IMAGE'] # لضمان استرجاع البصمة والنصوص
+                    response_modalities=['TEXT', 'IMAGE'] 
                 )
             )
 
@@ -110,7 +100,6 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
             output_filename = f"gen_{os.urandom(4).hex()}.png"
             output_path = os.path.join(IMAGE_DIR, output_filename)
 
-            # 5. استخراج النتائج من الـ Parts (نفس المنطق في مثالك الناجح)
             if not response or not response.parts:
                 return None, None
 
@@ -118,13 +107,13 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
                 # صيد بصمة التفكير (Signature)
                 if hasattr(part, 'thought_signature') and part.thought_signature:
                     returned_signature = part.thought_signature
-                    print(f"✅ Found Thought Signature! Length: {len(returned_signature)}")
+                    logger.info(f"✅ Found Thought Signature! Length: {len(returned_signature)}")
 
                 # صيد الصورة وحفظها
                 if part.inline_data:
                     img = Image.open(BytesIO(part.inline_data.data))
                     img.save(output_path)
-                    print(f"✅ Image Saved to: {output_path}")
+                    logger.info(f"✅ Image Saved to: {output_path}")
 
             if os.path.exists(output_path):
                 return output_path, returned_signature
@@ -133,17 +122,17 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
 
         except Exception as e:
             error_msg = str(e)
-            print(f"⚠️ Failed with {model_id}. Error: {error_msg}")
+            logger.error(f"⚠️ Failed with {model_id}. Error: {error_msg}")
             
-            # إذا كان الخطأ بسبب الضغط (503) أو الرصيد (429) أو مشكلة بالشبكة
             if "503" in error_msg or "429" in error_msg or "UNAVAILABLE" in error_msg:
-                print("🔄 Model is overloaded. Switching to fallback model...")
-                time.sleep(2) # انتظار بسيط جداً قبل تجربة الموديل الثاني
-                continue # 👈 هذه الكلمة تمنع الخطأ من الهروب وتنتقل للموديل التالي
+                logger.error(f"Faild to generate image due to [Error: {error_msg}]")
+                time.sleep(2) 
+                logger.info("🔄 Model is overloaded. Switching to fallback model...")
+                continue 
             else:
-                # إذا كان خطأ آخر (مثلاً صورة غير صالحة)، ننتقل للموديل التالي أيضاً كفرصة أخيرة
+                logger.exception(f"Unexpected error in generate_image: {e}")
                 continue
-    print("❌ All models failed or unavailable.")
+    logger.error("All models failed to generate the image.")
     return None, None
         
 

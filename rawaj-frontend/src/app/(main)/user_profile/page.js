@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import api from '@/services/api';
+import { motion } from 'framer-motion';
 import { 
   UserCircleIcon, 
-  EnvelopeIcon, 
   KeyIcon, 
-  CheckCircleIcon,
   PencilIcon,
-  XMarkIcon
+  CheckCircleIcon,
+  XCircleIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 export default function ProfilePage() {
@@ -23,7 +24,6 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    current_password: '',
     new_password: '',
     confirm_password: ''
   });
@@ -36,11 +36,12 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({
-        ...prev,
+      setFormData({
         name: user.name || '',
-        email: user.email || ''
-      }));
+        email: user.email || '',
+        new_password: '',
+        confirm_password: ''
+      });
     }
   }, [user]);
 
@@ -51,6 +52,8 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // إذا كان يريد تغيير كلمة المرور، تأكد من التطابق
     if (formData.new_password && formData.new_password !== formData.confirm_password) {
       setMessage({ type: 'error', text: 'كلمة المرور الجديدة وتأكيدها غير متطابقين' });
       return;
@@ -60,16 +63,17 @@ export default function ProfilePage() {
     setMessage({ type: '', text: '' });
 
     try {
-      const updateData = {
-        name: formData.name,
-        email: formData.email,
-      };
-      if (formData.current_password && formData.new_password) {
-        updateData.current_password = formData.current_password;
-        updateData.new_password = formData.new_password;
+      // بناء البيانات المتغيرة: نرسل الاسم دائماً
+      const updateData = { name: formData.name };
+
+      // فقط إذا أدخل كلمة مرور جديدة نضيف الحقل password
+      if (formData.new_password) {
+        updateData.password = formData.new_password;
       }
 
-      const response = await api('/users/me', {
+      console.log('Sending update data:', updateData); // للتتبع
+
+      const response = await api('/users/', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updateData)
@@ -77,23 +81,25 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || 'فشل في تحديث البيانات');
+        throw new Error(err.detail || `خطأ ${response.status}: فشل تحديث البيانات`);
       }
 
-      // تحديث بيانات المستخدم في السياق
+      const updatedUser = await response.json();
       if (refreshUser) await refreshUser();
-      
-      setMessage({ type: 'success', text: 'تم تحديث الملف الشخصي بنجاح' });
+
+      setMessage({ type: 'success', text: 'تم تحديث البيانات بنجاح' });
       setEditMode(false);
+
       // إعادة تعيين حقول كلمة المرور
       setFormData(prev => ({
         ...prev,
-        current_password: '',
         new_password: '',
         confirm_password: ''
       }));
+
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      console.error('Update error:', err);
+      setMessage({ type: 'error', text: err.message || 'حدث خطأ أثناء الاتصال بالخادم' });
     } finally {
       setLoading(false);
     }
@@ -103,152 +109,117 @@ export default function ProfilePage() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-background/95 p-6 text-right" dir="rtl">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-black text-white">الملف الشخصي</h1>
-          <p className="text-text-muted">عرض وتعديل بيانات حسابك</p>
+    <div className="min-h-screen bg-gray-900 p-6 text-right" dir="rtl">
+      <div className="max-w-4xl mx-auto pt-20 md:pt-24">
+
+        <div className="mb-8 flex items-center gap-4">
+          <div className="p-3 bg-green-500/10 rounded-2xl border border-green-500/20">
+            <UserCircleIcon className="w-8 h-8 text-green-400" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-white">الملف الشخصي</h1>
+          </div>
         </div>
 
-        {/* Profile Card */}
-        <div className="bg-panel/50 backdrop-blur-sm rounded-3xl border border-border-color shadow-2xl overflow-hidden">
-          {/* Card Header */}
-          <div className="bg-gradient-to-l from-accent/20 to-transparent p-6 border-b border-border-color flex justify-between items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
+        >
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gradient-to-r from-green-50 to-transparent">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center">
-                {user.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="w-full h-full rounded-2xl object-cover" />
-                ) : (
-                  <UserCircleIcon className="w-10 h-10 text-white" />
-                )}
+              <div className="w-16 h-16 rounded-2xl bg-green-500 flex items-center justify-center">
+                <UserCircleIcon className="w-10 h-10 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">{user.name}</h2>
-                <p className="text-text-muted text-sm">{user.email}</p>
+                <h2 className="text-xl font-black text-gray-800">{user.name}</h2>
+                <p className="text-gray-500 text-sm">{user.email}</p>
               </div>
             </div>
             {!editMode && (
               <button
                 onClick={() => setEditMode(true)}
-                className="flex items-center gap-2 bg-accent/10 hover:bg-accent/20 text-accent px-4 py-2 rounded-xl transition-colors"
+                className="px-4 py-2 bg-green-50 text-green-700 rounded-xl border transition hover:bg-green-100"
               >
-                <PencilIcon className="w-5 h-5" />
                 تعديل
               </button>
             )}
           </div>
 
-          {/* Form Body */}
           <div className="p-6">
             {message.text && (
-              <div className={`mb-6 p-4 rounded-xl ${message.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                {message.text}
+              <div className={`mb-4 p-3 rounded-xl flex items-center gap-2 ${
+                message.type === 'success' 
+                  ? 'bg-green-50 text-green-700 border border-green-200' 
+                  : 'bg-red-50 text-red-600 border border-red-200'
+              }`}>
+                {message.type === 'success' ? <CheckCircleIcon className="w-5 h-5" /> : <XCircleIcon className="w-5 h-5" />}
+                <span className="font-bold text-sm">{message.text}</span>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-white text-sm font-bold mb-2">الاسم الكامل</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  disabled={!editMode}
-                  className={`w-full bg-background border border-border-color rounded-xl p-3 text-white focus:outline-none focus:border-accent transition-colors ${!editMode ? 'opacity-70 cursor-not-allowed' : ''}`}
-                />
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <input
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                disabled={!editMode}
+                className="w-full p-3 rounded-xl border border-gray-300 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100 disabled:text-gray-500"
+              />
 
-              <div>
-                <label className="block text-white text-sm font-bold mb-2">البريد الإلكتروني</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  disabled={!editMode}
-                  className={`w-full bg-background border border-border-color rounded-xl p-3 text-white focus:outline-none focus:border-accent transition-colors ${!editMode ? 'opacity-70 cursor-not-allowed' : ''}`}
-                />
-              </div>
+              <input
+                name="email"
+                value={formData.email}
+                disabled
+                className="w-full p-3 rounded-xl border border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed"
+              />
 
               {editMode && (
                 <>
-                  <div className="border-t border-border-color pt-4 mt-2">
-                    <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                      <KeyIcon className="w-5 h-5 text-accent" />
-                      تغيير كلمة المرور
+                  <div className="border-t border-gray-200 pt-4 mt-2">
+                    <h3 className="flex items-center gap-2 text-gray-700 font-bold mb-3">
+                      <KeyIcon className="w-5 h-5 text-green-600" />
+                      تغيير كلمة المرور (اختياري)
                     </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-white text-sm font-bold mb-2">كلمة المرور الحالية</label>
-                        <input
-                          type="password"
-                          name="current_password"
-                          value={formData.current_password}
-                          onChange={handleChange}
-                          className="w-full bg-background border border-border-color rounded-xl p-3 text-white focus:outline-none focus:border-accent transition-colors"
-                          placeholder="أدخل كلمة المرور الحالية لتغييرها"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-white text-sm font-bold mb-2">كلمة المرور الجديدة</label>
-                        <input
-                          type="password"
-                          name="new_password"
-                          value={formData.new_password}
-                          onChange={handleChange}
-                          className="w-full bg-background border border-border-color rounded-xl p-3 text-white focus:outline-none focus:border-accent transition-colors"
-                          placeholder="اتركها فارغة إذا لم ترغب في التغيير"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-white text-sm font-bold mb-2">تأكيد كلمة المرور الجديدة</label>
-                        <input
-                          type="password"
-                          name="confirm_password"
-                          value={formData.confirm_password}
-                          onChange={handleChange}
-                          className="w-full bg-background border border-border-color rounded-xl p-3 text-white focus:outline-none focus:border-accent transition-colors"
-                        />
-                      </div>
-                    </div>
+                    <input
+                      type="password"
+                      name="new_password"
+                      placeholder="كلمة المرور الجديدة (اختياري)"
+                      value={formData.new_password}
+                      onChange={handleChange}
+                      className="w-full mb-3 p-3 rounded-xl border border-gray-300 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                    <input
+                      type="password"
+                      name="confirm_password"
+                      placeholder="تأكيد كلمة المرور الجديدة"
+                      value={formData.confirm_password}
+                      onChange={handleChange}
+                      className="w-full mb-2 p-3 rounded-xl border border-gray-300 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => router.push('/forgot-password')}
+                      className=" text-blue-600 hover:underline mt-1"
+                    >
+                      نسيت كلمة المرور؟
+                    </button>
                   </div>
                 </>
               )}
 
               {editMode && (
-                <div className="flex gap-4 pt-4">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-accent text-white font-bold py-3 rounded-xl hover:bg-accent-dark transition-all disabled:opacity-50"
-                  >
-                    {loading ? <LoadingSpinner size="sm" /> : 'حفظ التغييرات'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditMode(false);
-                      setFormData(prev => ({
-                        ...prev,
-                        name: user.name || '',
-                        email: user.email || '',
-                        current_password: '',
-                        new_password: '',
-                        confirm_password: ''
-                      }));
-                      setMessage({ type: '', text: '' });
-                    }}
-                    className="flex-1 bg-gray-700 text-white font-bold py-3 rounded-xl hover:bg-gray-600 transition-all"
-                  >
-                    إلغاء
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition disabled:opacity-50"
+                >
+                  {loading ? <LoadingSpinner size="sm" color="white" /> : 'حفظ التغييرات'}
+                </button>
               )}
             </form>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

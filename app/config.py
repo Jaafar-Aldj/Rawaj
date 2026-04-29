@@ -22,11 +22,8 @@ class Settings(BaseSettings):
     elevenlabs_api_key: str
     elevenlabs_voice_id: str
 
-    project_id: str
-    location: str
-    model_id: str
-
     calendarific_api_key: str
+    
     use_mock_api: bool
 
     class Config:

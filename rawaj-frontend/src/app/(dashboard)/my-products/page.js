@@ -142,7 +142,7 @@ export default function MyProductsPage() {
                           localStorage.setItem('currentProductId', product.id);
                           router.push('/analyze-product');
                         }}
-                        className="flex-1 flex items-center justify-center gap-2 bg-white text-black py-3.5 rounded-xl font-black text-sm hover:bg-accent hover:text-white transition-all shadow-sm"
+                        className="flex-1 flex items-center justify-center gap-2 bg-white text-black py-3.5 rounded-xl font-black text-sm hover:bg-accent hover:text-black transition-all shadow-sm"
                       >
                         <SparklesIcon className="w-5 h-5" /> تحليل الجمهور
                       </button>

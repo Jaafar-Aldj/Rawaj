@@ -11,14 +11,19 @@ router = APIRouter(
     tags=['Authentication'],
 )
 
+from app.logger import get_logger
+logger = get_logger(__name__)
+
 
 @router.post('/login', response_model=schemas.Token)
 @limiter.limit("5/minute")
 def login(request: Request, user_credentials: OAuth2PasswordRequestForm=Depends(), db: Session = Depends(get_db)):
     user = db.query(models.Users).filter(models.Users.email == user_credentials.username).first()
     if not user or not utils.verify_password(user_credentials.password, user.password_hash):
+        logger.warning(f"Failed login attempt for user: {user_credentials.username}")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
     if not user.is_verified:
+        logger.warning(f"Unverified user attempted login: {user.id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail={"message": "Email not verified. Please verify your email before logging in.", "user_id": user.id})
@@ -30,12 +35,15 @@ def verify_user(user_verfiy: schemas.UserVerify, db: Session = Depends(get_db)):
     user_query = db.query(models.Users).filter(models.Users.id == user_verfiy.user_id)
     user = user_query.first()
     if not user:
+        logger.warning(f"Verification attempt for non-existent user: {user_verfiy.user_id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({user_verfiy.user_id}) was not found')
     elif user.is_verified:
+        logger.info(f"User is already verified: {user.id}")
         return {"message": "User is already verified."}
     elif user.verification_code == user_verfiy.code:
         user_query.update({"is_verified": True, "verification_code": None}, synchronize_session=False)
         db.commit()
+        logger.info(f"User verified successfully: {user.id}")
         return {"message": "User verified successfully."}
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code.")
@@ -45,8 +53,10 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
     user_query = db.query(models.Users).filter(models.Users.id == id)
     user = user_query.first()
     if not user:
+        logger.warning(f"Verification code resend attempt for non-existent user: {id}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'user with id ({id}) was not found')
     elif user.is_verified:
+        logger.info(f"User is already verified: {user.id}")
         return {"message": "User is already verified."}
     else:
         code = utils.generate_verification_code()
@@ -54,19 +64,21 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
         try:
             await utils.send_code_email(user.email, code)
             db.commit()
+            logger.info(f"Verification code resent to user: {user.id}")
             return {"message": "Verification code resent! Check your email."}
         except Exception as e:
-            print(e)
+            logger.error(f"Failed to send verification email: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
 
 
 @router.post('/forgot-password', status_code=status.HTTP_200_OK)
 @limiter.limit("3/minute")
-async def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(request: Request, user_request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
     # 1. البحث عن المستخدم
-    user = db.query(models.Users).filter(models.Users.email == request.email).first()
+    user = db.query(models.Users).filter(models.Users.email == user_request.email).first()
     
     if not user:
+        logger.info(f"Forgot password attempt for non-existent user: {user_request.email}")
         return {"message": "If the email is registered, a reset code will be sent."}
     
     # 2. توليد كود جديد وحفظه
@@ -77,9 +89,10 @@ async def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = 
     # 3. إرسال الإيميل
     try:
         await utils.send_reset_password_email(user.email, code)
+        logger.info(f"Password reset code sent to user: {user.id}")
         return {"message": "If the email is registered, a reset code will be sent."}
     except Exception as e:
-        print(f"Failed to send reset email: {e}")
+        logger.error(f"Failed to send reset email: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send password reset email.")
 
 @router.post('/reset-password', status_code=status.HTTP_200_OK)
@@ -90,6 +103,7 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
     
     # 2. التحقق من الكود
     if not user or user.verification_code != request.code:
+        logger.warning(f"Invalid reset code attempt for user: {request.email}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or reset code.")
     
     # 3. تشفير كلمة المرور الجديدة وتحديثها
@@ -100,7 +114,7 @@ def reset_password(request: schemas.ResetPasswordRequest, db: Session = Depends(
         "password_hash": hashed_password,
         "verification_code": None # مسح الكود حتى لا يستخدم مرة أخرى
     }, synchronize_session=False)
-    
+    logger.info(f"Password reset successfully for user: {user.id}")
     db.commit()
     
     return {"message": "Password has been reset successfully."}

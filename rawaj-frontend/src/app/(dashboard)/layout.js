@@ -29,7 +29,6 @@ const Sidebar = () => {
     { name: 'توليد المحتوى', href: '/upload-image/', icon: SparklesIcon },
     { name: 'الحملات', href: '/camp', icon: MegaphoneIcon },
     { name: 'المنتجات', href: '/my-products', icon: Squares2X2Icon },
-    { name: 'الإعدادات', href: '/dashboard/settings', icon: Cog6ToothIcon },
   ];
 
   if (!mounted) return null;

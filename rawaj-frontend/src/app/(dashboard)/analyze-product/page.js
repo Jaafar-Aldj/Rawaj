@@ -102,7 +102,7 @@ export default function AnalyzeProductPage() {
     localStorage.setItem('campaignId', responseData.id.toString());
   }
   
-  // حفظ الخطة إذا كانت موجودة في الرد (مثل JSON)
+  // حفظ الخطة إذا كانت موجودة في الرد (JSON)
   if (responseData.name && responseData.objective) {
     localStorage.setItem('finalStrategy', JSON.stringify(responseData));
   }
@@ -116,22 +116,33 @@ export default function AnalyzeProductPage() {
 
   setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', text: cleanedText }]);
 
-  // التحقق من التأكيد بالعبارات النصية
+  // 1. التحقق من التأكيد النهائي عبر النصوص (بعد موافقة المستخدم)
   if (isFinalConfirmation(cleanedText)) {
     setFinalSummaryReady(true);
     setAwaitingManualApproval(false);
-  } 
-  // حالة جديدة: إذا كان الرد عبارة عن JSON (يبدأ بـ { أو يحتوي على مفاتيح الخطة) ونحن في مرحلة متقدمة
-  else if ((rawText.trim().startsWith('{') || rawText.includes('"name"')) && !finalSummaryReady && messages.length > 0) {
-    // هذا غالباً هو الرد النهائي بعد الموافقة
-    setFinalSummaryReady(true);
-    setAwaitingManualApproval(false);
+    return;
   }
-  else if (isAskingForApproval(cleanedText) && !finalSummaryReady) {
+  
+  // 2. إذا كان الرد عبارة عن خطة JSON (يحتوي على name و objective) ولم تتم الموافقة بعد
+  //    ولم يكن المساعد يطلب الموافقة بالفعل، نظهر زر الاعتماد للمستخدم
+  const isJsonPlan = (rawText.trim().startsWith('{') || rawText.includes('"name"')) && 
+                     (rawText.includes('"objective"') || rawText.includes('"audience"'));
+  
+  if (isJsonPlan && !finalSummaryReady && !awaitingManualApproval) {
+    // نعرض الخطة ولكن نطلب من المستخدم الموافقة، لا نعتبرها موافقة تلقائية
     setAwaitingManualApproval(true);
-  } 
-  else {
-    setAwaitingManualApproval(false);
+    return;
+  }
+  
+  // 3. إذا كان المساعد يطلب الموافقة بعبارات صريحة (مثل "هل أنت راضٍ؟")
+  if (isAskingForApproval(cleanedText) && !finalSummaryReady) {
+    setAwaitingManualApproval(true);
+  } else {
+    // في الحالات العادية لا نظهر زر الاعتماد
+    // لكن إذا لم تكن هناك خطة بعد ولا تأكيد، نضمن إخفاء الزر
+    if (!finalSummaryReady && !isJsonPlan) {
+      setAwaitingManualApproval(false);
+    }
   }
 };
 
