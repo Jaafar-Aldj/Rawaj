@@ -9,6 +9,9 @@ from google import genai
 from google.genai import types
 from app.config import settings
 
+from app.logger import get_logger
+logger = get_logger(__name__)
+
 # إعداد العميل
 client = genai.Client(api_key=settings.google_api_key)
 
@@ -18,15 +21,20 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 # الموديل المستخدم (تأكد من توفره في منطقتك، أو استخدم imagen-3 كبديل)
 IMAGE_MODEL_NAME = "gemini-3-pro-image-preview" 
 IMAGE_MODEL_NAME_ALT = "imagen-3"
+MODELS_TO_TRY =[
+    "gemini-3-pro-image-preview", 
+    "imagen-3",
+    "gemini-2.5-flash-image",     
+]
 
 # قيود السلامة لمنع ظهور نصوص عشوائية أو عناصر غير مرغوبة
 SAFETY_SUFFIX = " . exclude women, exclude females, exclude alcohol, exclude wine, modest. NO TEXT, NO TYPOGRAPHY."
 
-def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: str = "16:9", thought_signature: Any = None, model_name: str = IMAGE_MODEL_NAME) :
+def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: str = "16:9", thought_signature: Any = None) :
     """
     توليد صورة احترافية باستخدام بروتوكول التفكير والبصمة لضمان التطابق التام عند التعديل.
     """
-    print(f"🎨 Generating {aspect_ratio} Image via {model_name}...")
+    
 
     # 1. تجهيز البرومبت النهائي
     final_prompt = f"{prompt} {SAFETY_SUFFIX}"
@@ -36,8 +44,10 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
         try:
             if thought_signature.startswith('\\x'): thought_signature = thought_signature[2:]
             thought_signature = bytes.fromhex(thought_signature)
-            print("   🧠 Injecting Thought Signature (History Mode)...")
-        except: pass
+            logger.info("   🧠 Injecting Thought Signature (History Mode)...")
+        except Exception as e:
+            logger.error(f"Failed to convert thought_signature from hex: {e}")
+            thought_signature = None
 
     # 3. بناء المحتوى (Contents)
     contents = []
@@ -46,16 +56,32 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
         # وضع التعديل: نرسل الصورة السابقة مع بصمتها في دور 'model'
         with open(reference_image_path, "rb") as f:
             prev_image_bytes = f.read()
-
-        prev_model_part = types.Part(
-            inline_data=types.Blob(mime_type="image/png", data=prev_image_bytes),
-            thought_signature=thought_signature # حرج جداً: حقن البصمة هنا
-        )
-        contents.append(types.Content(role="model", parts=[prev_model_part]))
         
+
+        # prev_model_part = types.Part(
+        #     inline_data=types.Blob(mime_type="image/png", data=prev_image_bytes),
+        #     thought_signature=signature_bytes # حرج جداً: حقن البصمة هنا
+        # )
+        # contents.append(types.Content(role="model", parts=[prev_model_part]))
+        model_history = types.Content(role="model", parts=[
+            types.Part(
+                inline_data = types.Blob(mime_type="image/png", data=prev_image_bytes),
+                thought_signature = thought_signature
+            )
+        ])
+
+        with open(reference_image_path, "rb") as f:
+            prev_image_bytes = f.read()
+
+        user_request = types.Content(role="user", parts=[
+            types.Part(text=f"Modify the scene: {prompt}. CRITICAL: Use the attached product image as the ABSOLUTE reference for the bottle. Do not change its shape, label, or cap."),
+            types.Part(inline_data=types.Blob(mime_type="image/png", data=prev_image_bytes))
+        ])
+
+        contents = [model_history, user_request]
         # طلب المستخدم الجديد
-        user_parts = [types.Part(text=f"Update the image based on the reference. {final_prompt}")]
-        contents.append(types.Content(role="user", parts=user_parts))
+        # user_parts = [types.Part(text=f"Update the image based on the reference. {final_prompt}")]
+        # contents.append(types.Content(role="user", parts=user_parts))
     else:
         # وضع التوليد الأول
         user_parts = [types.Part(text=final_prompt)]
@@ -67,49 +93,59 @@ def generate_image(prompt: str, reference_image_path: str = None, aspect_ratio: 
             user_parts.append(types.Part(inline_data=types.Blob(mime_type="image/png", data=img_byte_arr.getvalue())))
         
         contents.append(types.Content(role="user", parts=user_parts))
-
-    try:
-        # 4. استدعاء الـ API مع تفعيل TEXT و IMAGE في الـ modalities
-        response = client.models.generate_content(
-            model=IMAGE_MODEL_NAME,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
-                response_modalities=['TEXT', 'IMAGE'] # لضمان استرجاع البصمة والنصوص
+    for model_id in MODELS_TO_TRY:
+        logger.info(f"🎨 Generating {aspect_ratio} Image via {model_id}...")
+        try:
+            # 4. استدعاء الـ API مع تفعيل TEXT و IMAGE في الـ modalities
+            response = client.models.generate_content(
+                model=model_id,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+                    response_modalities=['TEXT', 'IMAGE'] # لضمان استرجاع البصمة والنصوص
+                )
             )
-        )
 
-        returned_signature = None
-        output_filename = f"gen_{os.urandom(4).hex()}.png"
-        output_path = os.path.join(IMAGE_DIR, output_filename)
+            returned_signature = None
+            output_filename = f"gen_{os.urandom(4).hex()}.png"
+            output_path = os.path.join(IMAGE_DIR, output_filename)
 
-        # 5. استخراج النتائج من الـ Parts (نفس المنطق في مثالك الناجح)
-        if not response or not response.parts:
-             return None, None
+            # 5. استخراج النتائج من الـ Parts (نفس المنطق في مثالك الناجح)
+            if not response or not response.parts:
+                return None, None
 
-        for part in response.parts:
-            # صيد بصمة التفكير (Signature)
-            if hasattr(part, 'thought_signature') and part.thought_signature:
-                returned_signature = part.thought_signature
-                print(f"✅ Found Thought Signature! Length: {len(returned_signature)}")
+            for part in response.parts:
+                # صيد بصمة التفكير (Signature)
+                if hasattr(part, 'thought_signature') and part.thought_signature:
+                    returned_signature = part.thought_signature
+                    print(f"✅ Found Thought Signature! Length: {len(returned_signature)}")
 
-            # صيد الصورة وحفظها
-            if part.inline_data:
-                img = Image.open(BytesIO(part.inline_data.data))
-                img.save(output_path)
-                print(f"✅ Image Saved to: {output_path}")
+                # صيد الصورة وحفظها
+                if part.inline_data:
+                    img = Image.open(BytesIO(part.inline_data.data))
+                    img.save(output_path)
+                    print(f"✅ Image Saved to: {output_path}")
 
-        if os.path.exists(output_path):
-            return output_path, returned_signature
+            if os.path.exists(output_path):
+                return output_path, returned_signature
+                
+            return None, None
+
+        except Exception as e:
+            error_msg = str(e)
+            print(f"⚠️ Failed with {model_id}. Error: {error_msg}")
             
-        return None, None
-
-    except Exception as e:
-        if model_name == IMAGE_MODEL_NAME:
-            print(f"⚠️ Primary Model Failed, trying alternative model: {IMAGE_MODEL_NAME_ALT}")
-            return generate_image(prompt, reference_image_path, aspect_ratio, thought_signature, model_name=IMAGE_MODEL_NAME_ALT)
-        print(f"❌ Generation Failed: {e}")
-        return None, None
+            # إذا كان الخطأ بسبب الضغط (503) أو الرصيد (429) أو مشكلة بالشبكة
+            if "503" in error_msg or "429" in error_msg or "UNAVAILABLE" in error_msg:
+                print("🔄 Model is overloaded. Switching to fallback model...")
+                time.sleep(2) # انتظار بسيط جداً قبل تجربة الموديل الثاني
+                continue # 👈 هذه الكلمة تمنع الخطأ من الهروب وتنتقل للموديل التالي
+            else:
+                # إذا كان خطأ آخر (مثلاً صورة غير صالحة)، ننتقل للموديل التالي أيضاً كفرصة أخيرة
+                continue
+    print("❌ All models failed or unavailable.")
+    return None, None
+        
 
     
 if __name__ == "__main__":

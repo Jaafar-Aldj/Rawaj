@@ -5,6 +5,9 @@ import re
 import google.generativeai as genai
 import PIL.Image
 from ..config import settings
+    
+from app.logger import get_logger
+logger = get_logger(__name__)
 
 # إعداد Gemini
 if settings.google_api_key:
@@ -16,8 +19,10 @@ def extract_json_from_text(text):
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
             return json.loads(match.group())
+    except json.JSONDecodeError as e:
+        logger.error(f"Art Director JSON parse failed. Error: {e}. Text snippet: {text[:200]!r}")
     except Exception as e:
-        print(f"❌ Art Director JSON Parse Error: {e}")
+        logger.exception(f"Unexpected error in extract_json_from_text: {e}")
     return None
 
 def analyze_media(file_path, prompt, user_feedback=None, media_type="image", reference_image_path=None):
@@ -26,6 +31,7 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image", ref
     يقيم الميديا ويرجع استجابة بصيغة JSON تحتوي على الحالة، السبب، والبرومبت المعدل (إذا لزم الأمر).
     """
     if not file_path or not os.path.exists(file_path):
+        logger.warning(f"analyze_media: File not found or path is None. path='{file_path}' | type={media_type}")
         return {"status": "ERROR", "feedback": "Media file not found.", "improved_prompt": prompt}
 
     video_file = None # مرجع لملف الفيديو من أجل الحذف لاحقاً
@@ -37,7 +43,7 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image", ref
         contents = []
 
         if reference_image_path and os.path.exists(reference_image_path):
-            print(f"📌 Using reference image for comparison: {reference_image_path}")
+            logger.debug(f"Using reference image for comparison: {reference_image_path}")
             ref_media = PIL.Image.open(reference_image_path)
             contents.append("This is the ORIGINAL product image (The Ground Truth). The product in the generated media MUST look exactly like this in shape, color, and branding:")
             contents.append(ref_media)  
@@ -50,17 +56,16 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image", ref
             contents.append(media)
             
         elif media_type == "video":
-            print(f"⏳ Uploading video to Gemini for QA: {file_path}...")
+            logger.info(f"Uploading video to Gemini for QA: {file_path}")
             video_file = genai.upload_file(path=file_path)
             
-            print("⏳ Waiting for video processing on Google servers...")
+            logger.info("Waiting for video processing on Google servers...")
             while video_file.state.name == "PROCESSING":
-                print(".", end="", flush=True)
                 time.sleep(3)
-                video_file = genai.get_file(video_file.name) 
-                
-            print("\n✅ Video ready for QA.")
+                video_file = genai.get_file(video_file.name)
+            logger.info("Video is ready for QA review.") 
             if video_file.state.name == "FAILED":
+                logger.error(f"Google failed to process video: {file_path}. State: {video_file.state.name}")
                 return {"status": "ERROR", "feedback": "Google failed to process the video.", "improved_prompt": prompt}
             
             contents.append(video_file)
@@ -108,20 +113,28 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image", ref
         contents.append(system_instruction)
 
         # 4. إرسال الطلب لجوجل
-        print(f"🕵️‍♂️ Art Director is analyzing the {media_type}...")
+        logger.info(f"Art Director reviewing {media_type} | feedback_mode={bool(user_feedback)}")
         response = model.generate_content(contents)
         
         # 5. استخراج الـ JSON
         result_json = extract_json_from_text(response.text)
         
         if result_json and "status" in result_json:
+            logger.info(f"Art Director decision: {result_json['status']} | Feedback: {result_json.get('feedback', '')[:120]}")
             return result_json
         else:
-            # Fallback في حال فشل الذكاء الاصطناعي في إرجاع JSON
+            logger.warning(
+                f"Art Director returned unparseable JSON for {media_type}. "
+                f"Auto-approving. Raw response snippet: {response.text[:200]!r}"
+            )
             return {"status": "APPROVED", "feedback": "Auto-approved due to parsing error.", "improved_prompt": prompt}
 
+    except PIL.Image.UnidentifiedImageError as e:
+        logger.error(f"Cannot open image file (corrupt or unsupported format): {file_path}. Error: {e}")
+        return {"status": "APPROVED", "feedback": "Auto-approved: image file is unreadable.", "improved_prompt": prompt}
+
     except Exception as e:
-        print(f"⚠️ Art Director Vision Failed: {e}")
+        logger.exception(f"Art Director vision failed for {media_type} '{file_path}': {e}")
         return {"status": "APPROVED", "feedback": "Auto-approved due to API error.", "improved_prompt": prompt}
         
     finally:
@@ -129,6 +142,6 @@ def analyze_media(file_path, prompt, user_feedback=None, media_type="image", ref
         if media_type == "video" and video_file:
             try:
                 genai.delete_file(video_file.name)
-                print(f"🧹 Cleaned up video from Google servers.")
+                logger.debug(f"Cleaned up video from Google servers: {video_file.name}")
             except Exception as e:
-                print(f"⚠️ Failed to delete video from Google servers: {e}")
+                logger.warning(f"Failed to delete video from Google servers '{video_file.name}': {e}")

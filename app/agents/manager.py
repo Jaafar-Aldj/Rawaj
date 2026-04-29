@@ -22,6 +22,8 @@ from app.services.audio_gen import generate_voiceover, merge_video_audio
 from app.agents.config import api_key
 from app.config import settings
 
+from app.logger import get_logger
+logger = get_logger(__name__)
 
 # إعداد مكتبة جوجل مباشرة لتحليل الصور
 if api_key:
@@ -55,17 +57,6 @@ def create_rag_proxy(name: str, folder: str, collection: str, llm_model: str, ov
 def get_local_media_path(file_path: str):
     """دالة مساعدة لاستخراج المسار المحلي من الرابط أو المسار المطلق"""
     if not file_path: return None
-    # if "http" in file_path and "upload" in file_path:
-    #     filename = file_path.split("upload/")[-1]
-    #     path = os.path.join("rawaj-frontend", "assets", "upload", filename) 
-    #     if os.path.exists(path): return path
-    # elif "http" in file_path and "images" in file_path:
-    #     filename = file_path.split("images/")[-1]
-    #     path = os.path.join("rawaj-frontend", "assets", "images", filename)
-    #     if os.path.exists(path): return path
-    # elif os.path.exists(file_path):
-    #     return file_path
-    # return None
     if "http" in file_path:
          if "assets/" in file_path:
             relative_path = file_path.split("assets/")[-1]
@@ -74,7 +65,7 @@ def get_local_media_path(file_path: str):
             if os.path.exists(local_path):
                 return local_path
             else:
-                print(f"⚠️ Warning: File not found locally at {local_path}")
+                logger.warning(f"⚠️ Warning: File not found locally at {local_path}")
                 return None                
     elif os.path.exists(file_path):
         return file_path
@@ -96,8 +87,10 @@ def json_match_extractor(content):
         if json_match: return json.loads(json_match.group())
         list_match = re.search(r"\[.*\]", content, re.DOTALL)
         if list_match: return json.loads(list_match.group())
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode failed. Error: {e}. Content snippet: {content[:200]!r}")
     except Exception as e:
-        print(f"❌ Failed to parse JSON: {e}")
+        logger.exception(f"Unexpected error in json_match_extractor: {e}")
     return None
 
 def normalize_prompts_data(data):
@@ -144,7 +137,7 @@ def trim_voiceover_via_ai(text, target_duration):
     if estimated_duration <= target_duration:
         return text
 
-    print(f"✂️ Text is too long ({len(words)} words). Asking AI to trim for {target_duration}s...")
+    logger.info(f"✂️ Text is too long ({len(words)} words). Asking AI to trim for {target_duration}s...")
     
     try:
         model = genai.GenerativeModel('gemini-2.0-flash')
@@ -159,10 +152,10 @@ def trim_voiceover_via_ai(text, target_duration):
         OUTPUT ONLY THE SHORTENED TEXT. NO EXPLANATIONS.
         """
         response = model.generate_content(prompt)
+        logger.info("Voiceover trimming succeeded via AI.")
         return response.text.strip()
     except Exception as e:
-        print(f"⚠️ AI Trimming failed: {e}")
-        # Fallback: قص النص يدوياً كحل أخير
+        logger.warning(f"AI voiceover trimming failed, falling back to manual cut. Error: {e}")
         return " ".join(words[:int(target_duration * 2)])
 
 #===============================================================================
@@ -170,19 +163,24 @@ def trim_voiceover_via_ai(text, target_duration):
 #===============================================================================
 def analyze_image_content(image_path):
     if getattr(settings, "use_mock_api", False):
-        print("💰[SAVED $] MOCKING IMAGE ANALYSIS...")
+        logger.debug("MOCK MODE: Skipping real image analysis.")
         return "\n[AI Visual Analysis]: This is a mock analysis of the image content. The image features a modern product with sleek design, vibrant colors, and appears to be made of high-quality materials. Key features include a minimalist style, user-friendly interface, and innovative functionality that stands out in the market."
     local_path = get_local_media_path(image_path)
-    if not local_path: return ""
+    if not local_path: 
+        logger.warning(f"analyze_image_content: Could not resolve local path for '{image_path}'")
+        return ""
     try:
-        print(f"👁️ Analyzing image: {local_path}...")
+        logger.info(f"👁️ Analyzing image: {local_path}...")
         model = genai.GenerativeModel('gemini-2.5-flash')
         img = PIL.Image.open(local_path)
         prompt = "Describe this product image in high detail for a marketing team. Focus on colors, materials, style, and key features. Be objective."
         response = model.generate_content([prompt, img])
         return f"\n[AI Visual Analysis]: {response.text}"
+    except FileNotFoundError:
+        logger.error(f"Image file not found: {local_path}")
+        return ""
     except Exception as e:
-        print(f"⚠️ Image Analysis Failed: {e}")
+        logger.exception(f"Unexpected error during image analysis for '{local_path}': {e}")
         return ""
 
 def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback=None, thought_signature=None):
@@ -193,11 +191,11 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
 
     while attempt <= max_retries:
         if notify_callback: notify_callback(f"🕵️‍♂️ جاري تدقيق الصورة آلياً (المحاولة {attempt}/{max_retries})...")
-        print(f"\n🔄 [Image QA] Attempt {attempt}/{max_retries}...")
+        logger.info(f"[Image QA] Attempt {attempt}/{max_retries} | AR: {aspect_ratio}")
         image_path, signature = generate_image(current_prompt, reference_image_path, aspect_ratio, thought_signature)
         
         if not image_path or not os.path.exists(image_path):
-            print(f"❌ Image generation failed at attempt {attempt}.")
+            logger.warning(f"❌ Image generation failed at attempt {attempt}.")
             if notify_callback:
                 notify_callback("⚠️ فشل توليد الصورة. محاولة جديدة...")
             return last_generated_image, last_signature
@@ -208,31 +206,35 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
         review_data = analyze_media(image_path, current_prompt, media_type="image", reference_image_path=reference_image_path)
 
         if review_data["status"] == "APPROVED":
-            print("✅ Art Director APPROVED the image!")
+            logger.info(f"[Image QA] APPROVED at attempt {attempt}: {image_path}")
             if notify_callback:
                 notify_callback("✅ الصورة اجتازت التدقيق الفني.")
             return image_path, signature
         elif review_data["status"] == "REJECTED":
+            logger.warning(f"[Image QA] REJECTED at attempt {attempt}. Reason: {reason}")
             reason = review_data["feedback"]
             
             if notify_callback: 
                 notify_callback(f"⚠️ تم رفض الصورة، جاري تحسين الجودة (السبب: خطأ في التوليد). محاولة جديدة...")
-            print(f"❌ Art Director REJECTED the image: {reason}")
             
             # حذف الصورة المعيبة
             if attempt < max_retries: # فقط نحذف إذا كنا سنحاول مرة أخرى
-                try: os.remove(image_path)
-                except: pass
+                try: 
+                    os.remove(image_path)
+                    logger.debug(f"Deleted rejected image: {image_path}")
+                except OSError as e:
+                    logger.warning(f"Could not delete rejected image '{image_path}': {e}")
             
             # تحديث البرومبت بتعليمات المخرج
             current_prompt = review_data.get("improved_prompt") or f"{image_prompt}. CRITICAL FIX: {reason}"
             attempt += 1
         else:
+            logger.info(f"[Image QA] Unknown status '{review_data['status']}', auto-approving.")
             if notify_callback: notify_callback("✅ تم اعتماد الصورة (تجاوز الفحص).")
             return image_path, signature # كاحتياط
 
     if notify_callback: notify_callback("⚠️ تم استنفاد محاولات التحسين. تم اعتماد أفضل نتيجة.")
-    print("⚠️ Max retries reached. Returning last image.")
+    logger.warning(f"[Image QA] Max retries ({max_retries}) reached. Returning best available image.")
     return last_generated_image, last_signature
 
 def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback = None):
@@ -243,37 +245,43 @@ def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="
     while attempt <= max_retries:
         if notify_callback:
             notify_callback(f"🎬 جاري التوليد (المحاولة {attempt}/{max_retries})...")
-        print(f"\n🔄 [Video QA] Attempt {attempt}/{max_retries}...")
+        logger.info(f"[Video QA] Attempt {attempt}/{max_retries} | AR: {aspect_ratio}")
         video_path, _ = generate_veo_video(current_prompt, base_image_path, aspect_ratio)
         
-        if not video_path: return last_generated_video
+        if not video_path: 
+            logger.warning(f"[Video QA] Generation returned None at attempt {attempt}.")
+            return last_generated_video
         last_generated_video = video_path
 
         if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع جودة الفيديو...")
         review_data = analyze_media(video_path, current_prompt, media_type="video", reference_image_path=base_image_path)
     
         if review_data["status"] == "APPROVED":
-            print("✅ Art Director APPROVED the video!")
+            logger.info(f"[Video QA] APPROVED at attempt {attempt}: {video_path}")
             if notify_callback: notify_callback("✅ الفيديو اجتاز التدقيق الفني بامتياز!")
             return video_path
         elif review_data["status"] == "REJECTED":
             reason = review_data["feedback"]
-            print(f"❌ Art Director REJECTED the video: {reason}")
+            logger.warning(f"[Video QA] REJECTED at attempt {attempt}. Reason: {reason}")
             if notify_callback: 
                 notify_callback("⚠️ تم رصد خلل في جودة الفيديو. جاري التحسين وإعادة التوليد...")
             
             if attempt < max_retries: 
-                try: os.remove(video_path)
-                except: pass
+                try: 
+                    os.remove(video_path)
+                    logger.debug(f"Deleted rejected video: {video_path}")
+                except OSError as e:
+                    logger.warning(f"Could not delete rejected video '{video_path}': {e}")
             
             current_prompt = review_data.get("improved_prompt") or f"{video_prompt}. CRITICAL FIX: {reason}"
             attempt += 1
         else:
+            logger.info(f"[Video QA] Unknown status, auto-approving.")
             if notify_callback: notify_callback("✅ تم اعتماد الفيديو (تجاوز الفحص).")
             return video_path 
 
     if notify_callback: notify_callback("⚠️ تم استنفاد محاولات التحسين. تم اعتماد أفضل نتيجة.")
-    print("⚠️ Max retries reached. Returning last video.")
+    logger.warning(f"[Video QA] Max retries ({max_retries}) reached. Returning best available video.")
     return last_generated_video
     
 # ==============================================================================
@@ -285,14 +293,12 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     لا تولد JSON، بل ترجع رسالة نصية فقط.
     """
     if getattr(settings, "use_mock_api", False):
-        print("💰[SAVED $] MOCKING STRATEGIST CHAT...")
+        logger.debug("MOCK MODE: Returning mock strategist response.")  
         
-        # 1. إذا كان المستخدم يطلب اعتماد الخطة (عندما يضغط على زر الاعتماد اليدوي)
         if "اعتماد" in user_message or "موافق" in user_message:
             return "تم اعتماد الخطة النهائية بنجاح! الاستراتيجية جاهزة للانطلاق إلى فريق العمل."
-        
-        # 2. في حالة الدردشة العادية، نقترح عليه خطة ونسأله "هل توافق" لكي يظهر زر الاعتماد
         return f"هذه استراتيجية تسويقية تجريبية لمنتج ({product_name}) تم توليدها بواسطة وضع المحاكاة. اقترح استهداف فئة الشباب. هل توافق على اعتماد الخطة؟"
+
     strategist = get_marketing_strategist()
     model_name = strategist.llm_config['config_list'][0]['model']
     strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
@@ -303,11 +309,10 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     real_events_context = ""
 
     if country_code:
-        print(f"🌍 User mentioned country: {country_code.upper()}. Fetching events...")
-        # نجلب الأحداث وراء الكواليس
+        logger.info(f"Country detected in message: {country_code.upper()}. Fetching events...")
         real_events_context = get_upcoming_events_for_strategy(region=country_code, days_ahead=30)
     else:
-        # إذا لم يذكر دولة، نعطيه تنبيهاً ليقوم بسؤال المستخدم (بدل الكراش)
+        logger.debug("No country detected in user message. Prompting strategist to ask.")
         real_events_context = "⚠️ NOTE TO STRATEGIST: The user has not specified a country yet. If you need to suggest events, politely ask the user which country they are targeting first."
 
     history_text = ""
@@ -326,7 +331,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
         history_text
     )
 
-    print("🧠 Searching Knowledge Base and consulting Strategist...")
+    logger.info("Consulting Marketing Strategist via RAG...")
     
     chat_result = strategy_rag.initiate_chat(
         strategist, 
@@ -338,16 +343,18 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
 
     valid_replies = [msg['content'] for msg in chat_result.chat_history if msg.get('content') and msg.get('content').strip() != "" and msg.get('name') == 'Marketing_Strategist']
     
-    replay = valid_replies[-1] if valid_replies else "عذراً، حدث خطأ في توليد الاستراتيجية."
-    
-    return replay.strip()
+    if not valid_replies:
+        logger.error("Strategist returned no valid replies.")
+        return "عذراً، حدث خطأ في توليد الاستراتيجية."
+
+    return valid_replies[-1].strip()
 
 def finalize_strategy(product_name, chat_history):
     """
     تجبر المدير على تلخيص المحادثة السابقة وإخراجها كـ JSON صارم.
     """
     if getattr(settings, "use_mock_api", False):
-        print("💰[SAVED $] MOCKING STRATEGY FINALIZATION...")
+        logger.debug("MOCK MODE: Returning mock finalized strategy.")
         return {
             "suggested_audiences": {
                 "suggestions": [
@@ -384,7 +391,7 @@ def finalize_strategy(product_name, chat_history):
     
     magic_prompt = prompt_templates.get_finalize_strategy_prompt(product_name, history_text)
 
-    print("📄 Forcing Director to output JSON Strategy...")
+    logger.info("Forcing strategist to output JSON strategy...")
     chat_result = user_proxy.initiate_chat(strategist, message=magic_prompt, max_turns=1)
     
     last_message = chat_result.chat_history[-1]['content']
@@ -393,7 +400,7 @@ def finalize_strategy(product_name, chat_history):
     data = json_match_extractor(last_message)
     if data and "suggested_audiences" in data: return data
         
-    print("⚠️ Fallback strategy used due to JSON parsing error.")
+    logger.error("Failed to extract JSON strategy from strategist response.")
     raise ValueError("Failed to extract JSON strategy from Director's response.")
 # ==============================================================================
 # المرحلة 2: توليد النصوص فقط (Generate Copy)
@@ -401,7 +408,7 @@ def finalize_strategy(product_name, chat_history):
 def generate_copy_only(product_name, product_desc, audience, platforms):
     if getattr(settings, "use_mock_api", False):
         import time
-        print("💰[SAVED $] MOCKING COPYWRITER...")
+        logger.debug("MOCK MODE: Returning mock ad copy.")
         time.sleep(2) # محاكاة وقت الكتابة
         platforms_list = platforms if platforms and len(platforms) > 0 else["Instagram", "TikTok"]
         # توليد نصوص وهمية تتوافق مع الـ JSON المطلوب
@@ -425,6 +432,7 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
         platform_instruction = "Target Platforms: USER DID NOT SPECIFY. You MUST choose the 2 or 3 most suitable social media platforms for this specific product and audience."
     
     message = prompt_templates.get_copy_generation_prompt(product_name, product_desc, audience, platform_instruction)
+    logger.info(f"Generating ad copy for: '{product_name}' | Audience: '{audience}'")
 
     chat_result = copy_rag.initiate_chat(
         manager, 
@@ -441,7 +449,7 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
 def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature = None):
     if getattr(settings, "use_mock_api", False):
         import time, glob
-        print(f"💰 [SAVED $] MOCKING ENTIRE IMAGE PIPELINE...")
+        logger.debug("MOCK MODE: Returning mock image.")
         time.sleep(2) # محاكاة وقت التحميل
         existing_images = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "image", "gen_*.png"))
         mock_path = existing_images[0] if existing_images else None
@@ -464,14 +472,14 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
     )
     img_prompt = extract_agent_json(chat_result.chat_history, "Prompt_Engineer", "main_image_prompt")
 
-    print(f"🎨 Generating Image (AR: {aspect_ratio})...")
+    logger.info(f"Generating image | AR: {aspect_ratio} | Event: {event_name}")
     
     local_ref_path = get_local_media_path(original_image_path)
 
     try:
         image_path, signature = generate_and_review_image(img_prompt, reference_image_path=local_ref_path, aspect_ratio=aspect_ratio, notify_callback=notify_callback, thought_signature=thought_signature)
     except Exception as e:
-        print(f"❌ Image Gen Error: {e}")
+        logger.exception(f"Image generation pipeline failed for product '{product_name}': {e}")
         image_path = None
         signature = None
 
@@ -482,7 +490,7 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None, voice_preference="Auto"):
     if getattr(settings, "use_mock_api", False):
         import time, glob
-        print(f"💰 [SAVED $] MOCKING ENTIRE VIDEO PIPELINE...")
+        logger.debug("MOCK MODE: Returning mock video.")
         time.sleep(3) # محاكاة وقت التحميل والتوليد
         existing_videos = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "video", "gen_*.mp4"))
         mock_video_path = existing_videos[0] if existing_videos else None
@@ -505,6 +513,7 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
 
     message = prompt_templates.get_video_generation_prompt(product_name, audience, ad_copy_json, duration, num_scenes, aspect_ratio, event_name=event_name, event_angle=event_angle, voice_preference=voice_preference)
 
+    logger.info(f"Generating video | Duration: {duration}s | Scenes: {num_scenes} | AR: {aspect_ratio}")
     chat_result = prompts_rag.initiate_chat(
         manager, 
         message=prompts_rag.message_generator,
@@ -515,16 +524,16 @@ def generate_video_on_demand(product_name, audience, ad_copy_json, duration, asp
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard, voiceover_text = normalize_prompts_data(data)
     selected_voice = data.get("selected_voice_profile", "Farah") if isinstance(data, dict) else "Farah"
-    print(f"🎙️ AI selected voice profile: {selected_voice}")
+    logger.info(f"AI selected voice: {selected_voice}")
 
     local_ref_path = get_local_media_path(base_image_path)    
 
     video_url = None
     if vid_storyboard:
-        print(f"🎬 Sending Storyboard to Veo (Duration: {duration}s)...")
+        logger.info(f"Sending storyboard ({len(vid_storyboard)} scenes) to Veo...")
         if notify_callback:
             notify_callback(f"🎬 Sending Storyboard to Veo (Duration: {duration}s)...")
-        # نستدعي الدالة الشاملة التي تدمج المشاهد (تأكد أنها موجودة في هذا الملف أو مستوردة)
+
         video_url = generate_final_video_asset(
             vid_storyboard, 
             base_image_path=local_ref_path,
@@ -542,7 +551,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     """
     if getattr(settings, "use_mock_api", False):
         import time, glob
-        print(f"💰 [SAVED $] MOCKING ENTIRE VIDEO PIPELINE...")
+        logger.debug("MOCK MODE: Returning mock extended video.")
         time.sleep(3) # محاكاة وقت التحميل والتوليد
         existing_videos = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "video", "gen_*.mp4"))
         mock_video_path = existing_videos[0] if existing_videos else None
@@ -568,6 +577,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
         is_termination_msg=lambda x: False
     )
 
+    logger.info(f"Generating extended video | Duration: {duration}s | Scenes: 1 | AR: {aspect_ratio}")
     chat_result = prompts_rag.initiate_chat(
         manager, 
         message=prompts_rag.message_generator,
@@ -578,10 +588,10 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard, voiceover_text = normalize_prompts_data(data)
     selected_voice = data.get("selected_voice_profile", "Auto") if isinstance(data, dict) else "Farah"
-    print(f"🎙️ AI selected voice profile: {selected_voice}")
+    logger.info(f"AI selected voice: {selected_voice}")
 
     if not vid_storyboard or len(vid_storyboard) == 0:
-        print("❌ AI failed to generate storyboard.")
+        logger.error("AI failed to generate storyboard.")
         return {"video_storyboard": [], "video_url": None}
 
     scene = vid_storyboard[0]
@@ -593,6 +603,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     scene_image_path = local_ref_path 
     
     if scene_img_prompt:
+        logger.info(f"Generating image for scene | Prompt: {scene_img_prompt} | AR: {aspect_ratio}")
         if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد...")
         try:
             generated_img, _ = generate_image(
@@ -604,7 +615,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
                 scene_image_path = generated_img 
                 if notify_callback: notify_callback(f"✅ تم تصميم الصورة الافتتاحية بنجاح!")
         except Exception as e:
-            print(f"⚠️ Image Gen failed, using base image. Error: {e}")
+            logger.exception(f"Image generation failed for scene: {scene_img_prompt}. Error: {e}")
 
 
     def flatten(items):
@@ -623,24 +634,22 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     total_segments = 1 + extensions_needed
     
     if not motion_sequence:
+        logger.info(f"Using fallback prompt for video | Duration: {duration}s | AR: {aspect_ratio}")
         fallback_p = scene.get("motion_prompt") or scene.get("action_description") or ""
-        # إذا كان الـ fallback نفسه قائمة، نأخذ أول عنصر منه
         if isinstance(fallback_p, list): fallback_p = flatten(fallback_p)[0]
         motion_sequence = [str(fallback_p)] * total_segments
     while len(motion_sequence) < total_segments:
         motion_sequence.append(motion_sequence[-1])
-    print(f"🧩 Motion sequence for video: {motion_sequence} (Total segments: {total_segments})")
+    logger.info(f"🧩 Motion sequence for video: {motion_sequence} (Total segments: {total_segments})")
 
     first_prompt = str(motion_sequence[0])
     if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
         first_prompt = f"{first_prompt}. Audio context: {audio_p}"
     first_prompt = f"{first_prompt}. CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting. No voiceover. "
 
-
+    logger.info(f"Generating first 8 seconds of video | Prompt: {first_prompt} | AR: {aspect_ratio}")
     if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي (8 ثوانٍ)...")
-    
-    # 2. توليد أول 8 ثواني (ملاحظة: يجب أن تتأكد أن generate_veo_video ترجع مسار الفيديو + اسم الملف على جوجل)
-    # سنستخدم الدالة المعدلة التي ترجع القيمتين
+    logger.info(f"Sending first prompt to Veo | Prompt: {first_prompt} | AR: {aspect_ratio}")
     first_video_path, google_video_name = generate_veo_video(first_prompt, scene_image_path, aspect_ratio)
 
     if not first_video_path or not google_video_name:
@@ -654,27 +663,31 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
 
     # 4. حلقة التمديد المتتالية
     for i in range(extensions_needed):
+        logger.info(f"Generating extended video | Duration: {duration}s | Scenes: 1 | AR: {aspect_ratio}")
         if notify_callback: notify_callback(f"🔄 جاري تمديد الفيديو (الجزء {i+2})...")
         
         next_prompt_index = min(i + 1, len(motion_sequence) - 1)
         next_prompt = str(motion_sequence[next_prompt_index])
         next_prompt = f"{next_prompt} . CRITICAL: Characters must NOT speak. NO lip-syncing. Silent acting."
-        # نرسل نفس البرومبت، مع مرجع الفيديو السابق
         ext_path, new_google_name = extend_veo_video(next_prompt, current_google_name, aspect_ratio)
         
         if ext_path:
-            final_video_path = ext_path # الفيديو الجديد يحتوي المقطع الأول مدمجاً مع الثاني
+            logger.info(f"Extended video generated successfully | Path: {ext_path} | Google Name: {new_google_name}")
+            final_video_path = ext_path 
             current_google_name = new_google_name
+            
         else:
-            print("⚠️ Extension failed, stopping early.")
+            logger.warning("⚠️ Extension failed, stopping early.")
             break 
 
     # 5. توليد الصوت ودمجه
     if voiceover_text and voiceover_text.lower() != "none" and voiceover_text.strip() != "":
+        logger.info("🎙️ Generating voiceover...")
         if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي...")
         voice_path = generate_voiceover(voiceover_text, voice_profile_name=selected_voice)
         final_video_with_audio = merge_video_audio(final_video_path, voice_path)
     else:
+        logger.info("🔇 No voiceover requested.")
         final_video_with_audio = final_video_path # إذا لم يكن هناك تعليق صوتي
 
     if notify_callback: notify_callback(f"✅ تم الانتهاء من الفيديو الممتد!")
@@ -685,13 +698,14 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
 # ==============================================================================
 def refine_text(current_copy, feedback):
     if getattr(settings, "use_mock_api", False):
-        print("💰[SAVED $] MOCKING COPY REFINEMENT...")
+        logger.debug("MOCK MODE: Returning mock refined copy.")
         return {"ad_copy": [{"platform": "Instagram", "ad_copy": f"نسخة محسنة بناءً على الملاحظات: {feedback}"}]}
     copywriter = get_copywriter()
     model_name = copywriter.llm_config['config_list'][0]['model']
     copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name)
     
     msg = prompt_templates.get_refine_text_prompt(feedback, current_copy)
+    logger.info(f"Refining text based on feedback: '{feedback[:80]}...'")
     chat_result = copy_rag.initiate_chat(
         copywriter,
         message=copy_rag.message_generator,
@@ -709,13 +723,15 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
     
     local_current_image_path = get_local_media_path(current_image_path)
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
+    logger.info("🕵️‍♂️ Analyzing image for refinement...")
     review_data = analyze_media(
         file_path=local_current_image_path,
         prompt=current_prompt,
         user_feedback=feedback,
         media_type="image"
     )
-    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")    
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .")  
+    logger.info(f"🕵️‍♂️ Image analysis complete. With feedback: {review_data.get('feedback', 'None')}")
     feedback = f"{feedback}. IMPORTANT: Ensure the product and its branding remain identical and in the same position as the original image."
     msg = prompt_templates.get_refine_image_prompt(feedback, current_prompt, aspect_ratio, review_data.get("feedback", ""), event_name=event_name, event_angle=event_angle)
     chat_result = prompt_rag.initiate_chat(
@@ -739,7 +755,10 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
                 notify_callback=notify_callback,
                 thought_signature=thought_signature
             )
-        except: pass
+            logger.info(f"Image refinement succeeded. New image: {image_url}")
+        except Exception as e:
+            # ✅ كان except: pass — الحين نعرف بالضبط شو صار
+            logger.exception(f"Image refinement pipeline failed: {e}")
         
     return {"image_prompt": new_prompt, "image_url": image_url, "thought_signature": signature}
 
@@ -756,6 +775,7 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
 
     local_video_path = get_local_media_path(current_video_path)
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
+    logger.info("🕵️‍♂️ Analyzing video for refinement...")
     review_data = analyze_media(
         file_path=local_video_path,
         prompt=current_storyboard,
@@ -763,6 +783,7 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
         media_type="video",
     )
     if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
+    logger.info(f"🕵️‍♂️ Video analysis complete. With feedback: {review_data.get('feedback', 'None')}")
 
     msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, review_data.get("feedback", ""), event_name=event_name, event_angle=event_angle)
     chat_result = prompts_rag.initiate_chat(
@@ -786,6 +807,8 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
             aspect_ratio=aspect_ratio, 
             notify_callback=notify_callback
         )
+    else:
+        logger.warning("refine_video: No storyboard extracted from agent response.")
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
 
 # ==============================================================================
@@ -797,11 +820,10 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9",  notify_c
     صُممت لتعمل داخل Thread.
     """
     scene_num = scene.get("scene_number", 1)
-    print(f"⏳ [Thread] Started Processing Scene {scene_num}...")
+    logger.info(f"[Thread] Started processing scene {scene_num}...")
 
     if notify_callback: notify_callback(f"⏳ جاري معالجة المشهد رقم {scene_num}...")
     motion_p = scene.get("motion_prompt", "")
-    voice_p = scene.get("voiceover_text", "")
     audio_p = scene.get("audio_prompt", "")
     scene_img_prompt = scene.get("image_prompt", "")
     
@@ -817,10 +839,12 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9",  notify_c
             )
             if generated_img and os.path.exists(generated_img):
                 scene_image_path = generated_img
+                logger.info(f"[Scene {scene_num}] Custom frame generated: {generated_img}")
                 if notify_callback: notify_callback(f"✅ تم تصميم إطار المشهد {scene_num} بنجاح!")
         except Exception as e:
-            if notify_callback: notify_callback(f"⚠️ فشل تصميم إطار المشهد {scene_num}، سيتم استخدام الصورة الأساسية.")
-            print(f"⚠️ [Scene {scene_num}] Image Gen failed, using base image. Error: {e}")
+            logger.warning(f"[Scene {scene_num}] Frame generation failed, using base image. Error: {e}")
+            if notify_callback:
+                notify_callback(f"⚠️ فشل تصميم إطار المشهد {scene_num}، سيتم استخدام الصورة الأساسية.")
 
     # 2. تجهيز برومبت الفيديو (الصوت اختياري)
     veo_prompt = f"{motion_p}."
@@ -834,13 +858,13 @@ def process_single_scene(scene, valid_image_path, aspect_ratio="16:9",  notify_c
     try:
         scene_video_path = generate_and_review_video(veo_prompt, scene_image_path, aspect_ratio)
         if not scene_video_path or not os.path.exists(scene_video_path):
-            print(f"❌ [Scene {scene_num}] Video Gen failed (API returned None or File missing).")
+            logger.error(f"[Scene {scene_num}] Video file missing after generation.")
             if notify_callback: notify_callback(f"❌ فشل تحريك المشهد {scene_num} (مرفوض من جوجل).")
             return {"scene_number": scene_num, "path": None}
-        print(f"✅ [Thread] Scene {scene_num} completed.")
+        logger.info(f"[Thread] Scene {scene_num} completed: {scene_video_path}")
         if notify_callback: notify_callback(f"✅ تم الانتهاء من تحريك المشهد {scene_num} بنجاح!")
     except Exception as e:
-        print(f"❌ [Scene {scene_num}] Video Gen failed: {e}")
+        logger.exception(f"[Scene {scene_num}] Unhandled exception during video generation: {e}")
         if notify_callback: notify_callback(f"❌ فشل تحريك المشهد {scene_num}.")
         return {"scene_number": scene_num, "path": None}
     
@@ -853,13 +877,13 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     تقرأ الستوري بورد، تولد كل مشهد بالتوازي (Parallel)، ثم تدمجها بالترتيب.
     """
     if not storyboard_json or not isinstance(storyboard_json, list):
-        print("❌ Invalid storyboard format")
+        logger.error("generate_final_video_asset: Invalid or empty storyboard.")
         return None
 
     if notify_callback:
         notify_callback(f"🚀 بدء عملية الإنتاج السينمائي ({len(storyboard_json)} مشاهد)...")
 
-    print(f"🚀 Starting PARALLEL Multi-Scene Video Generation ({len(storyboard_json)} scenes)...")
+    logger.info(f"Starting parallel video generation | Scenes: {len(storyboard_json)} | AR: {aspect_ratio}")
 
     # معالجة مسار الصورة الأساسية
     valid_image_path = get_local_media_path(base_image_path)
@@ -882,11 +906,11 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
                 if res["path"]:
                     results.append(res)
             except Exception as exc:
-                print(f"⚠️ A scene generated an exception: {exc}")
+                logger.exception(f"Scene future raised an unhandled exception: {exc}")
 
     # --- ترتيب المشاهد ودمجها ---
     if not results:
-        print("⚠️ All Veo generations failed.")
+        logger.error("All scene generations failed. No video to return.")
         if notify_callback:
             notify_callback("⚠️ فشلت عملية توليد جميع المشاهد.")
         return None
@@ -896,7 +920,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     
     # استخراج المسارات المرتبة فقط
     ordered_video_paths = [res["path"] for res in results]
-
+    logger.info(f"Scenes completed: {len(ordered_video_paths)}/{len(storyboard_json)}")
     # الدمج
     if len(ordered_video_paths) == 1:
         if notify_callback:
@@ -906,6 +930,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
         if notify_callback:
             notify_callback("🎞️ جاري دمج المشاهد وإخراج الفيديو النهائي...")
         merged_silent_video = concatenate_veo_videos(ordered_video_paths)
+        logger.info(f"Videos merged into: {merged_silent_video}")
         if notify_callback:
             notify_callback("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
 
@@ -924,6 +949,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     if full_voice_path and merged_silent_video:
         if notify_callback: notify_callback("🎵 تركيب الهندسة الصوتية النهائية...")
         final_video = merge_video_audio(merged_silent_video, full_voice_path)
+        logger.info(f"Final video with audio: {final_video}")
         return final_video
     
     return merged_silent_video

@@ -1,6 +1,8 @@
 from fastapi import status, HTTPException, Depends, APIRouter
 from fastapi.security.oauth2 import OAuth2PasswordRequestForm
+from fastapi import Request  
 from sqlalchemy.orm import Session
+from app.limiter import limiter
 from .. import utils, models, schemas, oauth2
 from ..database import get_db   
 
@@ -11,7 +13,8 @@ router = APIRouter(
 
 
 @router.post('/login', response_model=schemas.Token)
-def login(user_credentials: OAuth2PasswordRequestForm=Depends(), db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, user_credentials: OAuth2PasswordRequestForm=Depends(), db: Session = Depends(get_db)):
     user = db.query(models.Users).filter(models.Users.email == user_credentials.username).first()
     if not user or not utils.verify_password(user_credentials.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
@@ -58,6 +61,7 @@ async def resend_verification_code(id: int, db: Session = Depends(get_db)):
 
 
 @router.post('/forgot-password', status_code=status.HTTP_200_OK)
+@limiter.limit("3/minute")
 async def forgot_password(request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
     # 1. البحث عن المستخدم
     user = db.query(models.Users).filter(models.Users.email == request.email).first()

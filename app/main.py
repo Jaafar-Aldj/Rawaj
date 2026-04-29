@@ -1,14 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-# from . import models
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 from .database import engine
 from .routers import product, user, auth, campaign
+from .limiter import limiter
 
 
-# models.Base.metadata.create_all(bind=engine)
+app = FastAPI(title="Rawaj API", version="1.0.0")
 
-app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 origins = ["*"]
 

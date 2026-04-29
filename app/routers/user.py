@@ -34,10 +34,6 @@ async def create_user(new_user: schemas.UserCreate, db: Session = Depends(get_db
         print(e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send verification email.") from e
 
-@router.get('/', response_model=list[schemas.UserResponse])
-def get_users(db: Session = Depends(get_db)):
-    users = db.query(models.Users).all()
-    return users
 
 @router.delete('/', status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
