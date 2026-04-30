@@ -33,6 +33,7 @@ const aspectRatios = [
   { id: '1:1', name: 'مربع 1:1' },
   { id: '16:9', name: 'أفقي 16:9' },
   { id: '9:16', name: 'عمودي 9:16' },
+  { id: '4:5', name: 'عمودي 4:5' },
 ];
 
 const videoRatios = [
@@ -49,6 +50,7 @@ export default function CampaignDetailsPage() {
 
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false); // حالة جديدة للتوجيه التلقائي
   const [activeTab, setActiveTab] = useState('overview');
   const [copiedId, setCopiedId] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -86,6 +88,22 @@ export default function CampaignDetailsPage() {
     }
     return () => stopAnyAudio();
   }, [authLoading, isAuthenticated, campaignId]);
+
+  // 🚀 التوجيه التلقائي (الشرطي)
+  useEffect(() => {
+    if (campaign) {
+      if (!campaign.is_strategy_approved) {
+        setIsRedirecting(true);
+        localStorage.setItem('currentProductId', campaign.product_id);
+        localStorage.setItem('campaignId', campaign.id);
+        router.push('/analyze-product');
+      } else if (!campaign.assets || campaign.assets.length === 0) {
+        setIsRedirecting(true);
+        localStorage.setItem('campaignId', campaign.id);
+        router.push('/select-platforms');
+      }
+    }
+  }, [campaign, router]);
 
   const fetchCampaignDetails = async () => {
     setLoading(true);
@@ -137,9 +155,26 @@ export default function CampaignDetailsPage() {
   };
 
   const handleCopy = (text, id) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+      }).catch((err) => console.error(err));
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed"; 
+      textArea.style.left = "-9999px"; 
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+      } catch (err) {}
+      document.body.removeChild(textArea);
+    }
   };
 
   const handleGenerateImage = async () => {
@@ -236,11 +271,8 @@ export default function CampaignDetailsPage() {
     finally { setTimeout(() => setShowProgressModal(false), 1500); }
   };
 
-  const navigateToSelectPlatforms = () => {
-    router.push(`/select-platforms?campaignId=${campaignId}`);
-  };
-
-  if (authLoading || loading) return <LoadingSpinner />;
+  // إظهار اللودينغ أثناء التحميل أو أثناء التوجيه التلقائي
+  if (authLoading || loading || isRedirecting) return <LoadingSpinner />;
 
   const assets = campaign?.assets || [];
   const allImages = assets.flatMap(a => (a.images || []).map(img => ({ ...img, audience: a.target_audience, assetId: a.id })));
@@ -446,12 +478,6 @@ export default function CampaignDetailsPage() {
                 <div className="text-center py-20 bg-white border-2 border-dashed border-gray-200 rounded-2xl shadow-sm">
                   <PhotoIcon className="w-16 mx-auto mb-3 text-gray-300" />
                   <p className="text-gray-500 font-black text-sm mb-4">لا توجد صور في المعرض حالياً</p>
-                  <button 
-                    onClick={navigateToSelectPlatforms}
-                    className="inline-flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-xl font-black text-sm shadow-md hover:bg-green-700 transition-all"
-                  >
-                    <PhotoIcon className="w-4 h-4" /> توليد صورة جديدة
-                  </button>
                 </div> : 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {allImages.map((img) => (
@@ -475,21 +501,15 @@ export default function CampaignDetailsPage() {
                 <div className="text-center py-20 bg-white border-2 border-dashed border-gray-200 rounded-2xl shadow-sm">
                   <VideoCameraIcon className="w-16 mx-auto mb-3 text-gray-300" />
                   <p className="text-gray-500 font-black text-sm mb-4">المعرض السينمائي فارغ حالياً</p>
-                  <button 
-                    onClick={navigateToSelectPlatforms}
-                    className="inline-flex items-center gap-2 bg-green-600 text-white px-5 py-2 rounded-xl font-black text-sm shadow-md hover:bg-green-700 transition-all"
-                  >
-                    <VideoCameraIcon className="w-4 h-4" /> إنتاج فيديو جديد
-                  </button>
                 </div> :
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {allVideos.map((vid) => (
                     <div key={vid.id} className="group bg-white rounded-xl border border-gray-100 overflow-hidden shadow-md hover:shadow-lg transition-all">
                       <div className="relative aspect-video bg-gray-900">
-                        <video src={vid.video_url} className="w-full h-full object-cover" muted loop />
+                        <video src={vid.url} className="w-full h-full object-cover" muted loop />
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-3">
-                           <button onClick={() => setSelectedVideo(vid.video_url)} className="p-2 bg-green-600 hover:bg-green-700 rounded-full text-white shadow-md transition-all"><PlayCircleIcon className="w-7 h-7"/></button>
-                           <button onClick={() => window.open(vid.video_url)} className="p-2 bg-green-600 hover:bg-green-700 rounded-full text-white shadow-md transition-all"><ArrowDownTrayIcon className="w-7 h-7"/></button>
+                           <button onClick={() => setSelectedVideo(vid.url)} className="p-2 bg-green-600 hover:bg-green-700 rounded-full text-white shadow-md transition-all"><PlayCircleIcon className="w-7 h-7"/></button>
+                           <button onClick={() => window.open(vid.url)} className="p-2 bg-green-600 hover:bg-green-700 rounded-full text-white shadow-md transition-all"><ArrowDownTrayIcon className="w-7 h-7"/></button>
                            <button onClick={() => setEditModal({ isOpen: true, type: 'video', id: vid.id, assetId: vid.assetId, feedback: '' })} className="p-2 bg-green-600 hover:bg-green-700 rounded-full text-white shadow-lg"><PencilSquareIcon className="w-7 h-7"/></button>
                         </div>
                       </div>
@@ -559,7 +579,7 @@ export default function CampaignDetailsPage() {
         </div>
       )}
 
-      {/* Video Modal - بنفس ألوان مودال الصورة */}
+      {/* Video Modal */}
       {videoModal.isOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" dir="rtl">
           <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -577,7 +597,6 @@ export default function CampaignDetailsPage() {
               </div>
             </div>
             <div className="p-6 space-y-8">
-              {/* 1. نمط الإخراج */}
               <div>
                 <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">1. نمط الإخراج</p>
                 <div className="flex gap-3 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
@@ -585,7 +604,6 @@ export default function CampaignDetailsPage() {
                   <button onClick={() => toggleVideoMode('extended')} className={`flex-1 py-3 rounded-xl text-sm font-black transition-all ${videoModal.mode === 'extended' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>لقطة ممتدة</button>
                 </div>
               </div>
-              {/* 2. المدة */}
               <motion.div layout>
                 <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">2. مدة الفيديو</p>
                 <div className="grid grid-cols-1 gap-2">
@@ -597,7 +615,6 @@ export default function CampaignDetailsPage() {
                   ))}
                 </div>
               </motion.div>
-              {/* 3. نسبة الأبعاد */}
               {videoModal.mode === 'standard' && (
                 <div>
                   <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">3. مقاس الفيديو</p>
@@ -615,7 +632,6 @@ export default function CampaignDetailsPage() {
                   ⚠️ اللقطة الممتدة تدعم المقاس الأفقي (16:9) فقط.
                 </div>
               )}
-              {/* 4. الصوت */}
               <div>
                 <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">4. نبرة المعلق الصوتي</p>
                 <div className="max-h-[240px] overflow-y-auto border border-gray-200 rounded-2xl p-2 custom-scrollbar">
@@ -632,7 +648,6 @@ export default function CampaignDetailsPage() {
                   ))}
                 </div>
               </div>
-              {/* 5. ربط المناسبة */}
               {campaign?.trending_events?.length > 0 && (
                 <div>
                   <p className="text-gray-500 text-[17px] font-black uppercase tracking-wider mb-3">5. ربط المناسبة</p>

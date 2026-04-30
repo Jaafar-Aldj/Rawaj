@@ -108,3 +108,40 @@ async def send_reset_password_email(email: str, code: str):
     
     fm = FastMail(conf)
     await fm.send_message(message)
+
+
+async def send_contact_alert_email(name: str, sender_email: str, user_message: str):
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; direction: rtl; text-align: right;">
+        <div style="background-color: #2c3e50; padding: 20px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0;">رسالة جديدة - منصة رواج</h1>
+        </div>
+        <div style="padding: 30px; background-color: #ffffff;">
+            <p style="color: #555555; font-size: 16px;">لقد تلقيت رسالة جديدة من نموذج التواصل:</p>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>الاسم:</strong></td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">{name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>البريد:</strong></td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;">{sender_email}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>الرسالة:</strong></td>
+                    <td style="padding: 10px; border-bottom: 1px solid #eee; white-space: pre-wrap;">{user_message}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    """
+
+    message = MessageSchema(
+        subject=f"استفسار جديد من {name} | رواج",
+        recipients=[settings.mail_from],  
+        body=html_body,
+        subtype="html"
+    )
+    
+    fm = FastMail(conf)
+    await fm.send_message(message)

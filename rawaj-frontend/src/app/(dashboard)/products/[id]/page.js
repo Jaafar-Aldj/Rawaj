@@ -137,6 +137,8 @@ export default function ProductDetailPage() {
   };
 
   const handleCreateCampaign = () => {
+    localStorage.removeItem('campaignId');
+    localStorage.removeItem('currentProductId');
     localStorage.setItem('currentProductId', productId);
     router.push('/analyze-product');
   };

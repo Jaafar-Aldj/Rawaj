@@ -215,3 +215,12 @@ class VoiceProfileResponse(BaseModel):
 
 class VoiceListResponse(BaseModel):
     voices: List[VoiceProfileResponse]
+
+
+# ==============================================================================
+# Contact Form Schema 
+# ==============================================================================
+class ContactMessageCreate(BaseModel):
+    name: str
+    email: EmailStr
+    message: str

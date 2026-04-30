@@ -41,6 +41,7 @@ const aspectRatios = [
   { id: '1:1', name: 'مربع 1:1' },
   { id: '16:9', name: 'أفقي 16:9' },
   { id: '9:16', name: 'عمودي 9:16' },
+  { id: '4:5', name: 'عمودي 4:5' },
 ];
 
 const videoRatios = [

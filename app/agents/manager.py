@@ -301,7 +301,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
 
     strategist = get_marketing_strategist()
     model_name = strategist.llm_config['config_list'][0]['model']
-    strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
+    strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name, overwrite=True)
 
     current_date = datetime.now().strftime("%Y-%m-%d")
 

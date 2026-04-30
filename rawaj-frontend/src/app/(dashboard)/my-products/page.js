@@ -139,6 +139,8 @@ export default function MyProductsPage() {
                     <div className="flex gap-3">
                       <button
                         onClick={() => {
+                          localStorage.removeItem('campaignId');
+                          localStorage.removeItem('currentProductId');
                           localStorage.setItem('currentProductId', product.id);
                           router.push('/analyze-product');
                         }}

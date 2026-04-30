@@ -1,7 +1,8 @@
-from fastapi import Response, status, HTTPException, Depends, APIRouter
+from fastapi import BackgroundTasks, Request, Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
 
 from app import oauth2
+from app.limiter import limiter
 from .. import utils, models, schemas
 from ..database import get_db
 
@@ -73,3 +74,19 @@ def update_user(
     user_query.update(user_data, synchronize_session=False)
     db.commit()
     return user_query.first()
+
+@router.post('/contact', status_code=status.HTTP_200_OK)
+@limiter.limit("1/minute")
+async def submit_contact_form(
+    request: Request,
+    contact_data: schemas.ContactMessageCreate,
+    background_tasks: BackgroundTasks
+):
+    background_tasks.add_task(
+        utils.send_contact_alert_email,
+        name=contact_data.name,
+        sender_email=contact_data.email,
+        user_message=contact_data.message
+    )
+
+    return {"message": "تم إرسال رسالتك بنجاح. سنتواصل معك قريباً!"}

@@ -88,6 +88,8 @@ export default function CreateProductPage() {
       });
       if (!response.ok) throw new Error('فشل في إنشاء المنتج');
       const product = await response.json();
+      localStorage.removeItem('campaignId');
+      localStorage.removeItem('currentProductId');
       localStorage.setItem('currentProductId', product.id);
       router.push('/analyze-product');
     } catch (err) {

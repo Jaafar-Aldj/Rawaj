@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
@@ -8,20 +8,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  SparklesIcon,
-  PaperAirplaneIcon,
-  CheckCircleIcon,
-  PlusCircleIcon,
-  ArrowLeftIcon,
-  UserCircleIcon,
-  ChatBubbleLeftRightIcon,
-  CheckBadgeIcon
+  SparklesIcon, PaperAirplaneIcon, CheckCircleIcon, PlusCircleIcon, 
+  ArrowLeftIcon, UserCircleIcon, ChatBubbleLeftRightIcon, CheckBadgeIcon
 } from '@heroicons/react/24/outline';
 
 export default function AnalyzeProductPage() {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // جعلناه true افتراضياً
   const [error, setError] = useState('');
   const [campaignId, setCampaignId] = useState(null);
   const [productId, setProductId] = useState(null);
@@ -30,121 +24,138 @@ export default function AnalyzeProductPage() {
   const [awaitingManualApproval, setAwaitingManualApproval] = useState(false);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, loading: authLoading } = useAuth();
   const chatContainerRef = useRef(null);
 
-  // التمرير التلقائي
+  // التمرير التلقائي للأسفل
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, loading]);
 
-  useEffect(() => {
-    const storedProductId = localStorage.getItem('currentProductId');
-    if (!authLoading) {
-      if (!storedProductId) {
-        router.push('/create-product');
-      } else {
-        setProductId(storedProductId);
-      }
-      if (!isAuthenticated) {
-        router.push('/login');
-      }
-    }
-  }, [authLoading, isAuthenticated, router]);
+  // دوال فحص النصوص
+  const cleanSystemText = (text) => text.replace(/\[SYSTEM:[^\]]*\]/gi, '').trim();
 
-  // دالة تنظيف النص من أوامر النظام مثل [SYSTEM: ...]
-  const cleanSystemText = (text) => {
-    return text.replace(/\[SYSTEM:[^\]]*\]/gi, '').trim();
-  };
-
-  // دالة محسنة للتعرف على العبارات النهائية بعد التنظيف
   const isFinalConfirmation = (text) => {
     const cleanedText = cleanSystemText(text);
     const confirmPhrases = [
-      'تم اعتماد الخطة النهائية',
-      'تم اعتماد الاستراتيجية',
-      'جاهزة للانطلاق',
-      'الخطة النهائية',
-      'استراتيجية نهائية',
-      'تم اعتماد الخطة',
-      'تمت الموافقة على الخطة',
-      'الخطة معتمدة',
-      'موافقة نهائية',
-      'نعم، تم اعتماد الخطة',
-      'تم اعتماد الاستراتيجية بنجاح',
-      'اعتماد الخطة',
-      'الخطة النهائية معتمدة'
+      'تم اعتماد الخطة النهائية', 'تم اعتماد الاستراتيجية', 'جاهزة للانطلاق',
+      'الخطة النهائية', 'استراتيجية نهائية', 'تم اعتماد الخطة', 'تمت الموافقة على الخطة',
+      'الخطة معتمدة', 'موافقة نهائية', 'نعم، تم اعتماد الخطة', 'تم اعتماد الاستراتيجية بنجاح',
+      'اعتماد الخطة', 'الخطة النهائية معتمدة'
     ];
     return confirmPhrases.some(phrase => cleanedText.includes(phrase));
   };
 
-  // دالة للتعرف على أن المساعد يطلب الموافقة (لإظهار الزر اليدوي)
   const isAskingForApproval = (text) => {
     const cleanedText = cleanSystemText(text);
     const approvalPhrases = [
-      'جاهز لاعتمادها',
-      'هل أنت راضٍ',
-      'هل توافق',
-      'هل تعتمد',
-      'اعتماد الخطة',
-      'لنبدأ التنفيذ',
-      'هل أنت مستعد',
-      'أؤكد اعتمادك'
+      'جاهز لاعتمادها', 'هل أنت راضٍ', 'هل توافق', 'هل تعتمد',
+      'اعتماد الخطة', 'لنبدأ التنفيذ', 'هل أنت مستعد', 'أؤكد اعتمادك'
     ];
     return approvalPhrases.some(phrase => cleanedText.includes(phrase));
   };
 
+  // 🚀 دالة التهيئة الذكية (تسترجع الرسائل والأزرار)
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
+    const initChat = async () => {
+      const paramCampaignId = searchParams.get('campaignId');
+      const storedCampaignId = localStorage.getItem('campaignId');
+      const activeId = paramCampaignId || storedCampaignId;
+      const storedProductId = localStorage.getItem('currentProductId');
+
+      if (activeId) {
+        setCampaignId(activeId);
+        localStorage.setItem('campaignId', activeId);
+        
+        try {
+          const response = await api(`/campaigns/${activeId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setProductId(data.product_id);
+            localStorage.setItem('currentProductId', data.product_id);
+            
+            // استرجاع الدردشة
+            if (data.chat_history && Array.isArray(data.chat_history) && data.chat_history.length > 0) {
+              const formattedMessages = data.chat_history.map((m, i) => ({
+                id: Date.now() + i, // ضمان فرادة الـ ID
+                role: m.role,
+                text: cleanSystemText(m.content)
+              }));
+              setMessages(formattedMessages);
+              
+              // 💡 التحقق الذكي من الأزرار
+              // إذا كانت معتمدة أساساً في الداتا بيز
+              if (data.is_strategy_approved || data.status !== 'DRAFTING_STRATEGY') {
+                setFinalSummaryReady(true);
+              } else {
+                // إذا لم تعتمد، نبحث عن *آخر رد من المساعد* وليس آخر رسالة عامة
+                const lastAssistantMsg = [...formattedMessages].reverse().find(m => m.role === 'assistant');
+                if (lastAssistantMsg) {
+                  if (isFinalConfirmation(lastAssistantMsg.text)) {
+                    setFinalSummaryReady(true);
+                  } else if (isAskingForApproval(lastAssistantMsg.text)) {
+                    setAwaitingManualApproval(true);
+                  }
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load chat history:", err);
+        } finally {
+          setLoading(false);
+        }
+      } else if (storedProductId) {
+        setProductId(storedProductId);
+        setLoading(false);
+      } else {
+        router.push('/create-product');
+      }
+    };
+
+    initChat();
+  }, [authLoading, isAuthenticated, router, searchParams]);
+
+  // دالة معالجة الردود المباشرة من الـ API
   const processApiResponse = (responseData) => {
-  if (responseData.id) {
-    setCampaignId(responseData.id);
-    localStorage.setItem('campaignId', responseData.id.toString());
-  }
-  
-  // حفظ الخطة إذا كانت موجودة في الرد (JSON)
-  if (responseData.name && responseData.objective) {
-    localStorage.setItem('finalStrategy', JSON.stringify(responseData));
-  }
-  
-  const chatHistory = responseData.chat_history || [];
-  const lastAssistantMsg = [...chatHistory].reverse().find(m => m.role === 'assistant');
-  if (!lastAssistantMsg) return null;
+    if (responseData.id) {
+      setCampaignId(responseData.id);
+      localStorage.setItem('campaignId', responseData.id.toString());
+    }
+    
+    const chatHistory = responseData.chat_history || [];
+    const lastAssistantMsg = [...chatHistory].reverse().find(m => m.role === 'assistant');
+    if (!lastAssistantMsg) return null;
 
-  const rawText = lastAssistantMsg.content;
-  const cleanedText = cleanSystemText(rawText);
+    const rawText = lastAssistantMsg.content;
+    const cleanedText = cleanSystemText(rawText);
 
-  setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', text: cleanedText }]);
+    setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', text: cleanedText }]);
 
-  // 1. التحقق من التأكيد النهائي عبر النصوص (بعد موافقة المستخدم)
-  if (isFinalConfirmation(cleanedText)) {
-    setFinalSummaryReady(true);
-    setAwaitingManualApproval(false);
-    return;
-  }
-  
-  // 2. إذا كان الرد عبارة عن خطة JSON (يحتوي على name و objective) ولم تتم الموافقة بعد
-  //    ولم يكن المساعد يطلب الموافقة بالفعل، نظهر زر الاعتماد للمستخدم
-  const isJsonPlan = (rawText.trim().startsWith('{') || rawText.includes('"name"')) && 
-                     (rawText.includes('"objective"') || rawText.includes('"audience"'));
-  
-  if (isJsonPlan && !finalSummaryReady && !awaitingManualApproval) {
-    // نعرض الخطة ولكن نطلب من المستخدم الموافقة، لا نعتبرها موافقة تلقائية
-    setAwaitingManualApproval(true);
-    return;
-  }
-  
-  // 3. إذا كان المساعد يطلب الموافقة بعبارات صريحة (مثل "هل أنت راضٍ؟")
-  if (isAskingForApproval(cleanedText) && !finalSummaryReady) {
-    setAwaitingManualApproval(true);
-  } else {
-    // في الحالات العادية لا نظهر زر الاعتماد
-    // لكن إذا لم تكن هناك خطة بعد ولا تأكيد، نضمن إخفاء الزر
-    if (!finalSummaryReady && !isJsonPlan) {
+    if (responseData.is_strategy_approved) {
+      setFinalSummaryReady(true);
+      setAwaitingManualApproval(false);
+    } else if (isFinalConfirmation(cleanedText)) {
+      setFinalSummaryReady(true);
+      setAwaitingManualApproval(false);
+    } else if ((rawText.trim().startsWith('{') || rawText.includes('"name"')) && !finalSummaryReady && messages.length > 0) {
+      setFinalSummaryReady(true);
+      setAwaitingManualApproval(false);
+    } else if (isAskingForApproval(cleanedText) && !finalSummaryReady) {
+      setAwaitingManualApproval(true);
+    } else {
       setAwaitingManualApproval(false);
     }
-  }
-};
+  };
 
   const startAnalysis = async () => {
     if (!productId) return;
@@ -159,7 +170,6 @@ export default function AnalyzeProductPage() {
     try {
       const response = await api('/campaigns/analyze/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_id: parseInt(productId),
           message: `ابدأ بتحليل المنتج واقترح استراتيجية تسويقية. في نهاية الحوار عند موافقتي، قل بالضبط: "تم اعتماد الخطة النهائية".`
@@ -187,7 +197,6 @@ export default function AnalyzeProductPage() {
     try {
       const response = await api('/campaigns/analyze/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_id: parseInt(productId),
           message: userMsg,
@@ -204,7 +213,6 @@ export default function AnalyzeProductPage() {
     }
   };
 
-  // الاعتماد اليدوي: يرسل رسالة "تم اعتماد الخطة النهائية" تلقائياً
   const handleManualApproval = async () => {
     if (!campaignId || loading) return;
     setInputMessage('');
@@ -215,7 +223,6 @@ export default function AnalyzeProductPage() {
     try {
       const response = await api('/campaigns/analyze/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           product_id: parseInt(productId),
           message: 'تم اعتماد الخطة النهائية',
@@ -237,11 +244,10 @@ export default function AnalyzeProductPage() {
     try {
       const response = await api('/campaigns/analyze/approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaign_id: parseInt(campaignId) })
       });
       if (!response.ok) throw new Error('فشل في اعتماد الحملة');
-      router.push('/select-platforms');
+      router.push(`/select-platforms?campaignId=${campaignId}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -273,21 +279,20 @@ export default function AnalyzeProductPage() {
             { id: 3, name: 'تحليل الجمهور', status: 'active' },
             { id: 4, name: 'تحديد الاستراتيجية', status: 'pending' },
             { id: 5, name: 'توليد الإعلان', status: 'pending' }
-          ].map((step) => (
+          ].map((step, idx, arr) => (
             <div key={step.id} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center gap-1.5">
+              <div className="flex flex-col items-center gap-1.5 min-w-[70px]">
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black transition-all duration-500 ${
                   step.status === 'active' ? 'bg-green-600 text-white shadow-md shadow-gray-200' : 
                   step.status === 'done' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'
                 }`}>
                   {step.status === 'done' ? <CheckCircleIcon className="w-5 h-5" /> : step.id}
                 </div>
-                <span className={`text-[10px] font-bold ${step.status !== 'pending' ? 'text-gray-900' : 'text-gray-400'}`}>{step.name}</span>
+                <span className={`text-[10px] font-bold whitespace-nowrap ${step.status !== 'pending' ? 'text-gray-900' : 'text-gray-400'}`}>{step.name}</span>
               </div>
-              {step.id < 5 && (
-                <div className={`flex-1 h-[2px] mx-3 mb-5 rounded-full ${
-                  step.id < 3 ? 'bg-green-100' : 
-                  step.id === 3 && step.status === 'active' ? 'bg-green-100' : 'bg-gray-100'
+              {idx < arr.length - 1 && (
+                <div className={`flex-1 h-[2px] mx-2 rounded-full ${
+                  step.status === 'done' || (step.id === 2 && step.status === 'active') ? 'bg-green-100' : 'bg-gray-100'
                 }`} />
               )}
             </div>
@@ -295,7 +300,7 @@ export default function AnalyzeProductPage() {
         </div>
 
         {/* Chat Section */}
-        <div className="flex flex-col h-[100vh] bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
+        <div className="flex flex-col h-[70vh] bg-white rounded-[2rem] shadow-xl overflow-hidden border border-gray-100">
           {/* Top Bar */}
           <div className="p-5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -325,6 +330,13 @@ export default function AnalyzeProductPage() {
               </div>
             )}
             
+            {loading && messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full">
+                <LoadingSpinner size="lg" color="#111827" />
+                <p className="text-gray-500 text-sm font-bold mt-4">جاري استرجاع المحادثة...</p>
+              </div>
+            )}
+
             <AnimatePresence>
               {messages.map((msg) => (
                 <motion.div 
@@ -346,17 +358,13 @@ export default function AnalyzeProductPage() {
                   {msg.role === 'assistant' && (
                     <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative">
                       <ChatBubbleLeftRightIcon className="w-5 h-5 text-white" />
-                      <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                      </span>
                     </div>
                   )}
                 </motion.div>
               ))}
             </AnimatePresence>
             
-            {loading && (
+            {loading && messages.length > 0 && (
               <div className="flex justify-end gap-3 animate-pulse">
                 <div className="bg-gray-50 px-6 py-4 rounded-2xl rounded-tl-none border border-gray-100 text-xs text-gray-500 font-bold">
                   جاري معالجة الاستراتيجية...
@@ -374,19 +382,19 @@ export default function AnalyzeProductPage() {
                 onChange={(e) => setInputMessage(e.target.value)} 
                 autoComplete="off"
                 placeholder='اسأل المساعد أو عدل على الخطة...' 
-                className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pr-5 pl-14 text-gray-900 text-sm font-bold shadow-sm focus:border-gray-900 focus:outline-none transition-all" 
-                disabled={!campaignId && messages.length > 0}
+                className="w-full bg-white border-2 border-transparent rounded-2xl py-4 pr-5 pl-14 text-gray-900 text-sm font-bold shadow-sm focus:border-gray-900 focus:outline-none transition-all disabled:bg-gray-100" 
+                disabled={(!campaignId && messages.length > 0) || finalSummaryReady}
               />
               <button 
                 type="submit" 
-                disabled={loading || !inputMessage.trim()}
+                disabled={loading || !inputMessage.trim() || finalSummaryReady}
                 className="absolute left-2 top-2 bottom-2 px-4 bg-gray-900 text-white rounded-xl hover:bg-black transition-all disabled:opacity-30"
               >
                 <PaperAirplaneIcon className="w-5 h-5 rotate-180" />
               </button>
             </form>
 
-            {/* زر الاعتماد اليدوي (يظهر عندما يطلب المساعد الموافقة) */}
+            {/* زر الاعتماد اليدوي */}
             <AnimatePresence>
               {awaitingManualApproval && !finalSummaryReady && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}>

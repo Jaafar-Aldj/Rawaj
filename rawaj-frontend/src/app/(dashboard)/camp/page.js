@@ -19,7 +19,9 @@ import {
   CheckCircleIcon,
   XMarkIcon,
   ExclamationTriangleIcon,
-  MagnifyingGlassIcon   // <-- إضافة أيقونة البحث
+  MagnifyingGlassIcon,
+  ChatBubbleLeftRightIcon,
+  RocketLaunchIcon
 } from '@heroicons/react/24/outline';
 
 export default function CampaignsPage() {
@@ -35,7 +37,6 @@ export default function CampaignsPage() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
-  // --- حالة البحث ---
   const [searchTerm, setSearchTerm] = useState('');
 
   const router = useRouter();
@@ -75,21 +76,24 @@ export default function CampaignsPage() {
     if (!authLoading && isAuthenticated) fetchCampaigns();
   }, [authLoading, isAuthenticated]);
 
-  // --- تصفية الحملات حسب الاسم (محلياً) ---
-  const filteredCampaigns = campaigns.filter(camp =>
-    camp.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCampaigns = campaigns.filter(camp => {
+    const campaignName = camp.name || "حملة استراتيجية جديدة";
+    return campaignName.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   const getStatusBadge = (status) => {
     switch (status) {
       case 'STRATEGY_APPROVED': 
-        return { label: 'جاهزة للتنفيذ', color: 'text-blue-400', bg: 'bg-blue-400/10', icon: SparklesIcon };
+        return { label: 'بانتظار الإنتاج', color: 'text-yellow-400', bg: 'bg-yellow-400/10', icon: RocketLaunchIcon };
+      case 'DRAFTING_STRATEGY': 
+      case 'DRAFT': 
+        return { label: 'قيد التخطيط', color: 'text-blue-400', bg: 'bg-blue-400/10', icon: ChatBubbleLeftRightIcon };
       case 'COMPLETED': 
         return { label: 'مكتملة بنجاح', color: 'text-green-400', bg: 'bg-green-400/10', icon: TrophyIcon };
       case 'DRAFTS_READY':
         return { label: 'مسودات جاهزة', color: 'text-purple-400', bg: 'bg-purple-400/10', icon: DocumentTextIcon };
       default: 
-        return { label: 'قيد التخطيط', color: 'text-yellow-400', bg: 'bg-yellow-400/10', icon: ClockIcon };
+        return { label: 'قيد العمل', color: 'text-gray-400', bg: 'bg-gray-400/10', icon: ClockIcon };
     }
   };
 
@@ -127,7 +131,7 @@ export default function CampaignsPage() {
       await fetchCampaigns(false);
       setSelectMode(false);
       setSelectedIds(new Set());
-      setSearchTerm(''); // إعادة تعيين البحث بعد الحذف
+      setSearchTerm(''); 
     } catch (err) {
       console.error(err);
     } finally {
@@ -136,11 +140,32 @@ export default function CampaignsPage() {
     }
   };
 
-  // إعادة تعيين وضع التحديد عند تغيير البحث
   useEffect(() => {
     setSelectMode(false);
     setSelectedIds(new Set());
   }, [searchTerm]);
+
+  // 🚀 التوجيه الذكي (Smart Routing)
+  const handleCampaignClick = (camp) => {
+    if (selectMode) return;
+
+    // في كل الأحوال يجب أن نحفظ معرف الحملة لكي تستخدمه الصفحات القادمة
+    localStorage.setItem('campaignId', camp.id);
+    localStorage.setItem('currentProductId', camp.product_id);
+
+    // 1. إذا لم توافق على الاستراتيجية بعد (ناقصة التخطيط)
+    if (!camp.is_strategy_approved) {
+      router.push(`/analyze-product?campaignId=${camp.id}`);
+    } 
+    // 2. إذا تمت الموافقة ولكن لا يوجد نصوص أو فئات (ناقصة الإنتاج)
+    else if (!camp.assets || camp.assets.length === 0) {
+      router.push(`/select-platforms?campaignId=${camp.id}`);
+    } 
+    // 3. إذا كان كل شيء جاهزاً
+    else {
+      router.push(`/campaigns/${camp.id}`);
+    }
+  };
 
   if (loading && skip === 0) return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
@@ -162,7 +187,6 @@ export default function CampaignsPage() {
         </button>
       </div>
 
-      {/* --- شريط البحث --- */}
       <div className="mb-8">
         <div className="relative">
           <MagnifyingGlassIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -239,7 +263,7 @@ export default function CampaignsPage() {
                   )}
 
                   <div 
-                    onClick={() => !selectMode && router.push(`/campaigns/${camp.id}`)}
+                    onClick={() => handleCampaignClick(camp)} // 👈 استخدام دالة التوجيه الذكي هنا
                     className={`flex-1 flex flex-col md:flex-row items-center justify-between gap-6 w-full ${!selectMode ? 'cursor-pointer' : ''}`}
                   >
                     <div className="flex items-center gap-6 w-full md:w-auto">
@@ -248,7 +272,7 @@ export default function CampaignsPage() {
                       </div>
                       <div>
                         <h3 className="text-2xl font-black text-white group-hover:text-green-400 transition-colors leading-tight">
-                          {camp.name || "حملة استراتيجية جديدة"}
+                          {camp.name || "حملة قيد التخطيط"}
                         </h3>
                         <div className="flex flex-wrap items-center gap-4 mt-3">
                           <span className={`flex items-center gap-2 text-xs font-black px-4 py-1.5 rounded-full ${status.bg} ${status.color} border border-white/5`}>
@@ -264,7 +288,7 @@ export default function CampaignsPage() {
                     <div className="flex items-center gap-10 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-gray-700/50 pt-5 md:pt-0">
                       <div className="hidden lg:block text-right">
                         <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">الهدف الإستراتيجي</p>
-                        <p className="text-sm text-gray-300 max-w-[300px] line-clamp-2 font-medium italic">"{camp.objective || "جاري تحديد الهدف..."}"</p>
+                        <p className="text-sm text-gray-300 max-w-[300px] line-clamp-2 font-medium italic">"{camp.objective || "بانتظار موافقتك على الاستراتيجية..."}"</p>
                       </div>
                       <div className={`p-4 rounded-full bg-gray-900 border border-gray-700 transition-all duration-300 ${!selectMode ? 'group-hover:bg-green-500 group-hover:text-white' : ''}`}>
                         <ChevronLeftIcon className="w-6 h-6" />
@@ -278,7 +302,7 @@ export default function CampaignsPage() {
         </div>
       )}
 
-      {hasMore && searchTerm === '' && ( // إخفاء "عرض المزيد" عند وجود بحث
+      {hasMore && searchTerm === '' && (
         <div className="mt-12 flex justify-center pb-10">
           <button
             onClick={() => fetchCampaigns(true)}
