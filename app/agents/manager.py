@@ -126,37 +126,6 @@ def extract_country_code(text: str) -> str:
             return code
     return None
 
-def trim_voiceover_via_ai(text, target_duration):
-    """
-    استخدام الذكاء الاصطناعي لتقليص النص ليتناسب مع مدة محددة
-    """
-    words = text.split()
-    # الحسبة: كلمتان في الثانية هي سرعة طبيعية ومريحة
-    estimated_duration = len(words) / 2.0 
-    
-    if estimated_duration <= target_duration:
-        return text
-
-    logger.info(f"✂️ Text is too long ({len(words)} words). Asking AI to trim for {target_duration}s...")
-    
-    try:
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        prompt = f"""
-        You are a professional ad script editor. 
-        The following Arabic text is too long for a {target_duration}-second video. 
-        Shorten it significantly to be spoken clearly within EXACTLY {target_duration} seconds.
-        Keep the core marketing message and the brand tone.
-        
-        TEXT: {text}
-        
-        OUTPUT ONLY THE SHORTENED TEXT. NO EXPLANATIONS.
-        """
-        response = model.generate_content(prompt)
-        logger.info("Voiceover trimming succeeded via AI.")
-        return response.text.strip()
-    except Exception as e:
-        logger.warning(f"AI voiceover trimming failed, falling back to manual cut. Error: {e}")
-        return " ".join(words[:int(target_duration * 2)])
 
 #===============================================================================
 #  Vision QA
@@ -237,7 +206,7 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
     logger.warning(f"[Image QA] Max retries ({max_retries}) reached. Returning best available image.")
     return last_generated_image, last_signature
 
-def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="16:9", max_retries=2, notify_callback = None):
+def generate_and_review_video(video_prompt, base_image_path=None, aspect_ratio="16:9", max_retries=1, notify_callback = None):
     current_prompt = video_prompt
     attempt = 1
     last_generated_video = None
@@ -694,7 +663,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
         ext_path, new_google_name = extend_veo_video(next_prompt, current_google_name, aspect_ratio)
         
         if ext_path:
-            logger.info(f"Extended video generated successfully | Path: {ext_path} | Google Name: {new_google_name}")
+            logger.info(f"Extended video generated successfully | Path: {ext_path} ")
             final_video_path = ext_path 
             current_google_name = new_google_name
             
@@ -822,7 +791,7 @@ def refine_video(current_storyboard, feedback, duration, base_image_path=None, a
     )
     
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
-    _, vid_storyboard = normalize_prompts_data(data)
+    _, vid_storyboard, voiceover_text  = normalize_prompts_data(data)
     selected_voice = data.get("selected_voice_profile", "Farah") if isinstance(data, dict) else "Farah"
 
     local_ref_path = get_local_media_path(base_image_path)
@@ -844,8 +813,9 @@ def refine_video(current_storyboard, feedback, duration, base_image_path=None, a
             vid_storyboard, 
             base_image_path=local_ref_path, 
             aspect_ratio=aspect_ratio, 
+            voiceover_text=voiceover_text, # 👈 تمرير التعليق الصوتي إن وجد
+            voice_profile_name=selected_voice, # 👈 تمرير الصوت
             notify_callback=notify_callback,
-            # selected_voice=selected_voice # مررها إذا كانت דالة الـ threadpool تستقبلها
         )
 
     else:
@@ -854,7 +824,8 @@ def refine_video(current_storyboard, feedback, duration, base_image_path=None, a
         
         scene = vid_storyboard[0]
         motion_p = scene.get("motion_prompt", "")
-        voice_p = scene.get("voiceover_text", "")
+        # في حال الـ Extended نأخذ التعليق الصوتي من الـ JSON الأساسي أو من المشهد
+        voice_p = voiceover_text or scene.get("voiceover_text", "")
         audio_p = scene.get("audio_prompt", "")
         scene_img_prompt = scene.get("image_prompt", "")
         scene_image_path = local_ref_path 
@@ -863,7 +834,7 @@ def refine_video(current_storyboard, feedback, duration, base_image_path=None, a
         if scene_img_prompt:
             if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد المعدل...")
             try:
-                generated_img = generate_image(scene_img_prompt, reference_image_path=scene_image_path, aspect_ratio=aspect_ratio)
+                generated_img, _ = generate_image(scene_img_prompt, reference_image_path=scene_image_path, aspect_ratio=aspect_ratio)
                 if generated_img and os.path.exists(generated_img):
                     scene_image_path = generated_img 
             except Exception as e:
@@ -873,7 +844,7 @@ def refine_video(current_storyboard, feedback, duration, base_image_path=None, a
         scene_prompt = f"{motion_p}"
         if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
             scene_prompt += f". Audio context: {audio_p}"
-        scene_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting."
+        scene_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting. No voiceover."
 
         if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي المعدل (8 ثوانٍ)...")
         
@@ -900,6 +871,7 @@ def refine_video(current_storyboard, feedback, duration, base_image_path=None, a
             # 5. توليد الصوت ودمجه
             if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
                 if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي الممتد...")
+                # لا تنسى تمرير الـ target_video_duration لتجنب أخطاء القص
                 voice_path = generate_voiceover(voice_p, voice_profile_name=selected_voice, target_video_duration=float(duration))
                 video_url = merge_video_audio(final_video_path, voice_path)
             else:
@@ -1032,20 +1004,27 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
 
     
     total_video_duration = len(storyboard_json) * 8  
-    final_script = voiceover_text
-    if voiceover_text:
-        if notify_callback: notify_callback("📝 جاري ضبط طول التعليق الصوتي ليتناسب مع المشاهد...")
-        final_script = trim_voiceover_via_ai(voiceover_text, total_video_duration)
-
+    
     full_voice_path = None
-    if final_script and final_script.strip() != "":
+    if voiceover_text and voiceover_text.strip() != "" and voiceover_text.lower() != "none":
         if notify_callback: notify_callback("🎙️ جاري تسجيل التعليق الصوتي الكامل للحملة...")
-        full_voice_path = generate_voiceover(final_script, voice_profile_name=voice_profile_name, target_video_duration=total_video_duration)
+        
+        # 👈 نرسل النص مباشرة كما هو. دالة generate_voiceover في audio_gen 
+        # هي من ستقوم بالقياس، وإذا كان طويلاً ستستدعي AI لتقصيره تلقائياً!
+        full_voice_path = generate_voiceover(
+            text=voiceover_text, 
+            voice_profile_name=voice_profile_name, 
+            target_video_duration=total_video_duration
+        )
 
     if full_voice_path and merged_silent_video:
         if notify_callback: notify_callback("🎵 تركيب الهندسة الصوتية النهائية...")
         final_video = merge_video_audio(merged_silent_video, full_voice_path)
         logger.info(f"Final video with audio: {final_video}")
+        if notify_callback: notify_callback("🎉 اكتمل إنتاج الفيديو المدمج بنجاح!")
         return final_video
     
+    if notify_callback: notify_callback("🎉 اكتمل إنتاج الفيديو بنجاح!")
     return merged_silent_video
+    
+    

@@ -81,14 +81,15 @@ AVAILABLE_VOICES = {
 }
 
 def generate_voiceover(text: str, voice_profile_name: str = "Farah", target_video_duration: float = None, _attempt: int = 1) -> str:
-    """توليد تعليق صوتي (TTS) باستخدام ElevenLabs مع حماية من الـ Loop"""
+    """توليد تعليق صوتي (TTS) باستخدام ElevenLabs مع حماية من الأخطاء والملفات العالقة"""
     if not text or text.lower() == "none" or text.strip() == "":
         return None
 
     if getattr(settings, "use_mock_api", False):
+        import glob
+        import time
         logger.info(f"MOCKING ELEVENLABS TTS...")
         time.sleep(1)
-        import glob
         existing_audio = glob.glob(os.path.join(AUDIO_DIR, "vo_*.mp3"))
         if existing_audio:
             return existing_audio[0]
@@ -113,31 +114,28 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah", target_vide
                 if chunk:
                     f.write(chunk)
         
-        # إذا لم يتم تحديد وقت مستهدف، نرجع الصوت مباشرة
         if not target_video_duration:
             return output_path
 
-        audio_duration = AudioFileClip(output_path).duration
+        # 👈 التعديل الثاني (الأهم لحل WinError 32): إغلاق الملف فوراً بعد قراءة مدته!
+        temp_audio_clip = AudioFileClip(output_path)
+        audio_duration = temp_audio_clip.duration
+        temp_audio_clip.close() # 🛑 تحرير الملف من قبضة نظام الويندوز!
         
-        # 🛡️ التحقق من الطول مع الحماية من הـ Infinite Loop
         if audio_duration > target_video_duration + 0.5:
-            
-            # إذا جربنا مرتين وفشل، لا تحذف الملف! دعه يمر لـ MoviePy ليقوم بقصه
             if _attempt >= 2:
-                logger.warning(f"⚠️ Audio is still too long after shortening. MoviePy will trim it to fit.")
+                logger.warning(f"⚠️ Audio is still slightly long after shortening. MoviePy will trim it to fit.")
                 return output_path
                 
             logger.info("⚠️ Audio is TOO LONG! Triggering AI Auto-Correction...")
             try:
                 os.remove(output_path)
-                logger.info(f"🧹 Removed original long audio.") 
+                logger.info(f"🧹 Removed original long audio successfully.") 
             except Exception as e:
                 logger.warning(f"⚠️ Failed to remove original audio file: {e}")
             
-            # اختصار النص
+            # اختصار النص وإعادة الاستدعاء الذاتي
             new_text = shorten_voiceover_text(text, target_video_duration)
-            
-            # 👈 الاستدعاء الذاتي الآمن (نحافظ على نفس الصوت ونزيد عداد المحاولات)
             return generate_voiceover(new_text, voice_profile_name, target_video_duration, _attempt=_attempt + 1)
             
         else:
@@ -147,7 +145,7 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah", target_vide
     except Exception as e:
         logger.error(f"❌ ElevenLabs TTS Failed: {e}")
         return None
-
+    
 
 def merge_video_audio(video_path: str, voice_path: str = None) -> str:
     """
@@ -222,16 +220,15 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
 
 
 
-def shorten_voiceover_text(original_text: str, target_duration: float) -> str:
+def shorten_voiceover_text(original_text: str, target_duration: float) :
     """
-    يطلب من الذكاء الاصطناعي تقصير النص.
-    تُرجع النص فقط ولا تقوم باستدعاء دوال أخرى (Separation of Concerns).
+    يطلب من الذكاء الاصطناعي تقصير النص ليتناسب مع المدة الزمنية المطلوبة بدقة عالية.
     """
     try:
         logger.info(f"🧠 AI is rewriting the voiceover to fit {target_duration} seconds...")
         client = genai.Client(api_key=settings.google_api_key)
         
-        target_words = max(5, int(target_duration * 2))
+        target_words = max(5, int(target_duration * 1.3))
         
         prompt = f"""
         You are an expert Arabic voiceover copywriter.
@@ -240,7 +237,8 @@ def shorten_voiceover_text(original_text: str, target_duration: float) -> str:
         Original Text: "{original_text}"
         
         TASK: 
-        Rewrite the text so it is SHORTER and punchier. It MUST be a maximum of {target_words} Arabic words.
+        Rewrite the text so it is EXTREMELY SHORT and punchy. It MUST be a MAXIMUM of {target_words} Arabic words.
+        If it exceeds {target_words} words, the audio will fail to sync with the video. Cut out unnecessary adjectives.
         Keep the core marketing message intact. 
         CRITICAL: DO NOT use any digits (e.g., 10, 50). Spell out all numbers in Arabic words.
         OUTPUT ONLY THE ARABIC TEXT. No quotes, no explanations.
@@ -257,4 +255,5 @@ def shorten_voiceover_text(original_text: str, target_duration: float) -> str:
         
     except Exception as e:
         logger.warning(f"⚠️ Error shortening text: {e}")
-        return original_text 
+        return original_text
+    
