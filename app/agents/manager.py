@@ -309,8 +309,12 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
     real_events_context = ""
 
     if country_code:
-        logger.info(f"Country detected in message: {country_code.upper()}. Fetching events...")
-        real_events_context = get_upcoming_events_for_strategy(region=country_code, days_ahead=30)
+        try:
+            logger.info(f"Country detected in message: {country_code.upper()}. Fetching events...")
+            real_events_context = get_upcoming_events_for_strategy(region=country_code, days_ahead=30)
+        except Exception as e:
+            real_events_context = f"⚠️ NOTE: Could not fetch real events for {country_code.upper()}. Please rely on general seasonal themes."
+            logger.warning(f"⚠️ Error fetching events: {e}")
     else:
         logger.debug("No country detected in user message. Prompting strategist to ask.")
         real_events_context = "⚠️ NOTE TO STRATEGIST: The user has not specified a country yet. If you need to suggest events, politely ask the user which country they are targeting first."
@@ -333,21 +337,39 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
 
     logger.info("Consulting Marketing Strategist via RAG...")
     
-    chat_result = strategy_rag.initiate_chat(
-        strategist, 
-        message=strategy_rag.message_generator,
-        problem = full_prompt, 
-        n_results=2,
-        max_turns=3,  
-    )
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # 👈 السحر هنا: نُعرّف الـ RAG Proxy داخل الـ Loop بأسماء مختلفة لتجنب تعليق الداتا بيز
+            strategy_rag = create_rag_proxy(f"Strategy_Admin_T{int(time.time())}", "strategy", "strategy_db", model_name)
+            
+            chat_result = strategy_rag.initiate_chat(
+                strategist, 
+                message=strategy_rag.message_generator,
+                problem=full_prompt, 
+                n_results=2,
+                max_turns=1
+            )
 
-    valid_replies = [msg['content'] for msg in chat_result.chat_history if msg.get('content') and msg.get('content').strip() != "" and msg.get('name') == 'Marketing_Strategist']
-    
-    if not valid_replies:
-        logger.error("Strategist returned no valid replies.")
-        return "عذراً، حدث خطأ في توليد الاستراتيجية."
+            valid_replies = [msg['content'] for msg in chat_result.chat_history if msg.get('content') and msg.get('content').strip() != "" and msg.get('name') == 'Marketing_Strategist']
+            
+            if valid_replies:
+                return valid_replies[-1].strip()
+                
+        except Exception as e:
+            error_msg = str(e)
+            print(f"⚠️ AI Chat Error (Attempt {attempt + 1}/{max_retries}): {error_msg}")
+            
+            # إذا فشل RAG أو كان هناك ضغط، ننتظر ونحاول مجدداً
+            if attempt < max_retries - 1:
+                print("🔄 Waiting 3 seconds before retrying...")
+                import time
+                time.sleep(3)
+                continue
+            else:
+                return "عذراً، خوادم الذكاء الاصطناعي تواجه ضغطاً هائلاً حالياً. يرجى المحاولة بعد قليل."
 
-    return valid_replies[-1].strip()
+    return "عذراً، حدث خطأ في توليد الاستراتيجية."
 
 def finalize_strategy(product_name, chat_history):
     """
@@ -684,7 +706,7 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     if voiceover_text and voiceover_text.lower() != "none" and voiceover_text.strip() != "":
         logger.info("🎙️ Generating voiceover...")
         if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي...")
-        voice_path = generate_voiceover(voiceover_text, voice_profile_name=selected_voice)
+        voice_path = generate_voiceover(voiceover_text, voice_profile_name=selected_voice, target_video_duration=duration)
         final_video_with_audio = merge_video_audio(final_video_path, voice_path)
     else:
         logger.info("🔇 No voiceover requested.")
@@ -762,27 +784,33 @@ def refine_image(current_prompt, feedback, aspect_ratio, original_image_path=Non
         
     return {"image_prompt": new_prompt, "image_url": image_url, "thought_signature": signature}
 
-def refine_video(current_storyboard, feedback, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None, event_name=None, event_angle=None):
+def refine_video(current_storyboard, feedback, duration, base_image_path=None, aspect_ratio="16:9", current_video_path=None,  notify_callback=None, event_name=None, event_angle=None):
     video_director = get_video_director()
     prompter = get_prompter()
     
     model_name = prompter.llm_config['config_list'][0]['model']
     prompts_rag = create_rag_proxy("Prompts_Admin", "prompts", "prompts_db", model_name)
     
-
     groupchat = autogen.GroupChat(agents=[prompts_rag, video_director, prompter], messages=[], max_round=3, speaker_selection_method="round_robin")
-    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=video_director.llm_config)
+    
+    manager = autogen.GroupChatManager(
+        groupchat=groupchat, 
+        llm_config=video_director.llm_config,
+        is_termination_msg=lambda x: False
+    )
 
     local_video_path = get_local_media_path(current_video_path)
-    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الصورة و طلب التعديل...")
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني يراجع الفيديو و طلب التعديل...")
     logger.info("🕵️‍♂️ Analyzing video for refinement...")
+    
     review_data = analyze_media(
         file_path=local_video_path,
         prompt=current_storyboard,
         user_feedback=feedback,
         media_type="video",
     )
-    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة .") 
+    
+    if notify_callback: notify_callback("🕵️‍♂️ المخرج الفني انتهى من المراجعة.") 
     logger.info(f"🕵️‍♂️ Video analysis complete. With feedback: {review_data.get('feedback', 'None')}")
 
     msg = prompt_templates.get_refine_video_prompt(feedback, current_storyboard, review_data.get("feedback", ""), event_name=event_name, event_angle=event_angle)
@@ -795,20 +823,88 @@ def refine_video(current_storyboard, feedback, base_image_path=None, aspect_rati
     
     data = extract_agent_json(chat_result.chat_history, "Prompt_Engineer")
     _, vid_storyboard = normalize_prompts_data(data)
-            
-    # توليد الفيديو الجديد 
-    local_ref_path = get_local_media_path(base_image_path)
+    selected_voice = data.get("selected_voice_profile", "Farah") if isinstance(data, dict) else "Farah"
 
+    local_ref_path = get_local_media_path(base_image_path)
     video_url = None
-    if vid_storyboard:
-         video_url = generate_final_video_asset(
+
+    if not vid_storyboard:
+        logger.warning("refine_video: No storyboard extracted from agent response.")
+        return {"video_storyboard": vid_storyboard, "video_url": None}
+
+    # ==============================================================================
+    # 🧠 THE SMART ROUTER: هل هو ممتد أم متعدد؟
+    # ==============================================================================
+    is_extended = (duration % 8 != 0)
+
+    if not is_extended:
+        # 🎬 المسار الأول: فيديو لقطات متعددة (8, 16, 24...)
+        logger.info(f"🎬 Refining Multi-Scene Video (Duration: {duration}s)")
+        video_url = generate_final_video_asset(
             vid_storyboard, 
             base_image_path=local_ref_path, 
             aspect_ratio=aspect_ratio, 
-            notify_callback=notify_callback
+            notify_callback=notify_callback,
+            # selected_voice=selected_voice # مررها إذا كانت דالة الـ threadpool تستقبلها
         )
+
     else:
-        logger.warning("refine_video: No storyboard extracted from agent response.")
+        # 🎬 المسار الثاني: فيديو ممتد لقطة واحدة (15, 22, 29...)
+        logger.info(f"🎬 Refining Extended One-Shot Video (Duration: {duration}s)")
+        
+        scene = vid_storyboard[0]
+        motion_p = scene.get("motion_prompt", "")
+        voice_p = scene.get("voiceover_text", "")
+        audio_p = scene.get("audio_prompt", "")
+        scene_img_prompt = scene.get("image_prompt", "")
+        scene_image_path = local_ref_path 
+        
+        # 1. تحديث الصورة الافتتاحية إن لزم الأمر
+        if scene_img_prompt:
+            if notify_callback: notify_callback(f"🎨 جاري توليد وتصميم الصورة الافتتاحية للمشهد المعدل...")
+            try:
+                generated_img = generate_image(scene_img_prompt, reference_image_path=scene_image_path, aspect_ratio=aspect_ratio)
+                if generated_img and os.path.exists(generated_img):
+                    scene_image_path = generated_img 
+            except Exception as e:
+                logger.warning(f"⚠️ Image Gen failed, using base image. Error: {e}")
+
+        # 2. بناء البرومبت السينمائي الصامت
+        scene_prompt = f"{motion_p}"
+        if audio_p and audio_p.lower() != "none" and audio_p.strip() != "":
+            scene_prompt += f". Audio context: {audio_p}"
+        scene_prompt += " CRITICAL: Characters must NOT speak. NO lip-syncing. Closed mouths only. Cinematic silent acting."
+
+        if notify_callback: notify_callback(f"🎬 جاري توليد المشهد الافتتاحي المعدل (8 ثوانٍ)...")
+        
+        # 3. التوليد الأول
+        first_video_path, google_video_name = generate_veo_video(scene_prompt, scene_image_path, aspect_ratio)
+
+        if first_video_path and google_video_name:
+            extensions_needed = max(0, (duration - 8) // 7)
+            current_google_name = google_video_name
+            final_video_path = first_video_path
+
+            # 4. التمديد
+            for i in range(extensions_needed):
+                if notify_callback: notify_callback(f"🔄 جاري تمديد الفيديو (الجزء {i+2})...")
+                ext_path, new_google_name = extend_veo_video(scene_prompt, current_google_name, aspect_ratio)
+                
+                if ext_path:
+                    final_video_path = ext_path 
+                    current_google_name = new_google_name
+                else:
+                    logger.warning("⚠️ Extension failed, stopping early.")
+                    break 
+
+            # 5. توليد الصوت ودمجه
+            if voice_p and voice_p.lower() != "none" and voice_p.strip() != "":
+                if notify_callback: notify_callback(f"🎙️ جاري تسجيل التعليق الصوتي الممتد...")
+                voice_path = generate_voiceover(voice_p, voice_profile_name=selected_voice, target_video_duration=float(duration))
+                video_url = merge_video_audio(final_video_path, voice_path)
+            else:
+                video_url = final_video_path 
+
     return {"video_storyboard": vid_storyboard, "video_url": video_url}
 
 # ==============================================================================
@@ -944,7 +1040,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     full_voice_path = None
     if final_script and final_script.strip() != "":
         if notify_callback: notify_callback("🎙️ جاري تسجيل التعليق الصوتي الكامل للحملة...")
-        full_voice_path = generate_voiceover(final_script, voice_profile_name=voice_profile_name)
+        full_voice_path = generate_voiceover(final_script, voice_profile_name=voice_profile_name, target_video_duration=total_video_duration)
 
     if full_voice_path and merged_silent_video:
         if notify_callback: notify_callback("🎵 تركيب الهندسة الصوتية النهائية...")

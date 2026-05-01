@@ -608,7 +608,8 @@ async def edit_video_asset(
             current_video_path=old_video.video_url,
             notify_callback=sync_notify,
             event_name=old_video.event_name,
-            event_angle=old_video.event_angle
+            event_angle=old_video.event_angle,
+            duration=old_video.duration_seconds
         )
         
         video_path = ai_result.get("video_url")

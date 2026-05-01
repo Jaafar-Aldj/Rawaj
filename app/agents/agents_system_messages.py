@@ -75,8 +75,6 @@ copywriter = """
         }}
         """
 
-
-
 ### ============================================================================
 # 4. Video Director (Visual Storytelling - The Most Important)
 ### ============================================================================
@@ -102,7 +100,6 @@ video_director = """
         }}
         """
 
-
 # ==============================================================================
 # 5. Prompt Engineer (Visual Safety - The Most Important)
 # ==============================================================================
@@ -123,6 +120,7 @@ prompter = """
            - `audio_prompt`: Background music and SFX description.
         6. Provide the `voiceover_text` as a single string at the root level of the JSON.
         7. 🛑 VOICEOVER NUMBERS: Spell out all numbers/prices in full Arabic words.
+        8. DO NOT ask for "cuts" or "montage" within a single scene prompt. Veo generates continuous motion. Instead of "cuts", describe a single, dynamic tracking shot that captures all the action in the scene.
 
         CRITICAL RULE FOR REFINEMENT (EDITING):
         When the user asks for an edit (e.g., changing a color or an object):

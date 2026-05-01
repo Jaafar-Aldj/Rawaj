@@ -5,6 +5,7 @@ import uuid
 from elevenlabs.client import ElevenLabs
 from moviepy import VideoFileClip, AudioFileClip, CompositeAudioClip, concatenate_videoclips
 from app.config import settings 
+from google import genai
 
 from app.logger import get_logger
 logger = get_logger(__name__)
@@ -79,20 +80,21 @@ AVAILABLE_VOICES = {
     }
 }
 
-def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
-    """توليد تعليق صوتي (TTS) باستخدام ElevenLabs"""
+def generate_voiceover(text: str, voice_profile_name: str = "Farah", target_video_duration: float = None, _attempt: int = 1) -> str:
+    """توليد تعليق صوتي (TTS) باستخدام ElevenLabs مع حماية من الـ Loop"""
     if not text or text.lower() == "none" or text.strip() == "":
         return None
 
     if getattr(settings, "use_mock_api", False):
         logger.info(f"MOCKING ELEVENLABS TTS...")
         time.sleep(1)
+        import glob
         existing_audio = glob.glob(os.path.join(AUDIO_DIR, "vo_*.mp3"))
         if existing_audio:
             return existing_audio[0]
         return None    
     
-    logger.info(f"🗣️ Generating Voiceover: {text[:30]}... with voice: {voice_profile_name}")
+    logger.info(f"🗣️ Generating Voiceover (Attempt {_attempt}): {text[:30]}... with voice: {voice_profile_name}")
     output_path = os.path.join(AUDIO_DIR, f"vo_{uuid.uuid4().hex[:8]}.mp3")
     
     try:
@@ -102,7 +104,7 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
         audio_stream = client.text_to_speech.convert(
             text=text,
             voice_id=voice_id, 
-            model_id="eleven_multilingual_v2", # الموديل الداعم للعربية
+            model_id="eleven_multilingual_v2", 
             output_format="mp3_44100_128"
         )
         
@@ -111,8 +113,36 @@ def generate_voiceover(text: str, voice_profile_name: str = "Farah") -> str:
                 if chunk:
                     f.write(chunk)
         
-        logger.info("✅ Voiceover saved successfully.")
-        return output_path
+        # إذا لم يتم تحديد وقت مستهدف، نرجع الصوت مباشرة
+        if not target_video_duration:
+            return output_path
+
+        audio_duration = AudioFileClip(output_path).duration
+        
+        # 🛡️ التحقق من الطول مع الحماية من הـ Infinite Loop
+        if audio_duration > target_video_duration + 0.5:
+            
+            # إذا جربنا مرتين وفشل، لا تحذف الملف! دعه يمر لـ MoviePy ليقوم بقصه
+            if _attempt >= 2:
+                logger.warning(f"⚠️ Audio is still too long after shortening. MoviePy will trim it to fit.")
+                return output_path
+                
+            logger.info("⚠️ Audio is TOO LONG! Triggering AI Auto-Correction...")
+            try:
+                os.remove(output_path)
+                logger.info(f"🧹 Removed original long audio.") 
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to remove original audio file: {e}")
+            
+            # اختصار النص
+            new_text = shorten_voiceover_text(text, target_video_duration)
+            
+            # 👈 الاستدعاء الذاتي الآمن (نحافظ على نفس الصوت ونزيد عداد المحاولات)
+            return generate_voiceover(new_text, voice_profile_name, target_video_duration, _attempt=_attempt + 1)
+            
+        else:
+            logger.info("✅ Audio fits the video perfectly.")
+            return output_path
 
     except Exception as e:
         logger.error(f"❌ ElevenLabs TTS Failed: {e}")
@@ -189,3 +219,42 @@ def merge_video_audio(video_path: str, voice_path: str = None) -> str:
                 logger.info(f"✅ Temporary audio file removed: {voice_path}")
         except Exception as e:
             logger.warning(f"⚠️ Failed to remove temporary audio file: {e}")
+
+
+
+def shorten_voiceover_text(original_text: str, target_duration: float) -> str:
+    """
+    يطلب من الذكاء الاصطناعي تقصير النص.
+    تُرجع النص فقط ولا تقوم باستدعاء دوال أخرى (Separation of Concerns).
+    """
+    try:
+        logger.info(f"🧠 AI is rewriting the voiceover to fit {target_duration} seconds...")
+        client = genai.Client(api_key=settings.google_api_key)
+        
+        target_words = max(5, int(target_duration * 2))
+        
+        prompt = f"""
+        You are an expert Arabic voiceover copywriter.
+        The following text is too long to fit in a {target_duration}-second video scene.
+        
+        Original Text: "{original_text}"
+        
+        TASK: 
+        Rewrite the text so it is SHORTER and punchier. It MUST be a maximum of {target_words} Arabic words.
+        Keep the core marketing message intact. 
+        CRITICAL: DO NOT use any digits (e.g., 10, 50). Spell out all numbers in Arabic words.
+        OUTPUT ONLY THE ARABIC TEXT. No quotes, no explanations.
+        """
+        
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        
+        new_text = response.text.strip().replace('"', '')
+        logger.info(f"✂️ Text shortened! New Text: {new_text}")
+        return new_text
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Error shortening text: {e}")
+        return original_text 

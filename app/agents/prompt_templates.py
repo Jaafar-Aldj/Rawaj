@@ -81,6 +81,15 @@ def get_image_generation_prompt(product_name, audience, ad_copy_json, aspect_rat
     CRITICAL RULE:
     - NO Alcohol, Women, Children, Faces, People.
     - Focus ONLY on the BACKGROUND SCENE where the product will be placed.
+
+    🛑 CRITICAL RULES FOR PROMPT_ENGINEER (MUST FOLLOW):
+    1. The `image_prompt` MUST ONLY describe visuals and camera angles in English. 
+    2. For action scenes, make the `motion_prompt` dynamic and fast-paced (e.g., tracking shot, motion blur).
+
+    ⛔ NEGATIVE CONSTRAINTS & CRITICAL RULES:
+    - NO Text, Typography, Labels, or Watermarks on screen.
+    - DO NOT include the Arabic ad copy or any language text in the `image_prompt`. The `image_prompt` must ONLY describe the visual scene and camera details in English.
+    - NO speaking, No Lip-syncing, NO talking characters.
     
     TASK: Prompt_Engineer, write a detailed English image prompt. Include aspect ratio instructions if necessary.
     Output ONLY JSON: {{ "main_image_prompt": "..." }}
@@ -123,10 +132,14 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
     2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
     🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
 
-    ⛔ NEGATIVE CONSTRAINTS:
-    - NO Text, Typography, Labels on screen.
-    - NO speaking
-    - No Lip-syncing
+    🛑 CRITICAL RULES FOR PROMPT_ENGINEER (MUST FOLLOW):
+    1. The `image_prompt` MUST ONLY describe visuals and camera angles in English. 
+    2. For action scenes, make the `motion_prompt` dynamic and fast-paced (e.g., tracking shot, motion blur).
+
+    ⛔ NEGATIVE CONSTRAINTS & CRITICAL RULES:
+    - NO Text, Typography, Labels, or Watermarks on screen.
+    - DO NOT include the Arabic ad copy or any language text in the `image_prompt`. The `image_prompt` must ONLY describe the visual scene and camera details in English.
+    - NO speaking, No Lip-syncing, NO talking characters.
     - NO talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
     
     OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
@@ -181,6 +194,7 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
        - Describe the continuous action. 
        - Write a single, cohesive `voiceover` script. The word count MUST match the {total_duration} seconds duration (assume 2 words per second. E.g., for 15 seconds, write about 30 Arabic words).
     2. Prompt_Engineer: Output the JSON `video_storyboard` containing ONLY ONE scene object.
+    
     🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
     For this EXTENDED one-shot video, you must provide a 'motion_sequence'.
     This is a list of prompts. Each prompt describes the NEXT ACTION in the sequence.
@@ -188,10 +202,14 @@ def get_extend_video_generation_prompt(product_name, audience, ad_copy_json, tot
     - Prompt 2 (Extension 1): Describes the progression of movement.
     - Prompt 3 (Extension 2): Describes the climax/end of the shot.
 
-    ⛔ NEGATIVE CONSTRAINTS:
-    - NO Text, Typography, Labels on screen.
-    - NO speaking
-    - No Lip-syncing
+    🛑 CRITICAL RULES FOR PROMPT_ENGINEER (MUST FOLLOW):
+    1. The `image_prompt` MUST ONLY describe visuals and camera angles in English. 
+    2. For action scenes, make the `motion_prompt` dynamic and fast-paced (e.g., tracking shot, motion blur).
+    
+    ⛔ NEGATIVE CONSTRAINTS & CRITICAL RULES:
+    - NO Text, Typography, Labels, or Watermarks on screen.
+    - DO NOT include the Arabic ad copy or any language text in the `image_prompt`. The `image_prompt` must ONLY describe the visual scene and camera details in English.
+    - NO speaking, No Lip-syncing, NO talking characters.
     - NO talking characters. Any people in the scene MUST be silent, performing actions or showing expressions without speaking.
     
     OUTPUT JSON FORMAT MUST BE EXACTLY LIKE THIS:
