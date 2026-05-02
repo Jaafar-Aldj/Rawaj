@@ -1,6 +1,8 @@
+import glob
 import os
 import json
 import re
+import time
 import concurrent.futures
 from datetime import datetime
 import google.generativeai as genai
@@ -82,6 +84,7 @@ def extract_agent_json(chat_history, target_agent_name, json_key=None):
     return None
 
 def json_match_extractor(content):
+    content = content.replace("{{", "{").replace("}}", "}")
     try:
         json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if json_match: return json.loads(json_match.group())
@@ -270,7 +273,7 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
 
     strategist = get_marketing_strategist()
     model_name = strategist.llm_config['config_list'][0]['model']
-    strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name, overwrite=True)
+    strategy_rag = create_rag_proxy("Strategy_Admin", "strategy", "strategy_db", model_name)
 
     current_date = datetime.now().strftime("%Y-%m-%d")
 
@@ -327,12 +330,11 @@ def chat_with_director(product_name, product_desc, product_analysis, user_messag
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"⚠️ AI Chat Error (Attempt {attempt + 1}/{max_retries}): {error_msg}")
+            logger.error(f"⚠️ AI Chat Error (Attempt {attempt + 1}/{max_retries}): {error_msg}")
             
             # إذا فشل RAG أو كان هناك ضغط، ننتظر ونحاول مجدداً
             if attempt < max_retries - 1:
-                print("🔄 Waiting 3 seconds before retrying...")
-                import time
+                logger.warning("🔄 Waiting 3 seconds before retrying...")
                 time.sleep(3)
                 continue
             else:
@@ -383,7 +385,19 @@ def finalize_strategy(product_name, chat_history):
     magic_prompt = prompt_templates.get_finalize_strategy_prompt(product_name, history_text)
 
     logger.info("Forcing strategist to output JSON strategy...")
-    chat_result = user_proxy.initiate_chat(strategist, message=magic_prompt, max_turns=1)
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try :
+            chat_result = user_proxy.initiate_chat(strategist, message=magic_prompt, max_turns=1)
+        except Exception as e:
+                error_msg = str(e)
+                logger.error(f"⚠️ AI Chat Error (Attempt {attempt + 1}/{max_retries}): {error_msg}")
+                
+                if attempt < max_retries - 1:
+                    logger.warning("🔄 Waiting 3 seconds before retrying...")
+                    time.sleep(3)
+                    continue
     
     last_message = chat_result.chat_history[-1]['content']
     
@@ -397,25 +411,20 @@ def finalize_strategy(product_name, chat_history):
 # المرحلة 2: توليد النصوص فقط (Generate Copy)
 # ==============================================================================
 def generate_copy_only(product_name, product_desc, audience, platforms):
+    from app.config import settings
     if getattr(settings, "use_mock_api", False):
-        import time
         logger.debug("MOCK MODE: Returning mock ad copy.")
-        time.sleep(2) # محاكاة وقت الكتابة
+        time.sleep(2) 
         platforms_list = platforms if platforms and len(platforms) > 0 else["Instagram", "TikTok"]
-        # توليد نصوص وهمية تتوافق مع الـ JSON المطلوب
-        ad_copy =[
-            {"platform": p, "ad_copy": f"إعلان تجريبي لمنصة {p}: اكتشف روعة {product_name} الآن! #تسويق #محاكاة"} 
-            for p in platforms_list
-        ]
+        ad_copy =[{"platform": p, "ad_copy": f"إعلان تجريبي لمنصة {p}: اكتشف روعة {product_name} الآن! #محاكاة"} for p in platforms_list]
         return {"ad_copy": ad_copy}
+
     director = get_director()
     copywriter = get_copywriter()
-    model_name = copywriter.llm_config['config_list'][0]['model']
-    copy_rag = create_rag_proxy("Copy_Admin", "copywriting", "copy_db", model_name, overwrite=True)
-
-    groupchat = autogen.GroupChat(agents=[copy_rag, director, copywriter], messages=[], max_round=4, speaker_selection_method="round_robin")
-    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
-
+    
+    # سنحاول مع Pro أولاً، ثم ننتقل לـ Flash إذا كان هناك ضغط 503
+    MODELS_TO_TRY =["gemini-2.5-pro", "gemini-2.5-flash"]
+    
     if platforms and len(platforms) > 0:
         platforms_str = ", ".join(platforms)
         platform_instruction = f"Target Platforms: {platforms_str}"
@@ -425,21 +434,61 @@ def generate_copy_only(product_name, product_desc, audience, platforms):
     message = prompt_templates.get_copy_generation_prompt(product_name, product_desc, audience, platform_instruction)
     logger.info(f"Generating ad copy for: '{product_name}' | Audience: '{audience}'")
 
-    chat_result = copy_rag.initiate_chat(
-        manager, 
-        message=copy_rag.message_generator,
-        problem = message,
-        n_results=2
-    )
+    for current_model in MODELS_TO_TRY:
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                # تحديث موديل الكاتب ليتماشى مع الموديل الحالي في הـ Loop
+                copywriter.llm_config['config_list'][0]['model'] = current_model
+                
+                # استخدام اسم فريد לـ RAG لتجنب تداخل الـ Sessions
+                rag_name = f"Copy_Admin_{current_model[-5:]}_{int(time.time())}"
+                copy_rag = create_rag_proxy(rag_name, "copywriting", "copy_db", current_model)
 
-    ad_copy = extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
-    return {"ad_copy": ad_copy}
+                logger.info(f"Using model: {current_model} (Attempt {attempt + 1}/{max_retries})")
+
+                groupchat = autogen.GroupChat(agents=[copy_rag, director, copywriter], messages=[], max_round=4, speaker_selection_method="round_robin")
+                manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=director.llm_config)
+
+                chat_result = copy_rag.initiate_chat(
+                    manager, 
+                    message=copy_rag.message_generator,
+                    problem=message,
+                    n_results=2
+                )
+
+                ad_copy = extract_agent_json(chat_result.chat_history, "Copywriter", "ad_copy")
+                if ad_copy:
+                    return {"ad_copy": ad_copy}
+                else:
+                    raise Exception("Valid JSON ad_copy not found in response.")
+
+            except Exception as e:
+                error_msg = str(e)
+                logger.warning(f"⚠️ Copywriter Error with {current_model} (Attempt {attempt + 1}): {error_msg}")
+                
+                if "503" in error_msg or "429" in error_msg or "UNAVAILABLE" in error_msg:
+                    if attempt < max_retries - 1:
+                        logger.info("🔄 Google server is busy. Waiting 3 seconds before retrying...")
+                        time.sleep(3)
+                        continue
+                    else:
+                        logger.error(f"❌ Model {current_model} failed after retries. Switching to next model...")
+                        break # الانتقال للموديل الثاني (Flash)
+                else:
+                    break # إذا كان خطأ غير متعلق بالضغط، ننتقل للموديل الثاني
+
+    logger.error(f"❌ All AI models failed. Using emergency fallback JSON.")
+    fallback_platforms = platforms if platforms else ["Instagram"]
+    fallback_copy =[{"platform": p, "ad_copy": f"إعلان مميز لمنتج {product_name} موجه إلى {audience}. تواصلوا معنا الآن!"} for p in fallback_platforms]
+    return {"ad_copy": fallback_copy}
+
+
 # ==============================================================================
 # المرحلة 3A: توليد صورة حسب الطلب (Generate Image)
 # ==============================================================================
 def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio, original_image_path=None, notify_callback=None, event_name=None, event_angle=None, thought_signature = None):
     if getattr(settings, "use_mock_api", False):
-        import time, glob
         logger.debug("MOCK MODE: Returning mock image.")
         time.sleep(2) # محاكاة وقت التحميل
         existing_images = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "image", "gen_*.png"))
@@ -480,7 +529,6 @@ def generate_image_on_demand(product_name, audience, ad_copy_json, aspect_ratio,
 # ==============================================================================
 def generate_video_on_demand(product_name, audience, ad_copy_json, duration, aspect_ratio="16:9", base_image_path=None, notify_callback=None, event_name=None, event_angle=None, voice_preference="Auto"):
     if getattr(settings, "use_mock_api", False):
-        import time, glob
         logger.debug("MOCK MODE: Returning mock video.")
         time.sleep(3) # محاكاة وقت التحميل والتوليد
         existing_videos = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "video", "gen_*.mp4"))
@@ -541,7 +589,6 @@ def generate_extended_video(product_name, audience, ad_copy_json, duration, aspe
     توليد مشهد واحد ممتد (Extended One-Shot) بدلاً من مشاهد متعددة.
     """
     if getattr(settings, "use_mock_api", False):
-        import time, glob
         logger.debug("MOCK MODE: Returning mock extended video.")
         time.sleep(3) # محاكاة وقت التحميل والتوليد
         existing_videos = glob.glob(os.path.join(os.getcwd(), "rawaj-frontend", "assets", "video", "gen_*.mp4"))
@@ -958,8 +1005,7 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
 
     # --- التنفيذ المتوازي (Parallel Execution) ---
     results = []
-    # نستخدم ThreadPoolExecutor لتشغيل المشاهد معاً
-    # max_workers يحدد كم فيديو يولد في نفس اللحظة (حسب قوة حسابك في API)
+    
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(storyboard_json)) as executor:
         # إرسال المهام
         future_to_scene = {
@@ -1009,8 +1055,6 @@ def generate_final_video_asset(storyboard_json, base_image_path=None, aspect_rat
     if voiceover_text and voiceover_text.strip() != "" and voiceover_text.lower() != "none":
         if notify_callback: notify_callback("🎙️ جاري تسجيل التعليق الصوتي الكامل للحملة...")
         
-        # 👈 نرسل النص مباشرة كما هو. دالة generate_voiceover في audio_gen 
-        # هي من ستقوم بالقياس، وإذا كان طويلاً ستستدعي AI لتقصيره تلقائياً!
         full_voice_path = generate_voiceover(
             text=voiceover_text, 
             voice_profile_name=voice_profile_name, 

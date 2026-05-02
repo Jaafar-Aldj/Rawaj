@@ -188,6 +188,7 @@ async def generate_copies(
                 await send_notification(process_id, f"✅ اكتملت نصوص فئة: {audience}.")
             except Exception as e:
                 logger.error(f"Error generating copy for {audience}: {e}")
+                background_tasks.add_task(close_connection, process_id)
 
         if generated_assets:
             campaign.status = "DRAFTS_READY"
@@ -284,6 +285,8 @@ async def generate_image_asset(
         await send_notification(process_id, f"❌ فشل التوليد: {e}")
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally :
+        background_tasks.add_task(close_connection, process_id)
 
 # ==============================================================================
 # المرحلة 3B: توليد فيديو حسب الطلب (On-Demand Video)
@@ -360,6 +363,8 @@ async def generate_video_asset(
         await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally :
+        background_tasks.add_task(close_connection, process_id)
 
 
 @router.post("/generate_extended_video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
@@ -434,6 +439,8 @@ async def generate_extended_video_asset(
         await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        background_tasks.add_task(close_connection, process_id)
 
 # ==============================================================================
 # المرحلة 4: التعديلات (Feedback & Refining)
@@ -485,6 +492,8 @@ async def edit_ad_copy(
         await send_notification(process_id, f"❌ فشل التعديل: {e}")
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        background_tasks.add_task(close_connection, process_id)
 
 @router.post("/edit/image", response_model=schemas.ImageAssetResponse, status_code=status.HTTP_201_CREATED)
 async def edit_image_asset(
@@ -566,6 +575,8 @@ async def edit_image_asset(
         await send_notification(process_id, f"❌ فشل التعديل: {e}")
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        background_tasks.add_task(close_connection, process_id)
 
 
 @router.post("/edit/video", response_model=schemas.VideoAssetResponse, status_code=status.HTTP_201_CREATED)
@@ -644,6 +655,8 @@ async def edit_video_asset(
         await send_notification(process_id, f"❌ فشل العملية: {str(e)}")
         background_tasks.add_task(close_connection, process_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        background_tasks.add_task(close_connection, process_id)
 
 
 # ==============================================================================
@@ -802,7 +815,7 @@ async def stream_notifications(proccess_id: str, request: Request):
                     yield {"data": message}
                 except asyncio.TimeoutError:
                     logger.warning(f"Timeout occurred for process {proccess_id}.")
-                    continue
+                    yield {"event": "ping", "data": "keep-alive"}
         except asyncio.CancelledError:
             logger.warning(f"Connection for {proccess_id} cancelled.")
         finally:
