@@ -1,0 +1,46 @@
+# Google Imagen 3 & Veo 3.1: The Ultimate Prompt Engineering Guide
+
+This document provides the official framework and technical vocabulary for generating hyper-realistic images (via Imagen 3) and cinematic videos (via Veo 3.1). Senior Prompt Engineers MUST use these rules to achieve perfect outputs.
+
+## 1. Imagen 3 (Image Generation) Rules
+Imagen 3 excels at photorealism, accurate lighting, and texture details. It prefers natural, descriptive language over comma-separated keywords.
+
+### The Perfect Image Prompt Formula:
+[Main Subject/Product] + [Action/Pose] + [Setting/Background] + [Lighting] + [Camera Angle/Lens] + [Style/Rendering Engine].
+
+### Visual Vocabulary for Images:
+*   **Lighting:** Studio lighting, dramatic low-key lighting, soft high-key lighting, golden hour, volumetric light rays, neon accents.
+*   **Camera Angles:** Extreme close-up (macro), eye-level shot, low angle (makes subject look powerful), high angle, bird's-eye view.
+*   **Lenses & Focus:** 85mm portrait lens, shallow depth of field (bokeh background), sharp focus on the product.
+*   **Styles:** Photorealistic, cinematic film still, commercial product photography, minimalist, flat lay.
+
+*Example:* "A sleek, luxurious perfume bottle resting on dark reflective marble. Gentle wisps of smoke rise in the background. Illuminated by warm, dramatic studio lighting. Shot on an 85mm lens with a shallow depth of field. Hyper-realistic commercial product photography."
+
+## 2. Veo 3.1 (Video Generation) Rules
+Veo generates continuous, high-fidelity video motion. It DOES NOT understand video editing techniques like "cuts" or "montage" within a single prompt.
+
+### 🛑 CRITICAL VEO CONSTRAINTS:
+1.  **NO CUTS:** Never use words like "quick cuts", "montage", or "transitions" in a single scene prompt. Veo generates ONE continuous camera take. If you ask for cuts, it will hallucinate a split-screen or collage.
+2.  **SILENT ACTING:** Veo models currently struggle with accurate lip-syncing for added voiceovers. ALWAYS add: "Silent acting, closed mouths, no speaking" if humans are in the scene to avoid awkward lip movements.
+3.  **CONTINUOUS MOTION:** Describe the camera motion as a fluid physical movement through the 3D space.
+
+### Visual Vocabulary for Veo Camera Motion:
+*   **Dolly In / Dolly Out:** The camera physically moves closer to or further from the subject (e.g., "Slow dolly in towards the coffee cup").
+*   **Pan Left / Pan Right:** The camera rotates horizontally on a fixed axis.
+*   **Tracking Shot:** The camera moves alongside a moving subject to match its speed.
+*   **Orbit:** The camera moves in a smooth circle around the product.
+
+*Example:* "A photorealistic shot of a luxurious perfume bottle on dark marble. Smooth, slow dolly in towards the bottle, while the camera subtly orbits to the right to reveal the brand logo. Warm cinematic lighting. Silent atmospheric scene."
+
+## 3. Dealing with AI Hallucinations (Negative Constraint Fixes)
+When an AI generates unwanted elements (like gibberish text or wrong colors), you must guide it strictly.
+
+*   **To avoid Gibberish Text:** AI struggles to write perfect Arabic or complex logos. ALWAYS include: "Clean scene, absolutely NO text, NO watermarks, NO typography, NO floating letters."
+*   **To enforce Identity:** If the product changes color or shape across video frames, use the phrase: "Maintain strict visual consistency and identity of the main subject throughout the motion."
+*   **To remove Humans:** "Completely empty of people, inanimate objects only, no human presence."
+
+## 4. Aspect Ratios (--ar)
+Always specify the aspect ratio at the end of your prompt to match the platform:
+*   `--ar 16:9` : For YouTube, TV, and cinematic horizontal videos.
+*   `--ar 9:16` : For Instagram Reels, TikTok, and YouTube Shorts (Vertical).
+*   `--ar 4:5` : For standard Instagram grid posts.

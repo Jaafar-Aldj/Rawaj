@@ -814,7 +814,7 @@ async def stream_notifications(proccess_id: str, request: Request):
                         break
                     yield {"data": message}
                 except asyncio.TimeoutError:
-                    logger.warning(f"Timeout occurred for process {proccess_id}.")
+                    # logger.warning(f"Timeout occurred for process {proccess_id}.")
                     yield {"event": "ping", "data": "keep-alive"}
         except asyncio.CancelledError:
             logger.warning(f"Connection for {proccess_id} cancelled.")

@@ -129,7 +129,7 @@ def get_video_generation_prompt(product_name, audience, ad_copy_json, duration, 
 
     TASK:
     1. Video_Director: Create a storyboard for EXACTLY {num_scenes} scenes (8s per scene). Consider the {aspect_ratio} format when planning the shots. REMEMBER: Keep the voiceover EXTREMELY short (max 10-12 words per scene) so it fits the 8-second timeframe.
-    2. Prompt_Engineer: Output the JSON `video_storyboard`. Ensure the `voiceover_text` remains short.
+    2. Prompt_Engineer: Output the JSON `video_storyboard`.
     🛑 IMPORTANT: Ensure the 'voiceover_text' contains NO digits. All numbers and dates must be written in full Arabic words for correct pronunciation.
 
     🛑 CRITICAL RULES FOR PROMPT_ENGINEER (MUST FOLLOW):

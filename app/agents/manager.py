@@ -183,8 +183,8 @@ def generate_and_review_image(image_prompt, reference_image_path=None, aspect_ra
                 notify_callback("✅ الصورة اجتازت التدقيق الفني.")
             return image_path, signature
         elif review_data["status"] == "REJECTED":
-            logger.warning(f"[Image QA] REJECTED at attempt {attempt}. Reason: {reason}")
             reason = review_data["feedback"]
+            logger.warning(f"[Image QA] REJECTED at attempt {attempt}. Reason: {reason}")
             
             if notify_callback: 
                 notify_callback(f"⚠️ تم رفض الصورة، جاري تحسين الجودة (السبب: خطأ في التوليد). محاولة جديدة...")
